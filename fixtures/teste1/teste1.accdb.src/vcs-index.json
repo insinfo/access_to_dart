@@ -1,0 +1,191 @@
+﻿{
+  "Info": {
+    "Class": "clsVCSIndex",
+    "Description": "Version Control System Index"
+  },
+  "Items": {
+    "MergeBuildDate": null,
+    "FullBuildDate": null,
+    "ExportDate": "2026-03-12T03:20:08.000Z",
+    "FullExportDate": "2026-03-12T03:20:08.000Z",
+    "OptionsHash": "e599266",
+    "LastMergedCommit": "",
+    "Components": {
+      "DB Connections": {
+        "db-connection.json": {
+        }
+      },
+      "DB Properties": {
+        "dbs-properties.json": {
+          "FileHash": "bf3c80c",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "d40c38e"
+        }
+      },
+      "Doc Properties": {
+        "documents.json": {
+          "FileHash": "979d737",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "fb034d1"
+        }
+      },
+      "Forms": {
+        "DetalhesDoContato.bas": {
+          "FileHash": "89a2839",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "5f371b3"
+        },
+        "FolhaDeDadosDoContato.bas": {
+          "FileHash": "6cd7228",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "346a639"
+        },
+        "ListaDeContatos.bas": {
+          "FileHash": "dd040bc",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "471a709"
+        }
+      },
+      "Hidden Attributes": {
+        "hidden-attributes.json": {
+        }
+      },
+      "Nav Pane Groups": {
+        "nav-pane-groups.json": {
+          "FileHash": "4d89cd0",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "907905e"
+        }
+      },
+      "Proj Properties": {
+        "proj-properties.json": {
+        }
+      },
+      "Project": {
+        "project.json": {
+          "FileHash": "9fe41ad",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "a53ab8d"
+        }
+      },
+      "Queries": {
+        "ContatosEstendidos.bas": {
+          "FileHash": "9d9f3de",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "3e90fc6"
+        }
+      },
+      "Reports": {
+        "CatálogoDeEndereçosDeContatos.bas": {
+          "FileHash": "3817dbb",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "40b6cbd"
+        },
+        "CatálogoTelefônicoDeContatos.bas": {
+          "FileHash": "630ecff",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "5c755c9"
+        },
+        "ListaDeContatos.bas": {
+          "FileHash": "816fea5",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "c842c3d"
+        },
+        "Rótulo.bas": {
+          "FileHash": "95df2d1",
+          "ExportDate": "2026-03-12T03:20:08.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "41fc546"
+        }
+      },
+      "Shared Images": {
+        "1_OutlookSearchMagnifyingGlassHS.json": {
+          "FileHash": "e1ae5f5",
+          "OtherHash": "fbb12a6",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "84e0332"
+        },
+        "default_Attachment.json": {
+          "FileHash": "88e0d27",
+          "OtherHash": "f5b1df3",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "2ebf77d"
+        },
+        "Form Logo.json": {
+          "FileHash": "e938e72",
+          "OtherHash": "f3ea34e",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "230cacb"
+        },
+        "OutlookSearchMagnifyingGlassHS.json": {
+          "FileHash": "6ab08d0",
+          "OtherHash": "d155066",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "8ba926b"
+        }
+      },
+      "Tables": {
+        "Contatos.xml": {
+          "FileHash": "30393b2",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "dc18ee5"
+        }
+      },
+      "Themes": {
+        "1_Office Theme.thmx": {
+          "FileHash": "5403c0e",
+          "OtherHash": "2695acd",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "06727ec"
+        },
+        "Office Theme.thmx": {
+          "FileHash": "6210574",
+          "OtherHash": "c2da514",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "be8139b"
+        },
+        "Tema do Office.thmx": {
+          "FileHash": "eecd194",
+          "OtherHash": "f7e413a",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "3ff8113"
+        }
+      },
+      "VB Project": {
+        "vbe-project.json": {
+          "FileHash": "c7aa7df",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "d23a1ec"
+        }
+      },
+      "VBE References": {
+        "vbe-references.json": {
+          "FileHash": "c8d14f7",
+          "ExportDate": "2026-03-12T03:20:07.000Z",
+          "SourceModified": null,
+          "FilePropertiesHash": "66f6cb1"
+        }
+      }
+    }
+  }
+}

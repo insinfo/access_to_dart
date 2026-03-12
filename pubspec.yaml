@@ -1,0 +1,17 @@
+name: access_to_dart
+description: CLI and workspace root for Access-to-Dart conversion tooling.
+version: 1.0.0
+repository: https://github.com/insinfo/access_to_dart.git
+publish_to: none
+
+environment:
+  sdk: ^3.6.2
+
+
+dependencies:
+  jackcess_dart:
+    path: packages/jackcess_dart
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0

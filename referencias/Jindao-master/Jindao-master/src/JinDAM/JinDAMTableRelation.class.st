@@ -1,0 +1,67 @@
+Class {
+	#name : #JinDAMTableRelation,
+	#superclass : #JinDAMEntity,
+	#instVars : [
+		'sourceTable',
+		'foreignTable',
+		'matches'
+	],
+	#category : #'JinDAM-Model'
+}
+
+{ #category : #'as yet unclassified' }
+JinDAMTableRelation >> accept: aVisitor [  
+	^ aVisitor visitTableRelation: self.
+
+]
+
+{ #category : #adding }
+JinDAMTableRelation >> addMatch: aString to: aString2 [
+
+	matches add: { 
+			aString.
+			aString2 }
+]
+
+{ #category : #accessing }
+JinDAMTableRelation >> foreignTable [
+	^ foreignTable
+]
+
+{ #category : #accessing }
+JinDAMTableRelation >> foreignTable: aString [ 
+	foreignTable := aString
+]
+
+{ #category : #initialization }
+JinDAMTableRelation >> initialize [
+
+	super initialize.
+	matches := OrderedCollection new
+]
+
+{ #category : #accessing }
+JinDAMTableRelation >> matches [
+	^ matches
+]
+
+{ #category : #initialization }
+JinDAMTableRelation >> printOn: aStream [
+
+	aStream
+		nextPutAll: 'Relatiion(';
+		nextPutAll: sourceTable;
+		nextPutAll: '=>';
+		nextPutAll: foreignTable;
+		nextPut: $)
+]
+
+{ #category : #accessing }
+JinDAMTableRelation >> sourceTable [
+	^ sourceTable
+]
+
+{ #category : #accessing }
+JinDAMTableRelation >> sourceTable: aString [ 
+	sourceTable := aString
+]

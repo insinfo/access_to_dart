@@ -1,0 +1,165 @@
+﻿-------------------------------------
+Beginning Export of Source Files
+teste1.accdb
+VCS Version 4.1.2
+Full Path: C:\Users\pmro\Downloads\teste1.accdb
+Export Folder: C:\Users\pmro\Downloads\teste1.accdb.src\
+Performing Full Export
+12/03/2026 00:20:07
+-------------------------------------
+Scanning source files...
+No db connections found in this database.
+No vbe forms found in this database.
+No proj properties found in this database.
+No saved specs found in this database.
+No modules found in this database.
+No commandbars found in this database.
+No imex specs found in this database.
+No macros found in this database.
+No table data found in this database.
+No table data macros found in this database.
+No relations found in this database.
+No hidden attributes found in this database.
+-------------------------------------
+Exporting project...          
+  teste1.accdb
+[1]
+-------------------------------------
+Exporting vb project...       
+  teste1
+[1]
+-------------------------------------
+Exporting vbe references...   
+  stdole
+[2]
+-------------------------------------
+Exporting shared images...    
+  OutlookSearchMagnifyingGlassHS
+  1_OutlookSearchMagnifyingGlassHS
+  default_Attachment
+  Form Logo
+[4]
+-------------------------------------
+Exporting themes...           
+  Tema do Office
+  Office Theme
+  1_Office Theme
+[3]
+-------------------------------------
+Exporting db properties...    
+  Database Properties (DAO)
+[33]
+-------------------------------------
+Exporting tables...           
+  Contatos
+    Sanitized in 0,005 seconds.
+  Contatos (SQL)
+[1]
+-------------------------------------
+Exporting queries...          
+  ContatosEstendidos
+    Sanitized in 0,001 seconds.
+  ContatosEstendidos (SQL)
+[1]
+-------------------------------------
+Exporting forms...            
+  DetalhesDoContato
+    Sanitized in 0,033 seconds.
+  FolhaDeDadosDoContato
+    Sanitized in 0,012 seconds.
+  ListaDeContatos
+    Sanitized in 0,013 seconds.
+[3]
+-------------------------------------
+Exporting reports...          
+  CatálogoTelefônicoDeContatos
+    Sanitized in 0,009 seconds.
+  ListaDeContatos
+    Sanitized in 0,014 seconds.
+  CatálogoDeEndereçosDeContatos
+    Sanitized in 0,007 seconds.
+  Rótulo
+    Sanitized in 0,002 seconds.
+[4]
+-------------------------------------
+Exporting doc properties...   
+  Database Documents
+[2]
+-------------------------------------
+Exporting nav pane groups...  
+  Groups
+[1]
+-------------------------------------
+Done. (0,99 seconds)
+
+--------------------------------------------------
+                PERFORMANCE REPORTS
+--------------------------------------------------
+Category                      Count     Seconds
+--------------------------------------------------
+Forms                         3         0,38
+Reports                       4         0,13
+Tables                        1         0,06
+DB Properties                 33        0,06
+Themes                        3         0,05
+Queries                       1         0,05
+Shared Images                 4         0,04
+Doc Properties                2         0,03
+Project                       1         0,02
+Nav Pane Groups               1         0,02
+CommandBars                   0         0,02
+VBE References                2         0,02
+VB Project                    1         0,01
+DB Connections                0         0,01
+Hidden Attributes             0         0,01
+Proj Properties               0         0,01
+Relations                     0         0,00
+Table Data Macros             0         0,00
+IMEX Specs                    0         0,00
+VBE Forms                     0         0,00
+Table Data                    0         0,00
+Saved Specs                   0         0,00
+Macros                        0         0,00
+Modules                       0         0,00
+--------------------------------------------------
+TOTALS:                       56        0,91
+--------------------------------------------------
+
+--------------------------------------------------
+Operations                    Count     Seconds
+--------------------------------------------------
+Read File Bytes               12        0,12
+Increment Progress            44        0,10
+Sanitize File                 8         0,09
+Convert to JSON               559       0,09
+Scan DB Objects               1         0,09
+App.SaveAsText()              8         0,02
+App.ExportXML()               1         0,02
+Console Updates               2         0,02
+Write File                    25        0,02
+modFileAccess.VerifyPath      41        0,01
+Get File Property Hash        22        0,01
+Format SQL                    1         0,01
+Read File DevMode             7         0,01
+Quick Count Files             1         0,00
+Compute SHA256                75        0,00
+Sanitize XML                  1         0,00
+Quick Count Objects           1         0,00
+Read File                     9         0,00
+Get VBA Hash                  7         0,00
+Get Modified Date             56        0,00
+Delete File                   10        0,00
+Save Table SQL                1         0,00
+Export Theme                  3         0,00
+Write Binary File             4         0,00
+Format XML (alt)              1         0,00
+Close Open Objects            1         0,00
+modFileAccess.GetUncPath      2         0,00
+Check for linked table        1         0,00
+Save Query SQL                1         0,00
+Clear Files by Ext            6         0,00
+--------------------------------------------------
+Other Operations                        0,36
+--------------------------------------------------
+
+
