@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbTableDef",
+    "Description": "Linked Table"
+  },
+  "Items": {
+    "Name": "tblLinkedCSV",
+    "Connect": "Text;DSN=Linked Link Specification;FMT=Delimited;HDR=NO;IMEX=2;CharacterSet=437;ACCDB=YES;DATABASE=rel:",
+    "SourceTableName": "Linked.csv",
+    "Attributes": 1073741824
+  }
+}

@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "Form Logo",
+    "FileName": "Recurso.png",
+    "Extension": "png",
+    "ContentHash": "0b5f6ce"
+  }
+}

@@ -1,0 +1,22 @@
+﻿CREATE TABLE [Contatos] (
+  [ID] AUTOINCREMENT CONSTRAINT [PrimaryKey] PRIMARY KEY UNIQUE NOT NULL,
+  [Empresa] VARCHAR (255),
+  [Sobrenome] VARCHAR (255),
+  [Nome] VARCHAR (255),
+  [EndereçoDeEmail] VARCHAR (255),
+  [Cargo] VARCHAR (255),
+  [TelefoneComercial] VARCHAR (255),
+  [FoneResidencial] VARCHAR (255),
+  [Celular] VARCHAR (255),
+  [NúmeroDeFax] VARCHAR (255),
+  [Endereço] VARCHAR (255),
+  [Cidade] VARCHAR (255),
+  [EstadoProvíncia] VARCHAR (255),
+  [CEP] VARCHAR (255),
+  [PaísRegião] VARCHAR (255),
+  [PáginaDaWeb] LONGTEXT,
+  [Anotações] LONGTEXT,
+  [Anexos] VARCHAR,
+  [NomeDoContato] VARCHAR (243),
+  [ArquivoComo] VARCHAR (243)
+)

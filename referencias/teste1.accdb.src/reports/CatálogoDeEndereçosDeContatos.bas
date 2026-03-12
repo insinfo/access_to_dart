@@ -1,0 +1,892 @@
+﻿Version =20
+VersionRequired =20
+Begin Report
+    AllowDesignChanges = NotDefault
+    DateGrouping =1
+    GrpKeepTogether =1
+    Cycle =1
+    PictureType =2
+    GridX =24
+    GridY =24
+    Width =11160
+    Tag ="ReportControlDefaults"
+    RecSrcDt = Begin
+        0xa684884ba081e640
+    End
+    RecordSource ="Contatos"
+    Caption ="Contact Address Book"
+    FilterOnLoad =0
+    FitToPage =255
+    Begin
+        Begin Label
+            BackStyle =0
+            BorderWidth =11
+            TextAlign =1
+            FontSize =11
+            FontName ="Calibri"
+            LeftPadding =0
+            TopPadding =0
+            RightPadding =0
+            BottomPadding =0
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            ForeThemeColorIndex =0
+            ForeTint =60.0
+        End
+        Begin CheckBox
+            OldBorderStyle =0
+            BorderWidth =1
+            BorderLineStyle =0
+            LabelX =230
+            LabelY =-30
+            LeftPadding =0
+            TopPadding =0
+            RightPadding =0
+            BottomPadding =0
+            BorderThemeColorIndex =3
+            BorderShade =90.0
+        End
+        Begin BoundObjectFrame
+            AddColon = NotDefault
+            SizeMode =3
+            OldBorderStyle =0
+            BorderLineStyle =0
+            Width =4536
+            Height =2835
+            LabelX =-1701
+            LeftPadding =0
+            TopPadding =0
+            RightPadding =0
+            BottomPadding =0
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =3
+            BorderShade =90.0
+        End
+        Begin TextBox
+            CanGrow = NotDefault
+            AddColon = NotDefault
+            FELineBreak = NotDefault
+            OldBorderStyle =0
+            BorderWidth =11
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            FontName ="Calibri"
+            AsianLineBreak =1
+            LeftPadding =0
+            TopPadding =0
+            RightPadding =0
+            BottomPadding =0
+            ShowDatePicker =0
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ThemeFontIndex =1
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+        End
+        Begin BreakLevel
+            GroupHeader = NotDefault
+            ControlSource ="=Left([Sobrenome],1)"
+        End
+        Begin BreakLevel
+            ControlSource ="Sobrenome"
+        End
+        Begin BreakLevel
+            ControlSource ="Nome"
+        End
+        Begin FormHeader
+            CanGrow = NotDefault
+            Height =0
+            Name ="ReportHeader"
+            AutoHeight =255
+            BackThemeColorIndex =1
+        End
+        Begin PageHeader
+            Height =1755
+            Name ="PageHeaderSection"
+            AutoHeight =255
+            BackThemeColorIndex =1
+            Begin
+                Begin EmptyCell
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell475"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =360
+                    LayoutGroup =1
+                    BackThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Width =10800
+                    Height =360
+                    Name ="zecEmptyCell415"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =360
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =360
+                    ColumnStart =1
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BackThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Top =360
+                    Width =360
+                    Height =525
+                    Name ="zecEmptyCell476"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =885
+                    RowStart =1
+                    RowEnd =1
+                    LayoutGroup =1
+                    BackThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin TextBox
+                    BorderWidth =0
+                    TextAlign =3
+                    Left =7200
+                    Top =360
+                    Width =3960
+                    Height =525
+                    Name ="txtDate"
+                    ControlSource ="=Date()"
+                    Format ="Long Date"
+                    Tag ="reportdate"
+                    GroupTable =1
+                    GridlineColor =-2147483609
+
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =885
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BorderThemeColorIndex =3
+                    BorderShade =90.0
+                    ForeThemeColorIndex =2
+                    ForeTint =100.0
+                    ForeShade =50.0
+                    GroupTable =1
+                    Begin
+                        Begin Label
+                            BackStyle =1
+                            BorderWidth =0
+                            Left =360
+                            Top =360
+                            Width =6840
+                            Height =525
+                            FontSize =18
+                            Name ="lblDate"
+                            Caption ="Catálogo de Endereços de Contatos"
+                            Tag ="detailformtitle"
+                            GroupTable =1
+                            LayoutCachedLeft =360
+                            LayoutCachedTop =360
+                            LayoutCachedWidth =7200
+                            LayoutCachedHeight =885
+                            RowStart =1
+                            RowEnd =1
+                            ColumnStart =1
+                            ColumnEnd =2
+                            LayoutGroup =1
+                            ThemeFontIndex =-1
+                            ForeThemeColorIndex =2
+                            ForeTint =100.0
+                            ForeShade =75.0
+                            GridlineThemeColorIndex =1
+                            GroupTable =1
+                        End
+                    End
+                End
+                Begin EmptyCell
+                    Top =885
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell477"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedTop =885
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =1245
+                    RowStart =2
+                    RowEnd =2
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Top =885
+                    Width =6840
+                    Height =360
+                    Name ="zecEmptyCell474"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =360
+                    LayoutCachedTop =885
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =1245
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =1
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =7200
+                    Top =885
+                    Width =3960
+                    Height =360
+                    Name ="zecEmptyCell287"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =885
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =1245
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Top =1245
+                    Width =360
+                    Height =330
+                    Name ="zecEmptyCell478"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedTop =1245
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =1575
+                    RowStart =3
+                    RowEnd =3
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Top =1245
+                    Width =360
+                    Height =330
+                    Name ="zecEmptyCell24"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineStyleBottom =1
+                    LayoutCachedLeft =360
+                    LayoutCachedTop =1245
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =1575
+                    RowStart =3
+                    RowEnd =3
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin Label
+                    BorderWidth =0
+                    Left =720
+                    Top =1245
+                    Width =6480
+                    Height =330
+                    FontWeight =700
+                    Name ="lblContactName"
+                    Caption ="Nome do Contato"
+                    GroupTable =1
+                    GridlineStyleBottom =1
+                    LayoutCachedLeft =720
+                    LayoutCachedTop =1245
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =1575
+                    RowStart =3
+                    RowEnd =3
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    BackThemeColorIndex =-1
+                    ForeThemeColorIndex =2
+                    ForeTint =100.0
+                    ForeShade =75.0
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin Label
+                    BorderWidth =0
+                    Left =7200
+                    Top =1245
+                    Width =3960
+                    Height =330
+                    FontWeight =700
+                    Name ="lblAddress"
+                    Caption ="Endereço"
+                    GroupTable =1
+                    GridlineStyleBottom =1
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =1245
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =1575
+                    RowStart =3
+                    RowEnd =3
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BackThemeColorIndex =-1
+                    ForeThemeColorIndex =2
+                    ForeTint =100.0
+                    ForeShade =75.0
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Top =1575
+                    Width =360
+                    Height =180
+                    Name ="zecEmptyCell479"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedTop =1575
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =1755
+                    RowStart =4
+                    RowEnd =4
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Top =1575
+                    Width =360
+                    Height =180
+                    Name ="zecEmptyCell459"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedLeft =360
+                    LayoutCachedTop =1575
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =1755
+                    RowStart =4
+                    RowEnd =4
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    BackStyle =1
+                    Left =720
+                    Top =1575
+                    Width =6480
+                    Height =180
+                    Name ="zecEmptyCell460"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =720
+                    LayoutCachedTop =1575
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =1755
+                    RowStart =4
+                    RowEnd =4
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    BackThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =7200
+                    Top =1575
+                    Width =3960
+                    Height =180
+                    Name ="zecEmptyCell461"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =1575
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =1755
+                    RowStart =4
+                    RowEnd =4
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+            End
+        End
+        Begin BreakHeader
+            KeepTogether = NotDefault
+            CanGrow = NotDefault
+            Height =360
+            Name ="CabeçalhoDoGrupo0"
+            BackThemeColorIndex =1
+            Begin
+                Begin EmptyCell
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell480"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =360
+                    RowStart =5
+                    RowEnd =5
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin TextBox
+                    BorderWidth =0
+                    TextAlign =1
+                    Left =360
+                    Width =360
+                    Height =360
+                    FontWeight =700
+                    ForeColor =6710886
+                    Name ="txtLetter"
+                    ControlSource ="=Left([Sobrenome],1)"
+                    Tag ="Letter~FieldName=Sobrenome"
+                    GroupTable =1
+                    GridlineColor =-2147483609
+
+                    LayoutCachedLeft =360
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =360
+                    RowStart =5
+                    RowEnd =5
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =3
+                    BorderShade =90.0
+                    ForeTint =60.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =720
+                    Width =6480
+                    Height =360
+                    Name ="zecEmptyCell28"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =720
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =360
+                    RowStart =5
+                    RowEnd =5
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =7200
+                    Width =3960
+                    Height =360
+                    Name ="zecEmptyCell290"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedLeft =7200
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =360
+                    RowStart =5
+                    RowEnd =5
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+            End
+        End
+        Begin Section
+            KeepTogether = NotDefault
+            CanGrow = NotDefault
+            Height =720
+            Name ="Detalhe"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin EmptyCell
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell481"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =360
+                    RowStart =6
+                    RowEnd =6
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell25"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =360
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =360
+                    RowStart =6
+                    RowEnd =6
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin TextBox
+                    BorderWidth =0
+                    TextAlign =1
+                    Left =720
+                    Width =6480
+                    Height =360
+                    LeftMargin =22
+                    TopMargin =22
+                    RightMargin =22
+                    BottomMargin =22
+                    ForeColor =0
+                    Name ="txtContactName"
+                    ControlSource ="NomeDoContato"
+                    GroupTable =1
+
+                    LayoutCachedLeft =720
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =360
+                    RowStart =6
+                    RowEnd =6
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    BorderThemeColorIndex =3
+                    BorderShade =90.0
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin TextBox
+                    BorderWidth =0
+                    TextAlign =1
+                    Left =7200
+                    Width =3960
+                    Height =360
+                    TabIndex =1
+                    ForeColor =0
+                    Name ="txtAddress"
+                    ControlSource ="Endereço"
+                    GroupTable =1
+                    GridlineColor =-2147483609
+
+                    LayoutCachedLeft =7200
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =360
+                    RowStart =6
+                    RowEnd =6
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BorderThemeColorIndex =3
+                    BorderShade =90.0
+                    ForeTint =100.0
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Top =360
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell482"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =720
+                    RowStart =7
+                    RowEnd =7
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Top =360
+                    Width =360
+                    Height =360
+                    Name ="zecEmptyCell465"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =360
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =720
+                    RowStart =7
+                    RowEnd =7
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =720
+                    Top =360
+                    Width =6480
+                    Height =360
+                    Name ="zecEmptyCell473"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedLeft =720
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =720
+                    RowStart =7
+                    RowEnd =7
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =2
+                    GridlineShade =75.0
+                    GroupTable =1
+                End
+                Begin TextBox
+                    BorderWidth =0
+                    TextAlign =1
+                    Left =7200
+                    Top =360
+                    Width =3960
+                    Height =360
+                    TabIndex =2
+                    ForeColor =0
+                    Name ="txtCity"
+                    ControlSource ="=[Cidade] & IIf(IsNull([Cidade]),\" \",\", \") & [EstadoProvíncia] & \" \" & [CE"
+                        "P] & \" \" & [PaísRegião]"
+                    Tag ="Address1"
+                    GroupTable =1
+                    GridlineColor =-2147483609
+
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =360
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =720
+                    RowStart =7
+                    RowEnd =7
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BorderThemeColorIndex =3
+                    BorderShade =90.0
+                    ForeTint =100.0
+                    GroupTable =1
+                End
+            End
+        End
+        Begin PageFooter
+            Height =0
+            Name ="PageFooterSection"
+            AutoHeight =255
+            BackThemeColorIndex =1
+        End
+        Begin FormFooter
+            CanGrow = NotDefault
+            Height =330
+            Name ="RodapéDoRelatório"
+            AutoHeight =255
+            BackThemeColorIndex =1
+
+            Begin
+                Begin EmptyCell
+                    Top =15
+                    Width =360
+                    Height =315
+                    Name ="zecEmptyCell483"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedTop =15
+                    LayoutCachedWidth =360
+                    LayoutCachedHeight =330
+                    RowStart =8
+                    RowEnd =8
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =360
+                    Top =15
+                    Width =360
+                    Height =315
+                    Name ="zecEmptyCell26"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedLeft =360
+                    LayoutCachedTop =15
+                    LayoutCachedWidth =720
+                    LayoutCachedHeight =330
+                    RowStart =8
+                    RowEnd =8
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =720
+                    Top =15
+                    Width =6480
+                    Height =315
+                    Name ="zecEmptyCell33"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    GridlineStyleTop =1
+                    GridlineWidthTop =2
+                    LayoutCachedLeft =720
+                    LayoutCachedTop =15
+                    LayoutCachedWidth =7200
+                    LayoutCachedHeight =330
+                    RowStart =8
+                    RowEnd =8
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+                Begin EmptyCell
+                    Left =7200
+                    Top =15
+                    Width =3960
+                    Height =315
+                    Name ="zecEmptyCell297"
+                    GroupTable =1
+                    LeftPadding =0
+                    TopPadding =0
+                    RightPadding =0
+                    BottomPadding =0
+                    LayoutCachedLeft =7200
+                    LayoutCachedTop =15
+                    LayoutCachedWidth =11160
+                    LayoutCachedHeight =330
+                    RowStart =8
+                    RowEnd =8
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    GridlineThemeColorIndex =1
+                    GroupTable =1
+                End
+            End
+        End
+    End
+End

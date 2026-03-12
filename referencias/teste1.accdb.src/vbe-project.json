@@ -1,0 +1,17 @@
+﻿{
+  "Info": {
+    "Class": "clsDbVbeProject",
+    "Description": "VBE Project"
+  },
+  "Items": {
+    "Name": "teste1",
+    "Description": "",
+    "FileName": "teste1.accdb",
+    "HelpFile": "",
+    "HelpContextId": 0,
+    "ConditionalCompilationArguments": "",
+    "Mode": 0,
+    "Protection": 0,
+    "Type": 100
+  }
+}

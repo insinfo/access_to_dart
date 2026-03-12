@@ -1,0 +1,257 @@
+
+Class AddInRibbon
+
+	Implements IDTExtensibility2
+
+	/*
+		PLEASE NOTE: make sure you create a DLL of the correct bitness to match your version of VBA
+		(e.g. if you're using the 64-bit version of VBA, make sure you change the 'Active Build' in the twinBASIC panel to 'win64')
+	*/
+	
+	[WithDispatchForwarding]
+	Implements IRibbonExtensibility
+	
+	/* 
+		The [WithDispatchForwarding] attribute seen above is needed so that late-bound calls
+		on the IRibbonExtensibility interface get routed to our default interface.
+		Without it, events will not fire.
+	*/
+    
+    ' This corresponds to the name of the Access Add-in Project
+    Const PROJECT_NAME As String = "MSAccessVCS"
+ 
+	' Cached copy of the ribbon XML as loaded from the Ribbon.xml file.
+	Private strRibbonXML As String
+	
+	' A reference to the Microsoft Access application
+	Private applicationObject As Object
+	
+	' A reference to the ribbon object
+	Private activeRibbon As IRibbonUI
+    
+    ' Dictionary of menu Labels, Descriptions and Supertips loaded from Ribbon.json
+    Private ribbonStrings As Dictionary
+
+	
+    /* 
+		Firstly we implement the IDTExtensibility2 interface members
+		We don't do anything particularly interesting here, except for taking a reference
+		to the Application object provided to us in the OnConnection event
+	*/
+	Public Sub OnConnection(ByVal Application As Object, _
+					 ByVal ConnectMode As ext_ConnectMode, _
+					 ByVal AddInInst As Object, _
+					 ByRef custom As Variant()) Implements IDTExtensibility2.OnConnection
+		
+		'MsgBox "MyCOMAddin.OnConnection"
+		Set applicationObject = Application
+	End Sub
+	
+	
+	Public Sub OnDisconnection(ByVal RemoveMode As ext_DisconnectMode, _
+						ByRef custom As Variant()) Implements IDTExtensibility2.OnDisconnection
+		
+		'MsgBox "MyCOMAddin.OnDisconnection"
+		Set applicationObject = Nothing
+	End Sub
+	
+	
+	Public Sub OnAddInsUpdate(ByRef custom As Variant()) Implements IDTExtensibility2.OnAddInsUpdate
+		
+		'MsgBox "MyCOMAddin.OnAddInsUpdate"
+	End Sub
+	
+	
+	Public Sub OnStartupComplete(ByRef custom As Variant()) Implements IDTExtensibility2.OnStartupComplete
+		
+		'MsgBox "MyCOMAddin.OnStartupComplete"
+	End Sub
+	
+	
+	Public Sub OnBeginShutdown(ByRef custom As Variant()) Implements IDTExtensibility2.OnBeginShutdown
+		Set activeRibbon = Nothing
+		'MsgBox "MyCOMAddin.OnBeginShutdown"
+	End Sub
+	
+	
+	/* 
+		Next we implement IRibbonExtensibility.GetCustomUI which lets us provide
+		a ribbon XML string to the host
+	*/
+	Private Function GetCustomUI(ByVal RibbonID As String) As String Implements IRibbonExtensibility.GetCustomUI
+		
+		Dim strPath As String
+        Dim strContent As String
+        Dim dStrings As Dictionary
+        
+        On Error GoTo ErrHandler
+        
+        ' Load translation strings
+        strPath = App.Path & "\Ribbon.json"
+		If Me.ribbonStrings Is Nothing Then
+        	If FSO.FileExists(strPath) Then
+                strContent = ReadFile(strPath)
+                If Len(strContent) Then
+                    Set dStrings = ParseJson(strContent)
+                    If Not dStrings Is Nothing Then Set Me.ribbonStrings = dStrings
+                End If
+            End If
+        End If
+        
+		' Load XML to cached variable if needed
+        strPath = App.Path & "\Ribbon.xml"
+        If Me.strRibbonXML = vbNullString Then
+			If FSO.FileExists(strPath) Then Me.strRibbonXML = ReadFile(strPath)
+        End If
+		
+		Return Me.strRibbonXML
+		Exit Function
+     
+	ErrHandler:
+		MsgBox "Error: " & Err.Number & vbCrLf & Err.Description, vbExclamation
+		Resume Next
+     
+	End Function
+
+    
+    /*
+		Read content from text file
+    */
+    Private Function ReadFile(strPath As String) As String
+	
+        Dim strContent As String
+        
+        ' If the file exists, load content as string
+        On Error Resume Next
+        If FSO.FileExists(strPath) Then
+            With New ADODB.Stream
+                .Charset = "utf-8"
+                .Open
+                .LoadFromFile strPath
+                strContent = .ReadText
+                .Close
+            End With
+        End If
+        
+        Return strContent
+    End Function
+    
+    
+	/*
+		Ensure that the add-in project is loaded in VBE
+	*/
+	Private Function VerifyAccessAddinProject() As Boolean
+
+		Dim strAddInLib As String
+		Dim proj As Object      	' VBProject
+		Dim addInProject As Object	' VBProject
+		Dim strName As String
+		Dim strTempDbPath As String = App.Path & "Temp.accdb"
+		
+		' Get relative path to Access add-in library (Should be in same folder as this dll)
+		strAddInLib = App.Path & "\Version Control"
+
+        ' If NO file is open, and NO add-ins are loaded, we may be unable to load
+        ' the MSAccessVCS add-in. To resolve this, create a new blank
+        ' database project, load the addin, then close the temporary database project.
+        If applicationObject.VBE.ActiveVBProject Is Nothing Then
+            ' Create a new database project.
+            If FSO.FileExists(strTempDbPath) Then FSO.DeleteFile(strTempDbPath)
+            applicationObject.NewCurrentDatabase strTempDbPath
+        End If
+        
+        ' At this point we should have a database file open, but just in case...
+        If applicationObject.VBE.ActiveVBProject Is Nothing Then
+            MsgBox "Please open a database file before using this add-in", vbInformation
+        Else
+            ' Attempt to call the Preload routine
+            On Error Resume Next
+            With applicationObject
+                .DoCmd.Hourglass True
+                .Run strAddInLib & ".Preload"
+                .DoCmd.Hourglass False
+            End With
+            If Err Then
+                MsgBox "Failed to Load Add-In" & vbCrLf & vbCrLf & _
+                    Err.Number & ": " & Err.Description, vbExclamation
+                Err.Clear()
+            End If
+            On Error GoTo 0
+        End If
+		
+		' Clean up any temporary database
+		If applicationObject.CurrentProject.FullName = strTempDbPath Then applicationObject.CloseCurrentDatabase
+		If FSO.FileExists(strTempDbPath) Then FSO.DeleteFile(strTempDbPath)
+
+        ' Technically, we are just returning true if ANY project is loaded.
+        ' (We should be able to call the add-in directly as long as a project is loaded.)
+        Return Not (applicationObject.VBE.ActiveVBProject Is Nothing)
+        
+	End Function
+	
+	
+	/*
+		Wrapper for the file system object
+	*/
+	Private Function FSO() As FileSystemObject
+		Static objFSO As FileSystemObject
+		If objFSO Is Nothing Then Set objFSO = New FileSystemObject
+		Return objFSO
+	End Function
+
+	
+	/*
+		Primary ribbon callback function. Relay control ID back to add-in for execution.
+	*/
+	Public Sub OnActionButton(control As IRibbonControl)
+		If VerifyAccessAddinProject Then
+			' Pass the control ID to the handler function
+			applicationObject.Run App.Path & "\Version Control.HandleRibbonCommand", control.Id
+		End If
+	End Sub
+	
+    /*
+		Functions to dynamically load labels and descriptions
+    */
+    Public Function GetLabel(control As IRibbonControl) As String
+        Return GetString(control, "Label")
+    End Function
+    
+    Public Function GetDescription(control As IRibbonControl) As String
+        Return GetString(control, "Description")
+    End Function
+    
+    Public Function GetSupertip(control As IRibbonControl) As String
+        Return GetString(control, "Supertip")
+    End Function
+	
+    ' Wrapper to look up a string value from the dictionary loaded from `Ribbon.json`
+    Private Function GetString(control As IRibbonControl, strKey As String) As String
+        Dim strValue As String
+        If Not Me.ribbonStrings Is Nothing Then
+			If Me.ribbonStrings.Exists(control.Id) Then
+				strValue = Me.ribbonStrings(control.Id)(strKey)
+			End If
+        End If
+        Return strValue
+    End Function
+    
+	/*
+		Stub functions for default ribbon callbacks. (Not currently used)
+	*/
+	Public Function GetVisible(control As IRibbonControl) As Boolean
+		' Always show all buttons for now.
+		Return True
+	End Function
+	
+	Public Function GetEnabled(control As IRibbonControl) As Boolean
+		' Always enable all buttons for now.
+		Return True
+	End Function
+	
+	
+	Public Sub OnRibbonLoad(ribbon As IRibbonUI)
+		' Save reference to ribbon object
+		Set activeRibbon = ribbon
+	End Sub
+End Class
