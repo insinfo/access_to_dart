@@ -51,18 +51,29 @@ Future<int> _runInspectAccdb(
     final database = await AccessDatabase.openPath(accdbPath);
     try {
       final info = database.info;
+      final systemCatalog = await database.inspectSystemCatalogPage();
       out.writeln('ACCDB inspection');
       out.writeln('Path: ${info.path}');
       out.writeln('Format: ${info.format.name}');
       out.writeln('Page size: ${info.pageSize} bytes');
       out.writeln('File size: ${info.fileSize} bytes');
       out.writeln('Estimated page count: ${info.pageCount}');
+      out.writeln(
+          'System catalog page: ${systemCatalog.pageNumber} (${systemCatalog.pageTypeName})');
+      out.writeln(
+          'System catalog row count hint: ${systemCatalog.rowCount}');
+      out.writeln(
+          'System catalog next table-def page: ${systemCatalog.nextTableDefPage}');
       return 0;
     } finally {
       await database.close();
     }
   } on FileSystemException catch (e) {
     err.writeln('Cannot open ACCDB: ${e.path ?? accdbPath}');
+    return 66;
+  } on AccdbPointerException catch (e) {
+    err.writeln(e);
+    err.writeln('Run `git lfs pull --include="$accdbPath"` to materialize it.');
     return 66;
   } catch (e) {
     err.writeln('Failed to inspect ACCDB: $e');

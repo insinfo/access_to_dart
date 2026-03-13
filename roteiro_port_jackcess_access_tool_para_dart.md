@@ -642,18 +642,18 @@ O MVP estará pronto quando:
 
 ## 22. Próximos passos imediatos
 
-1. Criar os pacotes `access_model`, `access_src_reader`, `access_analysis` e `access_to_dart_cli`.
-2. Definir o schema exato de `analysis.json`.
-3. Implementar leitura de `tbldefs/Contatos.sql` e `tbldefs/Contatos.xml`.
-4. Implementar leitura de `queries/ContatosEstendidos.sql`.
-5. Implementar leitura de `forms/DetalhesDoContato.bas`, `forms/ListaDeContatos.bas` e `forms/FolhaDeDadosDoContato.bas`.
-6. Só depois iniciar o port parcial do `jackcess` começando por `JetFormat`, `PageChannel`, catálogo, `TableDefinition` e rows.
-7. Adiar o adaptador Windows puro Dart até o leitor textual e o gerador já estarem funcionando.
+1. Definir o schema exato de `analysis.json` e começar a separar o modelo canônico do formato bruto atual de `read-src`.
+2. Extrair do catálogo binário do `.accdb` os objetos de `MSysObjects`, começando pela tabela `Contatos`.
+3. Portar o recorte mínimo de `TableDefinition` para listar tabelas do usuário, object ids e metadados básicos.
+4. Validar a leitura binária com testes contra `fixtures/teste1/teste1.accdb`, sem qualquer dependência operacional de `referencias/`.
+5. Depois disso, iniciar a leitura de colunas, propriedades e rows.
+6. Adiar o adaptador Windows puro Dart até o leitor textual, o catálogo binário e o modelo canônico já estarem estabilizados.
 
 ## 22.1 Status atual da implementação
 
 - o corpus necessário já foi internalizado em `fixtures/` e `third_party/`;
-- `jackcess_dart` já detecta o formato do `.accdb` e lê páginas por caminho informado;
+- o fixture `fixtures/teste1/teste1.accdb` já está materializado localmente e testado sem depender de `referencias/`;
+- `jackcess_dart` já detecta o formato do `.accdb`, lê páginas por caminho informado e identifica explicitamente quando o arquivo ainda for apenas um ponteiro do Git LFS;
 - o CLI raiz já expõe `inspect-accdb`;
 - o leitor Dart de `.accdb.src` já está implementado no workspace e o CLI raiz já expõe `read-src`;
 - o parser atual já cobre o caso real `teste1` para:
@@ -663,7 +663,10 @@ O MVP estará pronto quando:
   - `forms/DetalhesDoContato.bas`;
   - `forms/ListaDeContatos.bas`;
   - `forms/FolhaDeDadosDoContato.bas`;
-- a próxima entrega deve ser a leitura do catálogo binário do `.accdb`, porque a trilha textual mínima já deixou de ser bloqueadora.
+- o parser de forms agora extrai `RecordSource`, `Caption`, controles reais como `txtFirstName` e macros observadas no fixture;
+- `inspect-accdb` já passou de mera abertura de arquivo e resume a página 2 do catálogo do sistema (`MSysObjects`) como `TABLE_DEF`, incluindo `row count hint` e encadeamento de table-def;
+- a base atual está coberta por testes automatizados no workspace raiz e em `packages/jackcess_dart`;
+- a próxima entrega continua sendo a leitura do catálogo binário do `.accdb` em nível de objetos, tabelas e colunas, porque a trilha textual mínima já deixou de ser bloqueadora.
 
 ## 23. Resumo executivo
 

@@ -19,6 +19,11 @@ void main() {
       expect(database.info.fileSize, greaterThan(0));
       expect(database.info.pageSize, 4096);
       expect(database.info.pageCount, greaterThan(0));
+
+      final systemCatalog = await database.inspectSystemCatalogPage();
+      expect(systemCatalog.pageNumber, AccessDatabase.systemCatalogPageNumber);
+      expect(systemCatalog.pageTypeName, 'TABLE_DEF');
+      expect(systemCatalog.rowCount, greaterThan(0));
     });
 
     test('opens an accdb file from an arbitrary path', () async {

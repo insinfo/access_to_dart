@@ -34,6 +34,8 @@ void main() {
     expect(exitCode, 0);
     expect(out.toString(), contains('ACCDB inspection'));
     expect(out.toString(), contains('Format: VERSION_14'));
+    expect(out.toString(), contains('System catalog page: 2 (TABLE_DEF)'));
+    expect(out.toString(), contains('System catalog row count hint: 53'));
     expect(err.toString(), isEmpty);
   });
 

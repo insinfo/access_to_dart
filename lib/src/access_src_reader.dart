@@ -489,8 +489,16 @@ class AccessSrcReader {
         continue;
       }
 
-      stack.last.properties[propertyMatch.group(1)!.trim()] =
-          _unquoteBasValue(propertyMatch.group(2)!.trim());
+      final propertyName = propertyMatch.group(1)!.trim();
+      final propertyValue = propertyMatch.group(2)!.trim();
+      if (propertyValue == 'Begin') {
+        final node = _BasNode('property:$propertyName');
+        stack.last.children.add(node);
+        stack.add(node);
+        continue;
+      }
+
+      stack.last.properties[propertyName] = _unquoteBasValue(propertyValue);
     }
 
     return root;
