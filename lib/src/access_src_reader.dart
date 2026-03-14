@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:xml/xml.dart';
 import 'access_src_model.dart';
 
 class AccessSrcReader {
@@ -23,32 +25,60 @@ class AccessSrcReader {
 
   Future<List<AccessSrcTable>> _readTables(Directory directory) async {
     final sqlDir = Directory('${directory.path}\\tbldefs');
-    if (!await sqlDir.exists()) {
-      return const <AccessSrcTable>[];
-    }
+    // For non-Windows environments fallback gracefully to /
+    final altSqlDir = Directory('${directory.path}/tbldefs');
 
-    final sqlFiles = await sqlDir
+    final dirToRead = await sqlDir.exists()
+        ? sqlDir
+        : (await altSqlDir.exists() ? altSqlDir : null);
+    if (dirToRead == null) return const <AccessSrcTable>[];
+
+    final sqlFiles = await dirToRead
         .list()
         .where((entity) => entity is File && entity.path.endsWith('.sql'))
         .cast<File>()
         .toList();
     sqlFiles.sort((a, b) => a.path.compareTo(b.path));
 
+    final jsonFiles = await dirToRead
+        .list()
+        .where((entity) => entity is File && entity.path.endsWith('.json'))
+        .cast<File>()
+        .toList();
+    jsonFiles.sort((a, b) => a.path.compareTo(b.path));
+
     final tables = <AccessSrcTable>[];
     for (final sqlFile in sqlFiles) {
       final baseName = _basenameWithoutExtension(sqlFile.path);
-      final xmlFile = File('${sqlDir.path}\\$baseName.xml');
+      final xmlFile =
+          File('${dirToRead.path}${Platform.pathSeparator}$baseName.xml');
       final sql = (await sqlFile.readAsString()).trim();
       final xml = await xmlFile.exists() ? await xmlFile.readAsString() : null;
 
       tables.add(_parseTable(baseName, sql, xml));
     }
 
+    final seenNames = tables.map((table) => table.name.toLowerCase()).toSet();
+    for (final jsonFile in jsonFiles) {
+      final baseName = _basenameWithoutExtension(jsonFile.path);
+      if (seenNames.contains(baseName.toLowerCase())) {
+        continue;
+      }
+      final json = await jsonFile.readAsString();
+      final parsed = _parseJsonTable(baseName, json);
+      if (parsed != null) {
+        tables.add(parsed);
+      }
+    }
+
+    tables.sort((a, b) => a.name.compareTo(b.name));
+
     return tables;
   }
 
   Future<List<AccessSrcQuery>> _readQueries(Directory directory) async {
-    final queriesDir = Directory('${directory.path}\\queries');
+    final queriesDir =
+        Directory('${directory.path}${Platform.pathSeparator}queries');
     if (!await queriesDir.exists()) {
       return const <AccessSrcQuery>[];
     }
@@ -71,7 +101,8 @@ class AccessSrcReader {
   }
 
   Future<List<AccessSrcForm>> _readForms(Directory directory) async {
-    final formsDir = Directory('${directory.path}\\forms');
+    final formsDir =
+        Directory('${directory.path}${Platform.pathSeparator}forms');
     if (!await formsDir.exists()) {
       return const <AccessSrcForm>[];
     }
@@ -114,156 +145,255 @@ class AccessSrcReader {
     );
   }
 
+  AccessSrcTable? _parseJsonTable(String fallbackName, String json) {
+    try {
+      final decoded = json.isEmpty ? null : jsonDecode(json);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      final info = decoded['Info'];
+      final items = decoded['Items'];
+      if (info is! Map || items is! Map) {
+        return null;
+      }
+      if (info['Class']?.toString() != 'clsDbTableDef') {
+        return null;
+      }
+
+      final name = items['Name']?.toString() ?? fallbackName;
+      final connect = items['Connect']?.toString();
+      final sourceTableName = items['SourceTableName']?.toString();
+      final primaryKey = items['PrimaryKey']?.toString();
+      final isLinked = connect != null && connect.isNotEmpty;
+
+      return AccessSrcTable(
+        name: name,
+        sql: '',
+        columns: const <AccessSrcColumn>[],
+        indexes: primaryKey == null || primaryKey.isEmpty
+            ? const <AccessSrcIndex>[]
+            : <AccessSrcIndex>[
+                AccessSrcIndex(
+                  name: 'PrimaryKey',
+                  key: primaryKey,
+                  primary: true,
+                  unique: true,
+                ),
+              ],
+        isLinked: isLinked,
+        sourceTableName: sourceTableName,
+        connect: connect,
+        primaryKey: primaryKey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<AccessSrcColumn> _parseSqlColumns(String sql) {
-    final match = RegExp(
-      r'CREATE TABLE \[[^\]]+\] \(([\s\S]+)\)$',
-      caseSensitive: false,
-    ).firstMatch(sql.trim());
-    if (match == null) {
+    final createTableStr = "CREATE TABLE ";
+    int tableStrIndex = sql.toUpperCase().indexOf(createTableStr);
+    if (tableStrIndex < 0) return const <AccessSrcColumn>[];
+
+    int openParen = sql.indexOf('(', tableStrIndex);
+    int closeParen = sql.lastIndexOf(')');
+    if (openParen < 0 || closeParen < openParen) {
       return const <AccessSrcColumn>[];
     }
 
-    final body = match.group(1)!;
-    final lines = body
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .map((line) =>
-            line.endsWith(',') ? line.substring(0, line.length - 1) : line)
-        .toList();
+    String body = sql.substring(openParen + 1, closeParen);
+    List<String> rawColumns = [];
+    int depth = 0;
+    int start = 0;
+    for (int i = 0; i < body.length; i++) {
+      if (body[i] == '(') {
+        depth++;
+      } else if (body[i] == ')') {
+        depth--;
+      } else if (body[i] == ',' && depth == 0) {
+        rawColumns.add(body.substring(start, i).trim());
+        start = i + 1;
+      }
+    }
+    if (start < body.length) {
+      rawColumns.add(body.substring(start).trim());
+    }
 
     final columns = <AccessSrcColumn>[];
-    for (final line in lines) {
-      final columnMatch = RegExp(r'^\[([^\]]+)\]\s+(.+)$').firstMatch(line);
-      if (columnMatch == null) {
-        continue;
+    for (String line in rawColumns) {
+      if (line.isEmpty) continue;
+
+      int nameStart = line.indexOf('[');
+      int nameEnd = line.indexOf(']');
+      if (nameStart < 0 || nameEnd < nameStart) continue; // fallback to skip
+
+      String name = line.substring(nameStart + 1, nameEnd);
+      String definition = line.substring(nameEnd + 1).trim();
+
+      String? type;
+      int? maxLength;
+
+      int firstSpace = _indexOfFirstBoundary(definition);
+      if (firstSpace > 0) {
+        type = definition.substring(0, firstSpace);
+        String restOfDef = definition.substring(firstSpace).trim();
+        if (restOfDef.startsWith('(')) {
+          int pqEnd = restOfDef.indexOf(')');
+          if (pqEnd > 0) {
+            maxLength = int.tryParse(restOfDef.substring(1, pqEnd).trim());
+          }
+        }
+      } else {
+        type = definition.isEmpty ? null : definition;
       }
 
-      final name = columnMatch.group(1)!;
-      final definition = columnMatch.group(2)!;
-      final typeMatch =
-          RegExp(r'^([A-Z]+(?:\s*\([^)]+\))?)', caseSensitive: false)
-              .firstMatch(definition);
-      final type = typeMatch?.group(1)?.trim();
-
-      columns.add(
-        AccessSrcColumn(
-          name: name,
-          accessType: type,
-          sqlType: null,
-          caption: null,
-          required: definition.toUpperCase().contains('NOT NULL'),
-          maxLength: _extractLength(type),
-          isAttachment: name == 'Anexos',
-          isCalculated: false,
-          expression: null,
-          children: const <AccessSrcColumn>[],
-        ),
-      );
+      columns.add(AccessSrcColumn(
+        name: name,
+        accessType: type,
+        sqlType: null,
+        caption: null,
+        required: definition.toUpperCase().contains('NOT NULL'),
+        maxLength: maxLength,
+        isAttachment: name == 'Anexos',
+        isCalculated: false,
+        expression: null,
+        children: const [],
+      ));
     }
     return columns;
   }
 
-  String? _extractTableNameFromXml(String xml) {
-    final matches =
-        RegExp(r'<xsd:element name="([^"]+)"').allMatches(xml).toList();
-    if (matches.length < 2) {
-      return null;
+  int _indexOfFirstBoundary(String s) {
+    for (int i = 0; i < s.length; i++) {
+      if (s[i] == ' ' || s[i] == '(' || s[i] == ',') return i;
     }
-    return _decodeXml(matches[1].group(1)!);
+    return -1;
   }
 
-  List<AccessSrcIndex> _parseIndexes(String xml) {
+  String? _extractTableNameFromXml(String xmlStr) {
+    try {
+      final document = XmlDocument.parse(xmlStr);
+      final schemas = document.findAllElements('xsd:schema');
+      if (schemas.isNotEmpty) {
+        final elements = schemas.first.findElements('xsd:element').toList();
+        if (elements.length > 1) {
+          return elements[1].getAttribute('name');
+        } else if (elements.isNotEmpty &&
+            elements.first.getAttribute('name') != 'dataroot') {
+          return elements.first.getAttribute('name');
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  List<AccessSrcIndex> _parseIndexes(String xmlStr) {
     final indexes = <AccessSrcIndex>[];
-    final regex = RegExp(
-      r'<od:index index-name="([^"]+)" index-key="([^"]+)" primary="([^"]+)" unique="([^"]+)"[\s\S]*?/>',
-    );
-    for (final match in regex.allMatches(xml)) {
-      indexes.add(
-        AccessSrcIndex(
-          name: _decodeXml(match.group(1)!),
-          key: _decodeXml(match.group(2)!).trim(),
-          primary: match.group(3) == 'yes',
-          unique: match.group(4) == 'yes',
-        ),
-      );
-    }
+    try {
+      final document = XmlDocument.parse(xmlStr);
+      final indexTags = document.findAllElements('od:index');
+      for (final el in indexTags) {
+        indexes.add(AccessSrcIndex(
+          name: el.getAttribute('name') ?? el.getAttribute('index-name') ?? '',
+          key: el.getAttribute('index-key')?.trim() ?? '',
+          primary: el.getAttribute('primary') == 'yes',
+          unique: el.getAttribute('unique') == 'yes',
+        ));
+      }
+    } catch (_) {}
     return indexes;
   }
 
-  List<AccessSrcColumn> _parseXmlColumns(String xml, String tableName) {
-    final tableToken = '<xsd:element name="$tableName"';
-    final tableStart = xml.indexOf(tableToken);
-    if (tableStart < 0) {
-      return const <AccessSrcColumn>[];
-    }
-
-    final tableBlock = _extractBalancedElement(xml, tableStart);
-    if (tableBlock == null) {
-      return const <AccessSrcColumn>[];
-    }
-
-    final sequenceBlock =
-        _extractBalancedTag(tableBlock, '<xsd:sequence', '</xsd:sequence>');
-    if (sequenceBlock == null) {
-      return const <AccessSrcColumn>[];
-    }
-
-    final contentStart = sequenceBlock.indexOf('>') + 1;
-    final contentEnd = sequenceBlock.lastIndexOf('</xsd:sequence>');
-    final content = sequenceBlock.substring(contentStart, contentEnd);
-
-    return _extractTopLevelElements(content).map(_parseXmlColumn).toList();
+  List<AccessSrcColumn> _parseXmlColumns(String xmlStr, String tableName) {
+    try {
+      final document = XmlDocument.parse(xmlStr);
+      final elements = document.findAllElements('xsd:element');
+      for (final el in elements) {
+        if (el.getAttribute('name') == tableName &&
+            el.parent != null &&
+            el.parent is XmlElement &&
+            (el.parent as XmlElement).name.local == 'schema') {
+          return _parseXmlNodeColumns(el);
+        }
+      }
+    } catch (_) {}
+    return const [];
   }
 
-  AccessSrcColumn _parseXmlColumn(String elementXml) {
-    final openTagEnd = elementXml.indexOf('>');
-    final openTag = elementXml.substring(0, openTagEnd + 1);
-    final attrs = _parseAttributes(openTag);
-    final properties = _parseFieldProperties(elementXml);
-    final nestedSequence =
-        _extractBalancedTag(elementXml, '<xsd:sequence', '</xsd:sequence>');
+  List<AccessSrcColumn> _parseXmlNodeColumns(XmlElement element) {
+    final complexType = element.findElements('xsd:complexType').firstOrNull;
+    final sequence = complexType?.findElements('xsd:sequence').firstOrNull;
+    if (sequence == null) return const [];
+    return _parseXmlSequence(sequence);
+  }
+
+  List<AccessSrcColumn> _parseXmlSequence(XmlElement sequence) {
+    final result = <AccessSrcColumn>[];
+    for (final el in sequence.findElements('xsd:element')) {
+      result.add(_parseXmlColumnNode(el));
+    }
+    return result;
+  }
+
+  AccessSrcColumn _parseXmlColumnNode(XmlElement el) {
+    final name = el.getAttribute('name') ?? '';
+    final accessType = el.getAttribute('od:jetType');
+    final sqlType = el.getAttribute('od:sqlSType');
+    final nonNullable = el.getAttribute('od:nonNullable') == 'yes';
+    final isComplex =
+        el.getAttribute('od:jetComplexType') == 'MSysComplexType_Attachment';
+
+    int? maxLength;
+    final simpleType = el.findElements('xsd:simpleType').firstOrNull;
+    if (simpleType != null) {
+      final restriction =
+          simpleType.findElements('xsd:restriction').firstOrNull;
+      if (restriction != null) {
+        final maxEl = restriction.findElements('xsd:maxLength').firstOrNull;
+        if (maxEl != null) {
+          maxLength = int.tryParse(maxEl.getAttribute('value') ?? '');
+        }
+      }
+    }
+
+    String? caption;
+    String? expression;
+    bool required = nonNullable;
+
+    final annotation = el.findElements('xsd:annotation').firstOrNull;
+    if (annotation != null) {
+      final appinfo = annotation.findElements('xsd:appinfo').firstOrNull;
+      if (appinfo != null) {
+        final fieldProps = appinfo.findElements('od:fieldProperty');
+        for (final prop in fieldProps) {
+          final propName = prop.getAttribute('name');
+          final propValue = prop.getAttribute('value');
+          if (propName == 'Caption') caption = propValue;
+          if (propName == 'Required' && propValue == '1') required = true;
+          if (propName == 'Expression') expression = propValue;
+        }
+      }
+    }
+
+    final attrExpr = el.getAttribute('od:expression');
+    if (attrExpr != null) {
+      expression = attrExpr;
+    }
+
+    final children = _parseXmlNodeColumns(el);
 
     return AccessSrcColumn(
-      name: _decodeXml(attrs['name'] ?? ''),
-      accessType: attrs['od:jetType'],
-      sqlType: attrs['od:sqlSType'],
-      caption: properties['Caption'],
-      required:
-          attrs['od:nonNullable'] == 'yes' || properties['Required'] == '1',
-      maxLength: _parseMaxLength(elementXml),
-      isAttachment: attrs['od:jetComplexType'] == 'MSysComplexType_Attachment',
-      isCalculated: attrs.containsKey('od:expression') ||
-          properties.containsKey('Expression'),
-      expression:
-          _decodeXml(attrs['od:expression'] ?? properties['Expression'] ?? ''),
-      children: nestedSequence == null
-          ? const <AccessSrcColumn>[]
-          : _parseNestedColumnsFromSequence(nestedSequence),
+      name: name,
+      accessType: accessType,
+      sqlType: sqlType,
+      caption: caption,
+      required: required,
+      maxLength: maxLength,
+      isAttachment: isComplex,
+      isCalculated: expression != null && expression.isNotEmpty,
+      expression: expression,
+      children: children,
     );
-  }
-
-  List<AccessSrcColumn> _parseNestedColumnsFromSequence(String sequenceBlock) {
-    final contentStart = sequenceBlock.indexOf('>') + 1;
-    final contentEnd = sequenceBlock.lastIndexOf('</xsd:sequence>');
-    final content = sequenceBlock.substring(contentStart, contentEnd);
-    return _extractTopLevelElements(content).map(_parseXmlColumn).toList();
-  }
-
-  Map<String, String> _parseFieldProperties(String xml) {
-    final properties = <String, String>{};
-    final regex = RegExp(
-      r'<od:fieldProperty name="([^"]+)" type="[^"]+" value="([^"]*)"[\s\S]*?/>',
-    );
-    for (final match in regex.allMatches(xml)) {
-      properties[_decodeXml(match.group(1)!)] = _decodeXml(match.group(2)!);
-    }
-    return properties;
-  }
-
-  int? _parseMaxLength(String xml) {
-    final match = RegExp(r'<xsd:maxLength value="(\d+)"').firstMatch(xml);
-    return match == null ? null : int.tryParse(match.group(1)!);
   }
 
   AccessSrcForm _parseForm(String name, String text) {
@@ -310,35 +440,9 @@ class AccessSrcReader {
   }
 
   String _basenameWithoutExtension(String path) {
-    final fileName = path.split('\\').last;
+    final fileName = path.split(Platform.pathSeparator).last;
     final dotIndex = fileName.lastIndexOf('.');
     return dotIndex < 0 ? fileName : fileName.substring(0, dotIndex);
-  }
-
-  int? _extractLength(String? type) {
-    if (type == null) {
-      return null;
-    }
-    final match = RegExp(r'\((\d+)\)').firstMatch(type);
-    return match == null ? null : int.tryParse(match.group(1)!);
-  }
-
-  Map<String, String> _parseAttributes(String openTag) {
-    final attributes = <String, String>{};
-    final regex = RegExp(r'([A-Za-z0-9:_-]+)="([^"]*)"');
-    for (final match in regex.allMatches(openTag)) {
-      attributes[match.group(1)!] = _decodeXml(match.group(2)!);
-    }
-    return attributes;
-  }
-
-  String _decodeXml(String value) {
-    return value
-        .replaceAll('&quot;', '"')
-        .replaceAll('&apos;', "'")
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&amp;', '&');
   }
 
   String _unquoteBasValue(String rawValue) {
@@ -348,99 +452,6 @@ class AccessSrcReader {
       return rawValue.substring(1, rawValue.length - 1).replaceAll('""', '"');
     }
     return rawValue;
-  }
-
-  String? _extractBalancedElement(String text, int startIndex) {
-    final openStart = text.indexOf('<xsd:element', startIndex);
-    if (openStart < 0) {
-      return null;
-    }
-
-    final openEnd = text.indexOf('>', openStart);
-    if (openEnd < 0) {
-      return null;
-    }
-
-    if (text[openEnd - 1] == '/') {
-      return text.substring(openStart, openEnd + 1);
-    }
-
-    var depth = 1;
-    var cursor = openEnd + 1;
-    while (depth > 0) {
-      final nextOpen = text.indexOf('<xsd:element', cursor);
-      final nextClose = text.indexOf('</xsd:element>', cursor);
-      if (nextClose < 0) {
-        return null;
-      }
-
-      if (nextOpen >= 0 && nextOpen < nextClose) {
-        final nestedOpenEnd = text.indexOf('>', nextOpen);
-        if (nestedOpenEnd < 0) {
-          return null;
-        }
-        if (text[nestedOpenEnd - 1] != '/') {
-          depth++;
-        }
-        cursor = nestedOpenEnd + 1;
-      } else {
-        depth--;
-        cursor = nextClose + '</xsd:element>'.length;
-      }
-    }
-
-    return text.substring(openStart, cursor);
-  }
-
-  String? _extractBalancedTag(
-      String text, String openTagPrefix, String closeTag) {
-    final openStart = text.indexOf(openTagPrefix);
-    if (openStart < 0) {
-      return null;
-    }
-    final openEnd = text.indexOf('>', openStart);
-    if (openEnd < 0) {
-      return null;
-    }
-
-    var depth = 1;
-    var cursor = openEnd + 1;
-    while (depth > 0) {
-      final nextOpen = text.indexOf(openTagPrefix, cursor);
-      final nextClose = text.indexOf(closeTag, cursor);
-      if (nextClose < 0) {
-        return null;
-      }
-
-      if (nextOpen >= 0 && nextOpen < nextClose) {
-        depth++;
-        cursor = text.indexOf('>', nextOpen) + 1;
-      } else {
-        depth--;
-        cursor = nextClose + closeTag.length;
-      }
-    }
-
-    return text.substring(openStart, cursor);
-  }
-
-  List<String> _extractTopLevelElements(String content) {
-    final elements = <String>[];
-    var cursor = 0;
-    while (true) {
-      final start = content.indexOf('<xsd:element', cursor);
-      if (start < 0) {
-        break;
-      }
-
-      final element = _extractBalancedElement(content, start);
-      if (element == null) {
-        break;
-      }
-      elements.add(element);
-      cursor = start + element.length;
-    }
-    return elements;
   }
 
   _BasNode _parseBasTree(String text) {
@@ -453,12 +464,10 @@ class AccessSrcReader {
         continue;
       }
 
-      final macroStart =
-          RegExp(r'^([A-Za-z0-9_]+EmMacro)\s*=\s*Begin$').firstMatch(trimmed);
-      if (macroStart != null) {
-        final node = _BasNode('macro:${macroStart.group(1)!}');
-        stack.last.children.add(node);
-        stack.add(node);
+      if (trimmed == 'End') {
+        if (stack.length > 1) {
+          stack.removeLast();
+        }
         continue;
       }
 
@@ -476,29 +485,23 @@ class AccessSrcReader {
         continue;
       }
 
-      if (trimmed == 'End') {
-        if (stack.length > 1) {
-          stack.removeLast();
+      int equalIndex = trimmed.indexOf('=');
+      if (equalIndex > 0) {
+        String propName = trimmed.substring(0, equalIndex).trim();
+        String propValue = trimmed.substring(equalIndex + 1).trim();
+
+        if (propName.endsWith('EmMacro') && propValue == 'Begin') {
+          final node = _BasNode('macro:$propName');
+          stack.last.children.add(node);
+          stack.add(node);
+        } else if (propValue == 'Begin') {
+          final node = _BasNode('property:$propName');
+          stack.last.children.add(node);
+          stack.add(node);
+        } else {
+          stack.last.properties[propName] = _unquoteBasValue(propValue);
         }
-        continue;
       }
-
-      final propertyMatch =
-          RegExp(r'^([^=]+?)\s*=\s*(.+)$').firstMatch(trimmed);
-      if (propertyMatch == null) {
-        continue;
-      }
-
-      final propertyName = propertyMatch.group(1)!.trim();
-      final propertyValue = propertyMatch.group(2)!.trim();
-      if (propertyValue == 'Begin') {
-        final node = _BasNode('property:$propertyName');
-        stack.last.children.add(node);
-        stack.add(node);
-        continue;
-      }
-
-      stack.last.properties[propertyName] = _unquoteBasValue(propertyValue);
     }
 
     return root;

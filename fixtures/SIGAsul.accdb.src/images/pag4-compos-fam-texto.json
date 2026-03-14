@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag4-compos-fam-texto",
+    "FileName": "pag4-compos-fam-texto.jpg",
+    "Extension": "jpg",
+    "ContentHash": "2c92111"
+  }
+}

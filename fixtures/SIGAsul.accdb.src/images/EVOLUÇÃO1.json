@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "EVOLUÇÃO1",
+    "FileName": "EVOLUÇÃO1.png",
+    "Extension": "png",
+    "ContentHash": "3cbf542"
+  }
+}

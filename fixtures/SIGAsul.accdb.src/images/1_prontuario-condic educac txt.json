@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_prontuario-condic educac txt",
+    "FileName": "prontuario-condic educac txt.png",
+    "Extension": "png",
+    "ContentHash": "ec8e0ad"
+  }
+}

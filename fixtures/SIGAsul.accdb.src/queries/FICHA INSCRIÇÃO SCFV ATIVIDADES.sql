@@ -1,0 +1,20 @@
+﻿SELECT
+  [DADOS SCFV GRUPOS E FX ETARIA].CodDiarioDet,
+  TbPessoa.Nome,
+  TbPessoa.DNasc,
+  [DADOS SCFV GRUPOS E FX ETARIA].Grupo,
+  [DADOS SCFV GRUPOS E FX ETARIA].Tipo,
+  [DADOS SCFV GRUPOS E FX ETARIA].FxEtaria,
+  [DADOS SCFV GRUPOS E FX ETARIA].Horario,
+  [DADOS SCFV GRUPOS E FX ETARIA].DiaSemana
+FROM
+  TbPessoa
+  INNER JOIN [DADOS SCFV GRUPOS E FX ETARIA] ON TbPessoa.CodPessoa = [DADOS SCFV GRUPOS E FX ETARIA].Nome
+WHERE
+  (
+    (
+      (
+        [DADOS SCFV GRUPOS E FX ETARIA].CodDiarioDet
+      )= [Formulários]![DIARIO SUBFORM]![CodDiarioDet]
+    )
+  );

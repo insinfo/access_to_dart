@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "CARTAO-ACO-SOCIAL-frente",
+    "FileName": "CARTAO-ACO-SOCIAL-frente.png",
+    "Extension": "png",
+    "ContentHash": "5511def"
+  }
+}

@@ -1,0 +1,31 @@
+name: Prepare
+description: Prepare CI environment to test a component of drift
+
+inputs:
+  flutter_version:
+    description: Flutter version to use.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        flutter-version: ${{ inputs.flutter_version }}
+        cache: true
+        cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+        cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
+
+    # Setup Dart packages
+    - uses: actions/cache@v4
+      with:
+        path: "${{ env.PUB_CACHE }}"
+        key: dart-dependencies-${{ inputs.flutter_version }}-${{ hashFiles('**/pubspec.yaml') }}
+        restore-keys: |
+          dart-dependencies-${{ inputs.flutter_version }}-
+          dart-dependencies-
+    - name: Setup melos
+      run: dart pub global activate melos && dart pub get
+      shell: bash

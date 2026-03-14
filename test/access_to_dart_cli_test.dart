@@ -104,4 +104,123 @@ void main() {
       isTrue,
     );
   });
+
+  test('inspects SIGAsul frontend and reports linked tables', () async {
+    final fixture = File.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGAsul.accdb'),
+    );
+    expect(await fixture.exists(), isTrue);
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>['inspect-accdb', '--accdb', fixture.path],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 0);
+    expect(out.toString(), contains('Linked Tables (38):'));
+    expect(out.toString(), contains('[LINKED] TbPessoa'));
+    expect(out.toString(), contains('Queries (426):'));
+    expect(out.toString(), contains('Forms    (85):'));
+    expect(out.toString(), contains('Reports  (147):'));
+    expect(err.toString(), isEmpty);
+  });
+
+  test('reads SIGAsul.accdb.src linked-table metadata and SQL overlay',
+      () async {
+    final fixtureDir = Directory.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGAsul.accdb.src/'),
+    );
+    expect(await fixtureDir.exists(), isTrue);
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>['read-src', '--src', fixtureDir.path],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 0);
+    expect(err.toString(), isEmpty);
+
+    final parsed = jsonDecode(out.toString()) as Map<String, dynamic>;
+    final tables = parsed['tables'] as List<dynamic>;
+    final queries = parsed['queries'] as List<dynamic>;
+
+    final tbPessoa = tables
+        .cast<Map<String, dynamic>>()
+        .firstWhere((table) => table['name'] == 'TbPessoa');
+
+    expect(tables.length, greaterThanOrEqualTo(38));
+    expect(tbPessoa['isLinked'], isTrue);
+    expect(
+      tbPessoa['connect'],
+      contains('SIGA2021-SUL_be_senha_4462.accdb'),
+    );
+    expect(tbPessoa['sourceTableName'], 'TbPessoa');
+    expect(tbPessoa['primaryKey'], '[CodPessoa]');
+    expect(
+      queries.any(
+        (query) =>
+            (query as Map<String, dynamic>)['name'] ==
+                'listagem benef munic movimento ano GERAL' &&
+            ((query)['sql'] as String).contains('INNER JOIN TbBenfMunDet'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('reports encrypted backend metadata when password is missing', () async {
+    final fixture = File.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+    );
+    expect(await fixture.exists(), isTrue);
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>['inspect-accdb', '--accdb', fixture.path],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 65);
+    expect(out.toString(), isEmpty);
+    expect(err.toString(), contains('Encrypted ACCDB detected'));
+    expect(err.toString(), contains('Retry with --password'));
+  });
+
+  test('inspects encrypted SIGA backend when password is provided', () async {
+    final fixture = File.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+    );
+    expect(await fixture.exists(), isTrue);
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>[
+        'inspect-accdb',
+        '--accdb',
+        fixture.path,
+        '--password',
+        '4462',
+      ],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 0);
+    expect(out.toString(), contains('Encryption: Office 4.4 AES-256'));
+    expect(out.toString(), contains('Tables (39):'));
+    expect(out.toString(), contains('[TABLE] TbPessoa'));
+    expect(err.toString(), isEmpty);
+  });
 }

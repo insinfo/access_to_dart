@@ -1,0 +1,40 @@
+﻿SELECT
+  TbBeneficioEmergencial.CodBenef,
+  TbBeneficioEmergencial.DataBenef,
+  TbBeneficioEmergencial.CodTecnico,
+  TbBeneficioEmergencial.NomeTecnico,
+  TbBeneficioEmergencial.MatriculaTec,
+  TbBeneficioEmergencial.Nome,
+  TbBeneficioEmergencial.CodFam,
+  TbBeneficioEmergencial.Endereço,
+  TbBeneficioEmergencial.Bairro,
+  TbBeneficioEmergencial.CPFPessoa,
+  TbBeneficioEmergencial.RGPessoa,
+  TbBeneficioEmergencial.TelPessoa,
+  TbBeneficioEmergencial.CodCras,
+  TbBeneficioEmergencial.NomeCras,
+  TbBeneficioEmergencial.DescreverItem,
+  TbBeneficioEmergencial.Qtd,
+  TbBeneficioEmergencial.ApoioAlim,
+  TbBeneficioEmergencial.AuxNatal,
+  TbBeneficioEmergencial.Cobertor,
+  TbBeneficioEmergencial.Colchonete,
+  TbBeneficioEmergencial.Outro,
+  TbBeneficioEmergencial.OutroDescrever,
+  TbBeneficioEmergencial.Proprio,
+  TbBeneficioEmergencial.Doação,
+  TbBeneficioEmergencial.NomeRepresent,
+  TbBeneficioEmergencial.TelRepresent,
+  TbBeneficioEmergencial.CPFRepresent,
+  TbBeneficioEmergencial.RGRepresent
+FROM
+  TbBeneficioEmergencial
+WHERE
+  (
+    (
+      (
+        TbBeneficioEmergencial.DataBenef
+      ) Between [DATA INICIAL]
+      And [DATA FINAL]
+    )
+  );

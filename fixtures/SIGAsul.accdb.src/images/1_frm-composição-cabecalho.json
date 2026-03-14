@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_frm-composição-cabecalho",
+    "FileName": "1_frm-composição-cabecalho.png",
+    "Extension": "png",
+    "ContentHash": "059a0a7"
+  }
+}

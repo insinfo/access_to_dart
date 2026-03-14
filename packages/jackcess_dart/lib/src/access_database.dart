@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'jet_format.dart';
+import 'office_encryption.dart';
 import 'page_channel.dart';
 
 class AccdbPointerException implements Exception {
@@ -22,6 +23,7 @@ class AccessDatabaseInfo {
   final int pageSize;
   final int fileSize;
   final int pageCount;
+  final AccdbEncryptionInfo? encryptionInfo;
 
   const AccessDatabaseInfo({
     required this.path,
@@ -29,15 +31,17 @@ class AccessDatabaseInfo {
     required this.pageSize,
     required this.fileSize,
     required this.pageCount,
+    required this.encryptionInfo,
   });
 
-  Map<String, Object> toJson() {
-    return <String, Object>{
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
       'path': path,
       'format': format.name,
       'pageSize': pageSize,
       'fileSize': fileSize,
       'pageCount': pageCount,
+      'encryptionInfo': encryptionInfo?.toJson(),
     };
   }
 }
@@ -100,11 +104,11 @@ class AccessDatabase {
     required this.info,
   }) : _pageChannel = pageChannel;
 
-  static Future<AccessDatabase> openPath(String path) {
-    return openFile(File(path));
+  static Future<AccessDatabase> openPath(String path, {String? password}) {
+    return openFile(File(path), password: password);
   }
 
-  static Future<AccessDatabase> openFile(File file) async {
+  static Future<AccessDatabase> openFile(File file, {String? password}) async {
     if (!await file.exists()) {
       throw FileSystemException('ACCDB file not found', file.path);
     }
@@ -122,7 +126,7 @@ class AccessDatabase {
     }
 
     final randomAccessFile = await file.open(mode: FileMode.read);
-    final pageChannel = PageChannel(randomAccessFile);
+    final pageChannel = PageChannel(randomAccessFile, password: password);
 
     try {
       await pageChannel.initialize();
@@ -141,6 +145,7 @@ class AccessDatabase {
           pageSize: pageSize,
           fileSize: fileSize,
           pageCount: pageCount,
+          encryptionInfo: pageChannel.encryptionInfo,
         ),
       );
     } catch (_) {
@@ -150,6 +155,10 @@ class AccessDatabase {
   }
 
   JetFormat get format => info.format;
+  
+  PageChannel get pageChannel => _pageChannel;
+
+  AccdbEncryptionInfo? get encryptionInfo => info.encryptionInfo;
 
   Future<ByteBuffer> readPage(int pageNumber) {
     return _pageChannel.readPage(pageNumber);

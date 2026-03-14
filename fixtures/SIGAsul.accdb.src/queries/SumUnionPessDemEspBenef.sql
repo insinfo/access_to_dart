@@ -1,0 +1,67 @@
+﻿SELECT
+  TbUnidade.NOME,
+  TbUnidade.CRAS,
+  TbUnidade.LOGO,
+  TbUnidade.RODAPE,
+  TbUnidade.[DIRETOR(A)],
+  TbUnidade.MATRICULA,
+  TbUnidade.FUNÇÃO,
+  Sum(UnionPessDemEspBenef.AUTBPC) AS SomaDeAUTBPC,
+  Sum(UnionPessDemEspBenef.CEGBPC) AS SomaDeCEGBPC,
+  Sum(UnionPessDemEspBenef.BVBPC) AS SomaDeBVBPC,
+  Sum(UnionPessDemEspBenef.SSEVBPC) AS SomaDeSSEVBPC,
+  Sum(UnionPessDemEspBenef.SLEVBPC) AS SomaDeSLEVBPC,
+  Sum(UnionPessDemEspBenef.DEFBPC) AS SomaDeDEFBPC,
+  Sum(UnionPessDemEspBenef.DMENTBPC) AS SomaDeDMENTBPC,
+  Sum(UnionPessDemEspBenef.SDBPC) AS SomaDeSDBPC,
+  Sum(UnionPessDemEspBenef.TMENTBPC) AS SomaDeTMENTBPC,
+  Sum(UnionPessDemEspBenef.DCRONBPC) AS SomaDeDCRONBPC,
+  Sum(UnionPessDemEspBenef.IDOBPC) AS SomaDeIDOBPC,
+  Sum(UnionPessDemEspBenef.AUTBMD) AS SomaDeAUTBMD,
+  Sum(UnionPessDemEspBenef.CEGBMD) AS SomaDeCEGBMD,
+  Sum(UnionPessDemEspBenef.BVBMD) AS SomaDeBVBMD,
+  Sum(UnionPessDemEspBenef.SSEVBMD) AS SomaDeSSEVBMD,
+  Sum(UnionPessDemEspBenef.SLEVBMD) AS SomaDeSLEVBMD,
+  Sum(UnionPessDemEspBenef.DEFBMD) AS SomaDeDEFBMD,
+  Sum(UnionPessDemEspBenef.DMENTBMD) AS SomaDeDMENTBMD,
+  Sum(UnionPessDemEspBenef.SDBMD) AS SomaDeSDBMD,
+  Sum(UnionPessDemEspBenef.TMENTBMD) AS SomaDeTMENTBMD,
+  Sum(UnionPessDemEspBenef.DCRONBMD) AS SomaDeDCRONBMD,
+  Sum(UnionPessDemEspBenef.IDOBMD) AS SomaDeIDOBMD,
+  Sum(UnionPessDemEspBenef.AUTBMI) AS SomaDeAUTBMI,
+  Sum(UnionPessDemEspBenef.CEGBMI) AS SomaDeCEGBMI,
+  Sum(UnionPessDemEspBenef.BVBMI) AS SomaDeBVBMI,
+  Sum(UnionPessDemEspBenef.SSEVBMI) AS SomaDeSSEVBMI,
+  Sum(UnionPessDemEspBenef.SLEVBMI) AS SomaDeSLEVBMI,
+  Sum(UnionPessDemEspBenef.DEFBMI) AS SomaDeDEFBMI,
+  Sum(UnionPessDemEspBenef.DMENTBMI) AS SomaDeDMENTBMI,
+  Sum(UnionPessDemEspBenef.SDBMI) AS SomaDeSDBMI,
+  Sum(UnionPessDemEspBenef.TMENTBMI) AS SomaDeTMENTBMI,
+  Sum(UnionPessDemEspBenef.DCRONBMI) AS SomaDeDCRONBMI,
+  Sum(UnionPessDemEspBenef.IDOBMI) AS SomaDeIDOBMI,
+  Sum(UnionPessDemEspBenef.AUTBSF) AS SomaDeAUTBSF,
+  Sum(UnionPessDemEspBenef.CEGBSF) AS SomaDeCEGBSF,
+  Sum(UnionPessDemEspBenef.BVBSF) AS SomaDeBVBSF,
+  Sum(UnionPessDemEspBenef.SSEVBSF) AS SomaDeSSEVBSF,
+  Sum(UnionPessDemEspBenef.SLEVBSF) AS SomaDeSLEVBSF,
+  Sum(UnionPessDemEspBenef.DEFBSF) AS SomaDeDEFBSF,
+  Sum(UnionPessDemEspBenef.DMENTBSF) AS SomaDeDMENTBSF,
+  Sum(UnionPessDemEspBenef.SDBSF) AS SomaDeSDBSF,
+  Sum(UnionPessDemEspBenef.TMENTBSF) AS SomaDeTMENTBSF,
+  Sum(UnionPessDemEspBenef.DCRONBSF) AS SomaDeDCRONBSF,
+  Sum(UnionPessDemEspBenef.IDOBSF) AS SomaDeIDOBSF
+FROM
+  UnionPessDemEspBenef,
+  TbUnidade
+GROUP BY
+  TbUnidade.NOME,
+  TbUnidade.CRAS,
+  TbUnidade.[DIRETOR(A)],
+  TbUnidade.MATRICULA,
+  TbUnidade.FUNÇÃO
+HAVING
+  (
+    (
+      (TbUnidade.CRAS)= Yes
+    )
+  );

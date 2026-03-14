@@ -1,0 +1,16 @@
+﻿SELECT
+  CADUNICO.CODFAM,
+  CADUNICO.CRAS,
+  CADUNICO.NOME,
+  CADUNICO.NIS,
+  CADUNICO.SEXO,
+  CADUNICO.DNASC,
+  TbPessoa.DNasc,
+  TbPessoa.CPF,
+  CADUNICO.CPF
+FROM
+  CadResidencia
+  INNER JOIN (
+    TbPessoa
+    INNER JOIN CADUNICO ON TbPessoa.Nome = CADUNICO.NOME
+  ) ON CadResidencia.CodFam = TbPessoa.CodFam;

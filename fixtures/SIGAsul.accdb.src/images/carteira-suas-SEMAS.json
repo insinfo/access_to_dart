@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "carteira-suas-SEMAS",
+    "FileName": "carteira-suas-SEMAS.jpg",
+    "Extension": "jpg",
+    "ContentHash": "7de07ba"
+  }
+}

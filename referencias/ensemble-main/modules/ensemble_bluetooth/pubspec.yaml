@@ -1,0 +1,29 @@
+name: ensemble_bluetooth
+description: An Ensemble package for BLE connection
+version: 0.0.1
+homepage: https://github.com/EnsembleUI/ensemble/modules/ensemble_bluetooth
+
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # embed Ensemble as a sibling project
+  ensemble:
+    git:
+      url: https://github.com/EnsembleUI/ensemble.git
+      ref: ensemble-v1.2.36
+      path: modules/ensemble
+  ensemble_ts_interpreter: ^1.0.7
+
+  collection: ^1.17.1
+  flutter_blue_plus: ^1.33.4
+  workmanager: ^0.7.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0

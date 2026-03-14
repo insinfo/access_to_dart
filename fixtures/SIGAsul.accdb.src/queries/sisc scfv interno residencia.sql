@@ -1,0 +1,30 @@
+﻿SELECT
+  [SISC INTERNO SCFV].CodOfSEDet,
+  [SISC INTERNO SCFV].DataAtual,
+  CadResidencia.CodFam,
+  [SISC INTERNO SCFV].CodPessoa,
+  [SISC INTERNO SCFV].Nome,
+  [SISC INTERNO SCFV].DNasc,
+  [SISC INTERNO SCFV].Idade,
+  [SISC INTERNO SCFV].NomeMae,
+  [SISC INTERNO SCFV].Sexo,
+  [SISC INTERNO SCFV].[Raça/Cor],
+  [SISC INTERNO SCFV].SituaçãoUsuario,
+  [SISC INTERNO SCFV].MunicNasc,
+  [SISC INTERNO SCFV].UFNasc,
+  [SISC INTERNO SCFV].NIS,
+  [SISC INTERNO SCFV].CPF,
+  [SISC INTERNO SCFV].RG,
+  [SISC INTERNO SCFV].OrgaoRG,
+  [SISC INTERNO SCFV].DEmisRG,
+  [SISC INTERNO SCFV].CodFam,
+  CadResidencia.Endereço,
+  CadResidencia.Bairro,
+  CadResidencia.UF,
+  CadResidencia.CEP,
+  CadResidencia.Municipio,
+  CadResidencia.Complemento,
+  CadResidencia.Referencia
+FROM
+  [SISC INTERNO SCFV]
+  INNER JOIN CadResidencia ON [SISC INTERNO SCFV].CodFam = CadResidencia.CodFam;

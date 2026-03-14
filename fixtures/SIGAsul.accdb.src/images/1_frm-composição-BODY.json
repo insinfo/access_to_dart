@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_frm-composição-BODY",
+    "FileName": "1_frm-composição-BODY.png",
+    "Extension": "png",
+    "ContentHash": "b0f00f1"
+  }
+}

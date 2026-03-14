@@ -1,0 +1,20 @@
+name: benchmarks
+description: Runs simple and complex benchmarks to measure performance of moor and moor_ffi
+resolution: workspace
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  drift: ^2.0.0
+  sqlite3: ^3.0.0
+  benchmark_harness: ^2.0.0
+  source_span: ^1.10.0
+  intl: ^0.20.0
+  uuid: ^4.0.0
+  path: ^1.8.0
+
+dev_dependencies:
+  drift_dev: ^2.0.0
+  build_runner:
+  test:

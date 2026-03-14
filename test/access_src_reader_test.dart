@@ -64,4 +64,30 @@ void main() {
         .singleWhere((form) => form.name == 'FolhaDeDadosDoContato');
     expect(folha.recordSource, 'ContatosEstendidos');
   });
+
+  test('parses linked table metadata from SIGAsul.accdb.src', () async {
+    final fixtureDir = Directory.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGAsul.accdb.src/'),
+    );
+    expect(await fixtureDir.exists(), isTrue);
+
+    final project = await AccessSrcReader().readDirectory(fixtureDir.path);
+
+    expect(project.tables.length, greaterThanOrEqualTo(40));
+    expect(project.queries.length, greaterThanOrEqualTo(300));
+
+    final tbPessoa =
+        project.tables.singleWhere((table) => table.name == 'TbPessoa');
+    expect(tbPessoa.isLinked, isTrue);
+    expect(
+      tbPessoa.connect,
+      contains('SIGA2021-SUL_be_senha_4462.accdb'),
+    );
+    expect(tbPessoa.sourceTableName, 'TbPessoa');
+    expect(tbPessoa.primaryKey, '[CodPessoa]');
+    expect(
+      tbPessoa.indexes.any((index) => index.primary && index.key == '[CodPessoa]'),
+      isTrue,
+    );
+  });
 }

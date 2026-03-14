@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_ATIVIDADES CRAS",
+    "FileName": "1_ATIVIDADES CRAS.PNG",
+    "Extension": "PNG",
+    "ContentHash": "c6c4807"
+  }
+}

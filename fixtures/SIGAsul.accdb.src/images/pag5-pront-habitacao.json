@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag5-pront-habitacao",
+    "FileName": "pag5-pront-habitacao.jpg",
+    "Extension": "jpg",
+    "ContentHash": "245cb02"
+  }
+}

@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "2_TERMO-BMI",
+    "FileName": "TERMO-BMI.PNG",
+    "Extension": "PNG",
+    "ContentHash": "132ec47"
+  }
+}

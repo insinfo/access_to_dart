@@ -1,0 +1,43 @@
+name: ensemble_chat
+description: A new Flutter package project.
+version: 0.0.1
+
+environment:
+  sdk: ">=3.5.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  ensemble:
+    git:
+      url: https://github.com/EnsembleUI/ensemble.git
+      ref: ensemble-v1.2.36
+      path: modules/ensemble
+
+  ensemble_ts_interpreter: ^1.0.7
+
+  web_socket_client: ^0.2.1
+  yaml: ^3.1.2
+  flutter_svg: ^2.2.0
+  dart_openai: ^5.1.0
+  http: ^1.2.1
+
+dependency_overrides:
+  web_socket_channel: 2.3.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  # To add assets to your package, add an assets section, like this:
+  assets:
+    # - assets/images/
+  #   - images/a_dot_ham.jpeg

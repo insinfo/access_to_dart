@@ -1,0 +1,24 @@
+name: ensemble_bracket
+description: "A package for elimination style tournament brackets in ensemble"
+version: 0.0.1
+
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ensemble:
+    git:
+      url: https://github.com/EnsembleUI/ensemble.git
+      ref: ensemble-v1.2.36
+      path: modules/ensemble
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+

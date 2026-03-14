@@ -1,3 +1,11 @@
 # https://dart.dev/guides/libraries/private-files
 # Created by `dart pub`
 .dart_tool/
+
+build/
+
+SIGA2021-CENTRAL_be_2026_senha_4461.accdb
+SIGA2021-SUL_be_senha_4462.accdb
+SIGAsul.accdb
+
+SIGAsul.accdb.src/

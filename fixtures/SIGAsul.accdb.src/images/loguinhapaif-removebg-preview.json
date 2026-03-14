@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "loguinhapaif-removebg-preview",
+    "FileName": "loguinhapaif.PNG",
+    "Extension": "PNG",
+    "ContentHash": "318ef13"
+  }
+}

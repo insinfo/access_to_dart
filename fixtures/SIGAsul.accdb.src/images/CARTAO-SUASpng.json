@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "CARTAO-SUASpng",
+    "FileName": "CARTAO-SUASpng.png",
+    "Extension": "png",
+    "ContentHash": "31d87ac"
+  }
+}

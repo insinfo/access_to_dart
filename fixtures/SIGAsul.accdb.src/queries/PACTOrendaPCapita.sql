@@ -1,0 +1,4 @@
+﻿SELECT
+  DISTINCT PACTOrendaPCapitaNome.CODFAM
+FROM
+  PACTOrendaPCapitaNome;

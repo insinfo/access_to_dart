@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "cadastroBeneficiario",
+    "FileName": "cadastroBeneficiario.PNG",
+    "Extension": "PNG",
+    "ContentHash": "b284131"
+  }
+}

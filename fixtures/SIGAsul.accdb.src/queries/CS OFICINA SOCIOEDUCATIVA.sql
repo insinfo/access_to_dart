@@ -1,0 +1,21 @@
+﻿SELECT
+  TbOfSocioEduDetalhe.CodOfSEDet,
+  TbOfSocioEduDetalhe.Volante,
+  TbOfSocioEduDetalhe.DataInsc,
+  TbOfSocioEduDetalhe.Nome,
+  TbOfSocioEduDetalhe.DNasPessoa,
+  TbOfSocioEduDetalhe.Idade,
+  TbOfSocioEduDetalhe.SituaçãoUsuario,
+  TbOfSocioEduDetalhe.DataDesl,
+  TbOfSocioEduDetalhe.MotivoDesl,
+  TbOfSocioEduDetalhe.Encaminhado,
+  TbOfSocioEduDetalhe.Onde,
+  TbOfSocioEduDetalhe.Obs
+FROM
+  TbOfSocioEduDetalhe
+WHERE
+  (
+    (
+      (TbOfSocioEduDetalhe.DataDesl) Is Null
+    )
+  );

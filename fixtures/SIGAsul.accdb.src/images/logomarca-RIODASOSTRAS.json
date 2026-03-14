@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "logomarca-RIODASOSTRAS",
+    "FileName": "logomarca-RIODASOSTRAS.png",
+    "Extension": "png",
+    "ContentHash": "4fcf27d"
+  }
+}

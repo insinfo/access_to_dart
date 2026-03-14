@@ -1,0 +1,16 @@
+﻿SELECT
+  Max([atendimento total].Data) AS MáxDeData,
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].CodFam,
+  [atendimento total].CodFam,
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].TipoBeneficio,
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].Nome,
+  [atendimento total].Idade
+FROM
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS]
+  INNER JOIN [atendimento total] ON [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].CodPessoa = [atendimento total].Nome
+GROUP BY
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].CodFam,
+  [atendimento total].CodFam,
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].TipoBeneficio,
+  [LISTAGEM TOTAL BENEFICIARIOS MUNICIPAIS].Nome,
+  [atendimento total].Idade;

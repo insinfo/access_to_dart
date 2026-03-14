@@ -1,0 +1,200 @@
+name: ensemble
+description: Ensemble Runtime
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+#
+# This version is used _only_ for the Runner app, which is used if you just do
+# a `flutter run` or a `flutter make-host-app-editable`. It has no impact
+# on any other native host app that you embed your Flutter project into.
+version: 1.2.36
+
+environment:
+  sdk: ">=3.5.0"
+  flutter: '>=3.24.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  ensemble_device_preview: ^1.1.2
+
+  yaml: ^3.1.2
+  intl: '>=0.17.0 <=0.20.2'
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.2
+  http: ^1.2.1
+  brotli: ^0.6.0
+  flutter_rating_bar: ^4.0.0
+  fl_chart: ^0.69.0
+  signature: ^5.5.0
+
+  ensemble_icons: ^1.0.1
+
+  ensemble_ts_interpreter: ^1.0.7
+
+  event_bus: ^2.0.0
+  flutter_layout_grid: ^2.0.3
+  email_validator: ^3.0.0
+  mask_text_input_formatter: ^2.5.0
+  ensemble_otp: ^1.0.2
+  form_validator: ^2.1.1
+  flutter_svg: ^2.2.0
+  flutter_svg_provider: ^1.0.7
+  qr_flutter: ^4.1.0
+  device_info_plus: ^10.1.0
+  carousel_slider: ^5.0.0
+  fluttertoast: ^8.2.14
+  video_player: ^2.6.1
+  lottie: ^3.0.0
+  cookie_jar: ^4.0.8
+  js_widget: ^1.0.4
+  flutter_markdown: ^0.7.7+1
+  provider: ^6.0.3
+  cloud_firestore: ^6.0.3
+  get_storage: ^2.0.3
+  flutter_html: ^3.0.0
+  cached_network_image: ^3.2.3
+  sensors_plus: ^7.0.0
+  mime: ^2.0.0
+  flutter_cache_manager: ^3.3.0
+  google_fonts: ^6.3.0
+  ensemble_walletconnect: ^1.0.4
+  http_parser: ^4.0.2
+  shared_preferences: ^2.1.1
+  workmanager: ^0.7.0
+  flutter_local_notifications: ^19.4.2
+  flutter_i18n: ^0.36.2
+  pointer_interceptor: ^0.10.1+2
+  flutter_secure_storage: ^9.2.2
+  encrypt: ^5.0.3
+  staggered_grid_view_flutter: ^0.0.4
+  dart_jsonwebtoken: ^2.8.2
+  flutter_dotenv: ^6.0.0
+  get_it: ^8.0.0
+  custom_image_crop: ^0.1.1
+  open_settings_plus: ^0.4.0
+  firebase_messaging: ^16.0.3
+  firebase_core: ^4.2.0
+  custom_refresh_indicator: ^4.0.1
+  youtube_player_iframe: ^5.2.1
+  web_socket_client: ^0.2.1
+  app_links: ^6.3.2
+  share_plus: ^12.0.0
+  screenshot: ^3.0.0
+  rate_my_app: ^2.0.0
+  input_tagger: ^3.0.1
+  universal_html: ^2.2.4
+  ensemble_table_calendar: ^3.1.3
+
+  flutter_inappwebview: ^6.1.5
+  # old app_badger is unsupported so using a supported fork
+  ensemble_app_badger: ^1.6.1
+
+  # Current pub.dev version isn't compatible with 3.24 
+  flutter_share_receiver: ^1.0.4
+  change_case: ^2.2.0
+  crypto: ^3.0.3 
+  ensemble_dropdown: ^0.1.0
+  collection: ^1.17.1
+  package_info_plus: ^9.0.0
+  audioplayers: ^6.5.1
+  logger: ^2.2.0
+  visibility_detector: ^0.4.0+2
+  local_auth: ^2.2.0
+  # use this convert a language code to localized language name e.g. es => Spanish/Español
+  flutter_localized_locales: ^2.0.5
+  flutter_slidable: ^4.0.3
+  accordion: ^2.6.0
+  session_storage: ^0.0.1
+  connectivity_plus: ^7.0.0
+  flutter_security_checker: ^3.2.1
+  safe_device: ^1.2.1
+  firebase_app_check: ^0.4.1+1
+  cloud_functions: ^6.0.3
+  wakelock_plus: ^1.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^2.0.3
+  mockito: ^5.4.5
+
+flutter:
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+    # integration tests (TODO - exclude from build)
+    - integration_test/local/defaultApp/
+    - integration_test/local/themedApp/
+    - integration_test/local/dialogsAndToast/
+    - integration_test/local/widgets/
+    - integration_test/local/translation/
+    - integration_test/local/translation/i18n/
+    - integration_test/local/bottomNav/
+
+    - pubspec.yaml
+
+  fonts:
+    # icon fonts
+    - family: Remix
+      fonts:
+        - asset: assets/iconFonts/remixicon.ttf
+
+    # semi-custom fonts
+    - family: idealTalent
+      fonts:
+        - asset: assets/fonts/idealTalent/icomoon.ttf
+    - family: Clarika
+      fonts:
+        - asset: assets/fonts/idealTalent/Clarika.ttf
+    - family: ClarikaRegular
+      fonts:
+        - asset: assets/fonts/idealTalent/ClarikaRegular.ttf
+
+    # other fonts available to apps
+    - family: Jost
+      fonts:
+        - asset: assets/fonts/Jost-VariableFont_wght.ttf
+        - asset: assets/fonts/Jost-Italic-VariableFont_wght.ttf
+          style: italic
+
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter/Inter-Regular.ttf
+        - weight: 500
+          asset: assets/fonts/inter/Inter-Medium.ttf
+        - weight: 600
+          asset: assets/fonts/inter/Inter-SemiBold.ttf
+        - weight: 700
+          asset: assets/fonts/inter/Inter-Bold.ttf
+        - weight: 800
+          asset: assets/fonts/inter/Inter-ExtraBold.ttf
+
+  # This section identifies your Flutter project as a module meant for
+  # embedding in a native host app.  These identifiers should _not_ ordinarily
+  # be changed after generation - they are used to ensure that the tooling can
+  # maintain consistency when adding or modifying assets and plugins.
+  # They also do not have any bearing on your native host application's
+  # identifiers, which may be completely independent or the same as these.
+  module:
+    androidX: true
+    androidPackage: com.ensembleui.ensemble
+    iosBundleIdentifier: com.ensembleui.ensemble

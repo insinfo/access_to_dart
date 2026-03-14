@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "REATIVACAO",
+    "FileName": "REATIVACAO.PNG",
+    "Extension": "PNG",
+    "ContentHash": "0760e00"
+  }
+}

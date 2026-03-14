@@ -1,0 +1,13 @@
+﻿{
+  "Info": {
+    "Class": "clsDbTableDef",
+    "Description": "Linked Table"
+  },
+  "Items": {
+    "Name": "TbPessoa",
+    "Connect": "MS Access;PWD=4462;DATABASE=rel:SIGA2021-SUL_be_senha_4462.accdb",
+    "SourceTableName": "TbPessoa",
+    "Attributes": 1073741824,
+    "PrimaryKey": "[CodPessoa]"
+  }
+}

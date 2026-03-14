@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "COMPOSIÇÃO-CABEÇALHO-",
+    "FileName": "COMPOSIÇÃO-CABEÇALHO-.PNG",
+    "Extension": "PNG",
+    "ContentHash": "f6eaa18"
+  }
+}

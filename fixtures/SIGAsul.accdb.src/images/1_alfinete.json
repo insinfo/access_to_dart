@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_alfinete",
+    "FileName": "alfinete.png",
+    "Extension": "png",
+    "ContentHash": "1061c7e"
+  }
+}

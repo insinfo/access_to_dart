@@ -8,9 +8,7 @@ void main() {
   group('AccessDatabase', () {
     test('opens the checked-in teste1 fixture without using referencias',
         () async {
-      final fixture = File.fromUri(
-        Directory.current.uri.resolve('../../fixtures/teste1/teste1.accdb'),
-      );
+      final fixture = await _resolveCheckedInFixture();
       expect(await fixture.exists(), isTrue);
 
       final database = await AccessDatabase.openFile(fixture);
@@ -86,6 +84,79 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+
+    test('detects and opens the encrypted SIGA backend with password',
+        () async {
+      final fixture = await _resolveEncryptedBackendFixture();
+      if (!await fixture.exists()) return;
+
+      final database = await AccessDatabase.openPath(
+        fixture.path,
+        password: '4462',
+      );
+      addTearDown(database.close);
+
+      expect(database.encryptionInfo, isNotNull);
+      expect(database.encryptionInfo!.versionLabel, '4.4');
+      expect(database.encryptionInfo!.cipherAlgorithm, 'AES');
+      expect(database.encryptionInfo!.keyBits, 256);
+
+      final systemCatalog = await database.inspectSystemCatalogPage();
+      expect(systemCatalog.pageNumber, AccessDatabase.systemCatalogPageNumber);
+      expect(systemCatalog.pageTypeName, 'TABLE_DEF');
+      expect(systemCatalog.rowCount, greaterThan(0));
+    });
+  });
+
+  group('Catalog reverse engineering', () {
+    test('extracts schema flags for auto-number and calculated columns',
+        () async {
+      final fixture = await _resolveCheckedInFixture();
+      expect(await fixture.exists(), isTrue);
+
+      final database = await AccessDatabase.openFile(fixture);
+      addTearDown(database.close);
+
+      final catalog = AccessCatalog(
+        format: database.format,
+        pageChannel: database.pageChannel,
+      );
+      final model = await catalog.read(fixture.path);
+
+      final contatos =
+          model.tables.singleWhere((table) => table.name == 'Contatos');
+      final id = contatos.columns.singleWhere((column) => column.name == 'ID');
+      final nomeDoContato = contatos.columns.singleWhere(
+        (column) => column.name == 'NomeDoContato',
+      );
+      final arquivoComo = contatos.columns.singleWhere(
+        (column) => column.name == 'ArquivoComo',
+      );
+
+      expect(id.isAutoNumber, isTrue);
+      expect(id.typeCode, 0x04);
+      expect(nomeDoContato.isCalculated, isTrue);
+      expect(arquivoComo.isCalculated, isTrue);
+      expect(contatos.sampleRows, isNotEmpty);
+      expect(contatos.sampleRows.first['Sobrenome'], 'sdf');
+      expect(contatos.sampleRows.first['Nome'], 'dfs');
+      expect(contatos.sampleRows.first['NomeDoContato'], 'dfs sdf');
+      expect(contatos.sampleRows.first['ArquivoComo'], 'sdf, dfs');
+
+      final contatosEstendidos = model.queries.singleWhere(
+        (query) => query.name == 'ContatosEstendidos',
+      );
+      expect(contatosEstendidos.queryTypeName, isNotEmpty);
+      expect(contatosEstendidos.sqlText, contains('SELECT'));
+      expect(contatosEstendidos.sqlText, contains('FROM'));
+      expect(contatosEstendidos.sqlText, contains('AS [Pesquisável]'));
+      expect(contatosEstendidos.sqlText, contains('ORDER BY'));
+      expect(contatosEstendidos.sqlText, contains('[Contatos].[NomeDoContato]'));
+      final searchableRow = contatosEstendidos.rows.singleWhere(
+        (row) => row.name1 == 'Pesquisável',
+      );
+      expect(searchableRow.expressionAst, isNotNull);
+    });
   });
 }
 
@@ -102,4 +173,42 @@ Future<File> _createAccdbFixture(
   final file = File('${directory.path}\\fixture.accdb');
   await file.writeAsBytes(bytes, flush: true);
   return file;
+}
+
+Future<File> _resolveCheckedInFixture() async {
+  final candidates = <File>[
+    File.fromUri(
+      Directory.current.uri.resolve('../../fixtures/teste1/teste1.accdb'),
+    ),
+    File.fromUri(
+      Directory.current.uri.resolve('fixtures/teste1/teste1.accdb'),
+    ),
+  ];
+
+  for (final file in candidates) {
+    if (await file.exists()) {
+      return file;
+    }
+  }
+
+  return candidates.first;
+}
+
+Future<File> _resolveEncryptedBackendFixture() async {
+  final candidates = <File>[
+    File.fromUri(
+      Directory.current.uri.resolve('../../fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+    ),
+    File.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+    ),
+  ];
+
+  for (final file in candidates) {
+    if (await file.exists()) {
+      return file;
+    }
+  }
+
+  return candidates.first;
 }

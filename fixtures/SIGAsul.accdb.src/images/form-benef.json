@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "form-benef",
+    "FileName": "form-benef.PNG",
+    "Extension": "PNG",
+    "ContentHash": "015000e"
+  }
+}

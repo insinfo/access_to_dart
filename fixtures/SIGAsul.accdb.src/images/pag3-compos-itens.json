@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag3-compos-itens",
+    "FileName": "pag3-compos-itens.jpg",
+    "Extension": "jpg",
+    "ContentHash": "9168579"
+  }
+}

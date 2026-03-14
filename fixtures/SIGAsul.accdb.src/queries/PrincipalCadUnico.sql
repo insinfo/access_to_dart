@@ -1,0 +1,16 @@
+﻿SELECT
+  TbRecepção.CodRecepcao,
+  TbRecepção.Data,
+  TbRecepção.[RECEPÇÃO-QTD],
+  TbRecepção.CAD1VEZ,
+  TbRecepção.CADATUALIZ,
+  TbRecepção.CADORI
+FROM
+  TbRecepção
+WHERE
+  (
+    (
+      (TbRecepção.Data) Between [DATA INICIAL]
+      And [DATA FINAL]
+    )
+  );

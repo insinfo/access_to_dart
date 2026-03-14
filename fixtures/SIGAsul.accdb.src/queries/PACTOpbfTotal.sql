@@ -1,0 +1,10 @@
+﻿SELECT
+  DISTINCT TbPBF08.CODFAM
+FROM
+  TbPBF08
+WHERE
+  (
+    (
+      (TbPBF08.CRAS) Like [DIGITE O CRAS] + "*"
+    )
+  );

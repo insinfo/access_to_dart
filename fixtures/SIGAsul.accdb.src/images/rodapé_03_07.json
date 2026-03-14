@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "rodapé_03_07",
+    "FileName": "rodapé_03_07.jpg",
+    "Extension": "jpg",
+    "ContentHash": "42dbecd"
+  }
+}

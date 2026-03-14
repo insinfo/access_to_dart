@@ -1,0 +1,31 @@
+﻿SELECT
+  TbEncaminhamento.CODENC,
+  TbEncaminhamento.DataEnc,
+  TbPessoa.CodPessoa,
+  TbPessoa.CodFam,
+  TbPessoa.Nome,
+  TbEncaminhamento.DataMonit,
+  TbEncaminhamento.ATENDIDO,
+  TbEncaminhamento.MotivoNão,
+  TbEncaminhamento.ENG,
+  TbEncaminhamento.RSA,
+  TbEncaminhamento.RS,
+  TbEncaminhamento.RE,
+  TbEncaminhamento.SF,
+  TbEncaminhamento.OP,
+  TbUnidade.NOME,
+  TbUnidade.[DIRETOR(A)],
+  TbUnidade.FUNÇÃO,
+  TbUnidade.MATRICULA,
+  TbUnidade.LOGO,
+  TbUnidade.RODAPE
+FROM
+  TbUnidade,
+  TbPessoa
+  INNER JOIN TbEncaminhamento ON TbPessoa.CodPessoa = TbEncaminhamento.Nome
+WHERE
+  (
+    (
+      (TbPessoa.Nome) Like [DIGITE O NOME] + "*"
+    )
+  );

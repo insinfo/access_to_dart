@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_prontuario-sit violenc violaç txt",
+    "FileName": "prontuario-sit violenc violaç txt.png",
+    "Extension": "png",
+    "ContentHash": "61d2caf"
+  }
+}

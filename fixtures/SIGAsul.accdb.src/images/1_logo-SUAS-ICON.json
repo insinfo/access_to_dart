@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_logo-SUAS-ICON",
+    "FileName": "logo-SUAS-ICON.png",
+    "Extension": "png",
+    "ContentHash": "5ba946c"
+  }
+}

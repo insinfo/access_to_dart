@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_1_REGISTRO SINTETICO",
+    "FileName": "1_REGISTRO SINTETICO.png",
+    "Extension": "png",
+    "ContentHash": "b3d5854"
+  }
+}

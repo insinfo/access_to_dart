@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag1-identif",
+    "FileName": "pag1-identif.jpg",
+    "Extension": "jpg",
+    "ContentHash": "acb86a3"
+  }
+}

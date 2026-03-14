@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "SUSPENSAO",
+    "FileName": "SUSPENSAO.PNG",
+    "Extension": "PNG",
+    "ContentHash": "b965066"
+  }
+}

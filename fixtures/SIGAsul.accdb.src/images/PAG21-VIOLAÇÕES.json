@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "PAG21-VIOLAÇÕES",
+    "FileName": "PAG21-VIOLAÇÕES.PNG",
+    "Extension": "PNG",
+    "ContentHash": "47a8028"
+  }
+}

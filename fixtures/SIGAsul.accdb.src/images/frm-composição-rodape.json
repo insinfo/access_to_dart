@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "frm-composição-rodape",
+    "FileName": "frm-composição-rodape.png",
+    "Extension": "png",
+    "ContentHash": "18b081a"
+  }
+}

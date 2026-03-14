@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "postit-1",
+    "FileName": "postit-1.png",
+    "Extension": "png",
+    "ContentHash": "ed066ab"
+  }
+}

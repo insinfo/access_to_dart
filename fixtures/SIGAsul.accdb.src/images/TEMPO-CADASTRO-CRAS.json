@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "TEMPO-CADASTRO-CRAS",
+    "FileName": "TEMPO-CADASTRO-CRAS.PNG",
+    "Extension": "PNG",
+    "ContentHash": "4ad23fb"
+  }
+}

@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "2_cadastro",
+    "FileName": "2_cadastro.PNG",
+    "Extension": "PNG",
+    "ContentHash": "3a2e56d"
+  }
+}

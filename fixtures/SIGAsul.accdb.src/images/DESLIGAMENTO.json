@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "DESLIGAMENTO",
+    "FileName": "DESLIGAMENTO.PNG",
+    "Extension": "PNG",
+    "ContentHash": "bf16ed5"
+  }
+}

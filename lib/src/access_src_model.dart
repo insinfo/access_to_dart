@@ -26,12 +26,20 @@ class AccessSrcTable {
   final String sql;
   final List<AccessSrcColumn> columns;
   final List<AccessSrcIndex> indexes;
+  final bool isLinked;
+  final String? sourceTableName;
+  final String? connect;
+  final String? primaryKey;
 
   const AccessSrcTable({
     required this.name,
     required this.sql,
     required this.columns,
     required this.indexes,
+    this.isLinked = false,
+    this.sourceTableName,
+    this.connect,
+    this.primaryKey,
   });
 
   Map<String, Object?> toJson() {
@@ -40,6 +48,10 @@ class AccessSrcTable {
       'sql': sql,
       'columns': columns.map((column) => column.toJson()).toList(),
       'indexes': indexes.map((index) => index.toJson()).toList(),
+      'isLinked': isLinked,
+      'sourceTableName': sourceTableName,
+      'connect': connect,
+      'primaryKey': primaryKey,
     };
   }
 }

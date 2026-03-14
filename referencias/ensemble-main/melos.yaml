@@ -1,0 +1,19 @@
+name: Ensemble
+
+repository: 
+  type: github
+  origin: https://github.com
+  owner: ensembleUI
+  name: ensemble
+
+packages:
+  - starter
+  - packages/**
+  - modules/**
+
+ignore:
+  - modules/ensemble_ts_interpreter
+
+command:
+  version:
+    updateGitTagRefs: true

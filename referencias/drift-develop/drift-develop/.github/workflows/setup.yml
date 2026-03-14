@@ -1,0 +1,33 @@
+on:
+  workflow_call:
+    outputs:
+      flutter_version:
+        description: Version of the Flutter SDK used during the setup run.
+        value: ${{ jobs.dart_dependencies.outputs.flutter_version }}
+
+jobs:
+  dart_dependencies:
+    name: Get and cache Dart dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      flutter_version: ${{ steps.setup_flutter.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Flutter
+        id: setup_flutter
+        uses: subosito/flutter-action@v2
+        with:
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+          cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
+      - uses: actions/cache@v4
+        with:
+          path: "${{ env.PUB_CACHE }}"
+          key: dart-dependencies-${{ steps.setup_flutter.outputs.VERSION }}-${{ hashFiles('**/pubspec.yaml') }}
+          restore-keys: |
+            dart-dependencies-${{ steps.setup_flutter.outputs.VERSION }}-
+            dart-dependencies-
+      - name: Setup melos
+        run: dart pub global activate melos && dart pub get
+      - name: Get Dart dependencies
+        run: melos bootstrap --no-flutter

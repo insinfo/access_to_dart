@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "cartãoSUAS",
+    "FileName": "cartãoSUAS.jpg",
+    "Extension": "jpg",
+    "ContentHash": "dcc58ee"
+  }
+}

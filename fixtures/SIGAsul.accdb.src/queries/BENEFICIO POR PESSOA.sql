@@ -1,0 +1,31 @@
+﻿SELECT
+  TbUnidade.NOME,
+  TbUnidade.[DIRETOR(A)],
+  TbUnidade.FUNÇÃO,
+  TbUnidade.MATRICULA,
+  TbUnidade.LOGO,
+  TbUnidade.RODAPE,
+  TbBeneficioEmergencial.CodBenef,
+  TbBeneficioEmergencial.DataBenef,
+  TbPessoa.CodPessoa,
+  TbPessoa.CodFam,
+  TbPessoa.Nome,
+  TbBeneficioEmergencial.DescreverItem,
+  TbBeneficioEmergencial.CodItem,
+  TbBeneficioEmergencial.Qtd,
+  TbBeneficioEmergencial.ApoioAlim,
+  TbBeneficioEmergencial.AuxNatal,
+  TbBeneficioEmergencial.Cobertor,
+  TbBeneficioEmergencial.Colchonete,
+  TbBeneficioEmergencial.Outro,
+  TbBeneficioEmergencial.OutroDescrever
+FROM
+  TbUnidade,
+  TbPessoa
+  INNER JOIN TbBeneficioEmergencial ON TbPessoa.CodPessoa = TbBeneficioEmergencial.Nome
+WHERE
+  (
+    (
+      (TbPessoa.Nome) Like [DIGITE O NOME] + "*"
+    )
+  );

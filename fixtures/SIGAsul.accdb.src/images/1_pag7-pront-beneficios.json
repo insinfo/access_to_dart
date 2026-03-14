@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_pag7-pront-beneficios",
+    "FileName": "pag7-pront-beneficios.jpg",
+    "Extension": "jpg",
+    "ContentHash": "cc57341"
+  }
+}

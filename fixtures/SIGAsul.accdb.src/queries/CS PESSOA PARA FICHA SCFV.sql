@@ -1,0 +1,80 @@
+﻿SELECT
+  TbPessoa.CodPessoa,
+  CadResidencia.Volante,
+  TbPessoa.CodFam,
+  TbPessoa.DataCadPes,
+  TbPessoa.Nome,
+  TbPessoa.Parentesco,
+  TbPessoa.DNasc,
+  Int(
+    DateDiff(
+      "d",
+      [DNasC],
+      Date()
+    )/ 365.25
+  ) AS Idade,
+  TbPessoa.Apelido,
+  TbPessoa.NomeMae,
+  TbPessoa.Celular,
+  TbPessoa.NIS,
+  TbPessoa.CPF,
+  TbPessoa.RG,
+  TbPessoa.OrgaoRG,
+  TbPessoa.DEmisRG,
+  TbPessoa.[CERT LIVRO/FOLHA/TERMO],
+  TbPessoa.[TITULO/ZONA/SEÇAO],
+  TbPessoa.Sexo,
+  TbPessoa.[Raça/Cor],
+  TbPessoa.MunicNasc,
+  TbPessoa.UFNasc,
+  TbPessoa.[Estado Civil],
+  TbPessoa.Autismo,
+  TbPessoa.Cegueira,
+  TbPessoa.[Baixa visão],
+  TbPessoa.[Surdez severa profunda],
+  TbPessoa.[Surdez leve moderada],
+  TbPessoa.[Deficiencia fisica],
+  TbPessoa.[Defic mental intelec],
+  TbPessoa.[Sindrome down],
+  TbPessoa.[Transt doença mental],
+  TbPessoa.DoencaCronica,
+  TbPessoa.[Qual DCronica],
+  TbPessoa.SituaçãoRua,
+  TbPessoa.ServAco,
+  TbPessoa.LerEscrever,
+  TbPessoa.FreqEscola,
+  TbPessoa.Escolaridade,
+  TbPessoa.CTPS,
+  TbPessoa.[Nº CTPS],
+  TbPessoa.[Condição Ocupação],
+  TbPessoa.BPCD,
+  TbPessoa.BPCI,
+  TbPessoa.[Renda sem programas sociais],
+  TbPessoa.[Renda per capita],
+  TbPessoa.[Recebe programa social],
+  TbPessoa.[Aposentado/pensionista],
+  TbPessoa.DataDesligPes,
+  TbPessoa.MotivoDeslPes,
+  CadResidencia.CodFam,
+  CadResidencia.DataCad,
+  CadResidencia.[CRAS Origem],
+  CadResidencia.[Nº Cras],
+  CadResidencia.CodCREAS,
+  CadResidencia.CodCEAM,
+  CadResidencia.Endereço,
+  CadResidencia.Bairro,
+  CadResidencia.UF,
+  CadResidencia.CEP,
+  CadResidencia.Municipio,
+  CadResidencia.Complemento,
+  CadResidencia.Referencia,
+  CadResidencia.[Tel fixo]
+FROM
+  CadResidencia
+  INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam
+WHERE
+  (
+    (
+      (TbPessoa.DataDesligPes) Is Null
+    )
+  );

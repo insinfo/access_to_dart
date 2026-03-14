@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag5-pront-condicoes-habit",
+    "FileName": "pag5-pront-condicoes-habit.jpg",
+    "Extension": "jpg",
+    "ContentHash": "11a7165"
+  }
+}

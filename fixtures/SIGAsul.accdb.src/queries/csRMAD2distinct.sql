@@ -1,0 +1,5 @@
+﻿SELECT
+  DISTINCT csRMAD2.Nome,
+  csRMAD2.Idade
+FROM
+  csRMAD2;

@@ -1,0 +1,1205 @@
+import 'dart:convert';
+import 'dart:core';
+import 'dart:async';
+
+import 'package:ensemble_ts_interpreter/errors.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokable.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokablecommons.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokablemath.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokableprimitives.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokablefetch.dart';
+import 'package:ensemble_ts_interpreter/invokables/invokablecollections.dart';
+import 'package:ensemble_ts_interpreter/parser/regex_ext.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:json_path/json_path.dart';
+import 'package:intl/intl.dart';
+
+import 'UserLocale.dart';
+import 'invokablepromises.dart';
+
+abstract class GlobalContext {
+  static RegExp regExp(String regex, String options) {
+    RegExp r = RegExp(regex);
+    return r;
+  }
+
+  static Map<String, dynamic> _context = {
+    'regExp': regExp,
+    'Math': InvokableMath(),
+    'parseFloat': (dynamic value) {
+      if (value is String) {
+        return double.tryParse(value) ?? double.nan;
+      } else if (value is num) {
+        return value.toDouble();
+      } else {
+        return double.nan;
+      }
+    },
+    'parseInt': (dynamic value, [int? radix = 10]) {
+      // Directly return the value if it's already an integer
+      if (value is int) return value;
+
+      // Convert to string to handle both String and double inputs
+      String stringValue = value.toString();
+
+      // Handling radix for non-decimal numbers correctly requires parsing integers only
+      if (radix != null && radix >= 2 && radix <= 36) {
+        // Check if the value is a valid integer for the specified radix
+        int? parsedInt = int.tryParse(stringValue, radix: radix);
+        if (parsedInt != null) return parsedInt;
+
+        // If parsing as int fails, try double and then convert to int
+        double? parsedDouble = double.tryParse(stringValue);
+        if (parsedDouble != null) return parsedDouble.toInt();
+      } else {
+        // Fallback to parsing as a decimal number if no valid radix is provided
+        double? parsedDouble = double.tryParse(stringValue);
+        if (parsedDouble != null) return parsedDouble.toInt();
+      }
+
+      // Return 0 if all parsing attempts fail
+      return double.nan;
+    },
+
+    'parseDouble': (dynamic value) {
+      if (value is String) {
+        return double.tryParse(value) ?? double.nan;
+      } else if (value is num) {
+        return value.toDouble();
+      } else {
+        return double.nan;
+      }
+    },
+
+    'JSON': JSON(),
+    'btoa': _String.btoa,
+    'atob': _String.atob,
+    'console': Console(),
+    'Date': StaticDate(),
+    'Object': InvokableObject(),
+    'Error': JSCustomException(null),
+    'Array': StaticArray(),
+    'Number': StaticNumber(),
+    'String': StaticString(),
+    'performance': StaticPerformance(),
+    'Map': JSMapConstructor(),
+    'Set': JSSetConstructor(),
+    'queueMicrotask': (Function cb) => scheduleMicrotask(() {
+          try {
+            cb([]);
+          } catch (_) {}
+        }),
+    'isNaN': (dynamic value) {
+      if (value == null) return true;
+      final num? parsed = num.tryParse(value.toString());
+      return parsed == null || parsed.isNaN;
+    },
+    'isFinite': (dynamic value) {
+      if (value == null) return false;
+      final num? parsed = num.tryParse(value.toString());
+      return parsed != null && parsed.isFinite;
+    },
+    // Encode and Decode URI Component functions
+    'encodeURIComponent': (String s) => Uri.encodeComponent(s),
+    'decodeURIComponent': (String s) => Uri.decodeComponent(s),
+    // Encode and Decode URI functions
+    'encodeURI': (String uri) => Uri.encodeFull(uri),
+    'decodeURI': (String uri) => Uri.decodeFull(uri),
+    'setTimeout': TimerManager.setTimeout,
+    'clearTimeout': TimerManager.clearTimeout,
+    'setInterval': TimerManager.setInterval,
+    'clearInterval': TimerManager.clearInterval,
+    'setImmediate': TimerManager.setImmediate,
+    'clearImmediate': TimerManager.clearImmediate,
+    'Promise': JSPromiseConstructor(),
+    'fetch': Fetch.fetch,
+  };
+
+  static get context => _context;
+}
+
+class InvokableController {
+  // remember the last locale set to be used with locale-specific operations
+  static Locale? locale;
+  static void updateLocale(Map<String, dynamic> dataContext) {
+    if (dataContext["app"] is Invokable) {
+      var localFunc = (dataContext["app"] as Invokable).getters()["locale"];
+      if (localFunc is Function) {
+        var foundLocale = localFunc();
+        if (foundLocale is UserLocale) {
+          locale = foundLocale.toLocale();
+          return;
+        }
+      }
+    }
+    // if locale is not set, we should clear it out vs using the stale one
+    locale = null;
+  }
+
+  static bool isPrimitive(dynamic val) {
+    bool rtn = val == null;
+    if (!rtn) {
+      rtn = val is String || val is num || val is bool; //add more
+    }
+    return rtn;
+  }
+
+  static bool isNative(dynamic val) {
+    bool rtn = isPrimitive(val);
+    if (!rtn) {
+      rtn = val is Map || val is List || val is RegExp;
+    }
+    return rtn;
+  }
+
+//   // Sample function to simulate a changing condition
+//   static bool isConditionMet() {
+//     // Replace this with your actual condition-checking code
+//     return DateTime.now().second % 10 == 0;
+//   }
+//
+// // Function to wait until the condition is met
+//   static Future<void> waitForCondition() async {
+//     while (!isConditionMet()) {
+//       print('Condition not met, waiting 500ms...');
+//       await Future.delayed(Duration(milliseconds: 500));
+//     }
+//     print('Condition met! Continuing execution...');
+//   }
+  static void addGlobals(Map<String, dynamic> context) {
+    context.addAll(GlobalContext.context);
+    context['globalThis'] = context;
+    // context['debug'] = () async {
+    //   await waitForCondition();
+    // };
+  }
+
+  static Map<String, Function> methods(dynamic val) {
+    if (val == null) {
+      return {};
+    } else if (val is Invokable) {
+      return val.methods();
+    } else if (val is String) {
+      return _String.methods(val);
+    } else if (val is bool) {
+      return _Boolean.methods(val);
+    } else if (val is num) {
+      return _Number.methods(val);
+    } else if (val is Map) {
+      return _Map.methods(val);
+    } else if (val is List) {
+      return _List.methods(val);
+    } else if (val is RegExp) {
+      return _RegExp.methods(val);
+    }
+    return {};
+  }
+
+  static Map<String, Function> setters(dynamic val) {
+    if (val == null) {
+      return {};
+    } else if (val is Invokable) {
+      return val.setters();
+    } else if (val is String) {
+      return _String.setters(val);
+    } else if (val is bool) {
+      return _Boolean.setters(val);
+    } else if (val is num) {
+      return _Number.setters(val);
+    } else if (val is Map) {
+      return _Map.setters(val);
+    } else if (val is List) {
+      return _List.setters(val);
+    } else if (val is RegExp) {
+      return _RegExp.setters(val);
+    }
+    return {};
+  }
+
+  static Map<String, Function> getters(dynamic val) {
+    if (val == null) {
+      return {};
+    } else if (val is Invokable) {
+      return val.getters();
+    } else if (val is String) {
+      return _String.getters(val);
+    } else if (val is bool) {
+      return _Boolean.getters(val);
+    } else if (val is num) {
+      return _Number.getters(val);
+    } else if (val is Map) {
+      return _Map.getters(val);
+    } else if (val is List) {
+      return _List.getters(val);
+    } else if (val is RegExp) {
+      return _RegExp.getters(val);
+    }
+    return {};
+  }
+
+  static dynamic getProperty(dynamic val, dynamic prop) {
+    if (val == null) {
+      throw InvalidPropertyException(
+          'Cannot get a property on a null object. Property=$prop');
+    } else if (val is Invokable) {
+      return val.getProperty(prop);
+    } else if (val is String) {
+      return _String.getProperty(val, prop);
+    } else if (val is bool) {
+      return _Boolean.getProperty(val, prop);
+    } else if (val is num) {
+      return _Number.getProperty(val, prop);
+    } else if (val is Map) {
+      return _Map.getProperty(val, prop);
+    } else if (val is List) {
+      return _List.getProperty(val, prop);
+    } else if (val is RegExp) {
+      return _RegExp.getProperty(val, prop);
+    }
+    return null;
+  }
+
+  static dynamic setProperty(dynamic val, dynamic prop, dynamic value) {
+    if (val == null) {
+      throw InvalidPropertyException(
+          'Cannot set a property on a null object. Property=$prop and prop value=$value');
+    } else if (val is Invokable) {
+      return val.setProperty(prop, value);
+    } else if (val is String) {
+      return _String.setProperty(val, prop, value);
+    } else if (val is bool) {
+      return _Boolean.setProperty(val, prop, value);
+    } else if (val is num) {
+      return _Number.setProperty(val, prop, value);
+    } else if (val is Map) {
+      return _Map.setProperty(val, prop, value);
+    } else if (val is List) {
+      return _List.setProperty(val, prop, value);
+    } else if (val is RegExp) {
+      return _RegExp.setProperty(val, prop, value);
+    }
+    return {};
+  }
+
+  static bool deleteProperty(dynamic val, dynamic prop) {
+    if (val == null) {
+      return false;
+    } else if (val is Invokable) {
+      // For Invokable objects, try to use deleteProperty if available
+      try {
+        val.setProperty(prop, null);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    } else if (val is Map) {
+      return val.remove(prop) != null;
+    } else if (val is List) {
+      // For lists, delete by index
+      if (prop is int && prop >= 0 && prop < val.length) {
+        val.removeAt(prop);
+        return true;
+      }
+      return false;
+    }
+    // For other types, deletion is not supported
+    return false;
+  }
+
+  static List<String> getGettableProperties(dynamic obj) {
+    if (obj is Invokable) {
+      return Invokable.getGettableProperties(obj);
+    } else {
+      return InvokableController.getters(obj).keys.toList();
+    }
+  }
+
+  static List<String> getSettableProperties(dynamic obj) {
+    if (obj is Invokable) {
+      return Invokable.getSettableProperties(obj);
+    } else {
+      return InvokableController.setters(obj).keys.toList();
+    }
+  }
+
+  static Map<String, Function> getMethods(dynamic obj) {
+    if (obj is Invokable) {
+      return Invokable.getMethods(obj);
+    } else {
+      return InvokableController.methods(obj);
+    }
+  }
+}
+
+class Console extends Object with Invokable, MethodExecutor {
+  @override
+  Map<String, Function> getters() => {};
+
+  @override
+  Map<String, Function> methods() {
+    return {
+      'log': (dynamic args) => _log('log', _normalizeArgs(args)),
+      'info': (dynamic args) => _log('info', _normalizeArgs(args)),
+      'warn': (dynamic args) => _log('warn', _normalizeArgs(args)),
+      'error': (dynamic args) => _log('error', _normalizeArgs(args)),
+      'debug': (dynamic args) => _log('debug', _normalizeArgs(args)),
+      'trace': (dynamic args) => _trace(_normalizeArgs(args)),
+    };
+  }
+
+  @override
+  Map<String, Function> setters() => {};
+
+  List<dynamic> _normalizeArgs(dynamic args) {
+    if (args == null) {
+      return [];
+    }
+    if (args is List<dynamic>) {
+      return args;
+    }
+    return [args];
+  }
+
+  String _formatArg(dynamic value) {
+    if (value == null) return 'null';
+    if (value is bool || value is num) return value.toString();
+    if (value is String) return value;
+    if (value is RegExp) return value.pattern;
+    if (value is DateTime) return value.toIso8601String();
+
+    if (value is Map || value is Iterable) {
+      try {
+        return jsonEncode(value);
+      } catch (_) {
+        // Fall through to string conversion if encoding fails
+      }
+    }
+
+    try {
+      return value.toString();
+    } catch (_) {
+      return '<unprintable>';
+    }
+  }
+
+  void _emit(String level, List<dynamic> args, {StackTrace? stack}) {
+    final formattedArgs = args.map(_formatArg).toList();
+    final message = formattedArgs.join(' ');
+    final prefix = level == 'log' ? '' : '[console.$level]';
+    final buffer = StringBuffer('$prefix$message');
+    if (stack != null) {
+      buffer.writeln();
+      buffer.write(stack.toString());
+    }
+    debugPrint(buffer.toString());
+  }
+
+  dynamic _log(String level, List<dynamic> args) {
+    _emit(level, args);
+    return null;
+  }
+
+  dynamic _trace(List<dynamic> args) {
+    _emit('trace', args, stack: StackTrace.current);
+    return null;
+  }
+
+  @override
+  dynamic callMethod(String methodName, List<dynamic> args) {
+    switch (methodName) {
+      case 'log':
+        return _log('log', args);
+      case 'info':
+        return _log('info', args);
+      case 'warn':
+        return _log('warn', args);
+      case 'error':
+        return _log('error', args);
+      case 'debug':
+        return _log('debug', args);
+      case 'trace':
+        return _trace(args);
+      default:
+        throw InvalidPropertyException(
+            'console does not have a method named $methodName');
+    }
+  }
+}
+
+class TimerManager {
+  static final Map<int, Timer> _timers = {};
+  static final Map<int, Timer> _intervals = {};
+  static int _nextId = 1;
+
+  static int _toMilliseconds(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final int? parsedInt = int.tryParse(value);
+      if (parsedInt != null) return parsedInt;
+      final double? parsedDouble = double.tryParse(value);
+      if (parsedDouble != null) return parsedDouble.toInt();
+    }
+    return 0;
+  }
+
+  static void _invokeCallback(dynamic callback, List<dynamic> args) {
+    try {
+      // Filter out trailing null optional args to avoid arity errors.
+      final filteredArgs =
+          args.takeWhile((element) => element != null).toList();
+      if (callback is Function) {
+        // JavascriptFunction._onCall expects a single List argument.
+        callback(filteredArgs);
+      }
+    } catch (_) {
+      try {
+        // Fallback: attempt positional invocation if the callback expects spread args.
+        Function.apply(callback, args);
+      } catch (_) {
+        // Swallow errors to mimic JS setTimeout behavior.
+      }
+    }
+  }
+
+  static int setTimeout(dynamic callback,
+      [dynamic delayMs = 0,
+      dynamic arg1,
+      dynamic arg2,
+      dynamic arg3,
+      dynamic arg4]) {
+    final int id = _nextId++;
+    final int ms = _toMilliseconds(delayMs);
+    _timers[id] = Timer(Duration(milliseconds: ms), () {
+      _timers.remove(id);
+      _invokeCallback(callback, [arg1, arg2, arg3, arg4]);
+    });
+    return id;
+  }
+
+  static void clearTimeout([int? id]) {
+    if (id == null) return;
+    _timers.remove(id)?.cancel();
+  }
+
+  static Map<String, dynamic> setInterval(dynamic callback,
+      [dynamic delayMs = 0,
+      dynamic arg1,
+      dynamic arg2,
+      dynamic arg3,
+      dynamic arg4]) {
+    final int id = _nextId++;
+    final int ms = _toMilliseconds(delayMs);
+    _intervals[id] = Timer.periodic(Duration(milliseconds: ms), (_) {
+      _invokeCallback(callback, [arg1, arg2, arg3, arg4]);
+    });
+    return {
+      'id': id,
+      'ref': () => null,
+      'unref': () => null,
+    };
+  }
+
+  static void clearInterval([dynamic handle]) {
+    if (handle == null) return;
+    int? id;
+    if (handle is int) {
+      id = handle;
+    } else if (handle is Map && handle['id'] is int) {
+      id = handle['id'] as int;
+    }
+    if (id == null) return;
+    _intervals.remove(id)?.cancel();
+  }
+
+  static int setImmediate(dynamic callback,
+      [dynamic arg1, dynamic arg2, dynamic arg3, dynamic arg4]) {
+    final int id = _nextId++;
+    _timers[id] = Timer(Duration.zero, () {
+      _timers.remove(id);
+      _invokeCallback(callback, [arg1, arg2, arg3, arg4]);
+    });
+    return id;
+  }
+
+  static void clearImmediate([int? id]) {
+    if (id == null) return;
+    _timers.remove(id)?.cancel();
+  }
+}
+
+class StaticArray extends Object with Invokable {
+  @override
+  Map<String, Function> getters() => {};
+
+  @override
+  Map<String, Function> methods() {
+    return {
+      'isArray': (dynamic value) => value is List,
+    };
+  }
+
+  @override
+  Map<String, Function> setters() => {};
+}
+
+class StaticNumber extends Object with Invokable {
+  @override
+  Map<String, Function> getters() => {};
+
+  @override
+  Map<String, Function> methods() {
+    return {
+      'isNaN': (dynamic value) {
+        final num? parsed = num.tryParse(value.toString());
+        return parsed != null && parsed.isNaN;
+      },
+      'isFinite': (dynamic value) {
+        final num? parsed = num.tryParse(value.toString());
+        return parsed != null && parsed.isFinite;
+      },
+      'isInteger': (dynamic value) {
+        final num? parsed = num.tryParse(value.toString());
+        if (parsed == null || parsed.isNaN || !parsed.isFinite) return false;
+        return parsed == parsed.truncate();
+      }
+    };
+  }
+
+  @override
+  Map<String, Function> setters() => {};
+}
+
+class StaticString extends Object with Invokable {
+  @override
+  Map<String, Function> getters() => {};
+
+  @override
+  Map<String, Function> methods() {
+    List<int> _normalizeCodes(dynamic first, List<dynamic> rest) {
+      if (first is List) {
+        return first.map((e) => int.tryParse(e.toString()) ?? 0).toList();
+      }
+      List<dynamic> all = [first, ...rest].where((e) => e != null).toList();
+      return all.map((e) => int.tryParse(e.toString()) ?? 0).toList();
+    }
+
+    return {
+      'fromCharCode': (dynamic a,
+              [dynamic b, dynamic c, dynamic d, dynamic e, dynamic f]) =>
+          String.fromCharCodes(_normalizeCodes(a, [b, c, d, e, f])),
+      'fromCodePoint': (dynamic a,
+              [dynamic b, dynamic c, dynamic d, dynamic e, dynamic f]) =>
+          String.fromCharCodes(_normalizeCodes(a, [b, c, d, e, f])),
+    };
+  }
+
+  @override
+  Map<String, Function> setters() => {};
+}
+
+class StaticPerformance extends Object with Invokable {
+  @override
+  Map<String, Function> getters() => {};
+
+  @override
+  Map<String, Function> methods() {
+    return {
+      'now': () => DateTime.now().microsecondsSinceEpoch / 1000,
+    };
+  }
+
+  @override
+  Map<String, Function> setters() => {};
+}
+
+class _String {
+  //encodes string to base64 string
+  static String btoa(String s) {
+    final List<int> bytes = utf8.encode(s);
+    return base64.encode(bytes);
+  }
+
+  //decodes a base64 string
+  static String atob(String s) => utf8.decode(base64.decode(s));
+  static Map<String, Function> getters(String val) {
+    return {'length': () => val.length};
+  }
+
+  static dynamic getProperty(String obj, dynamic prop) {
+    Function? f = getters(obj)[prop];
+    if (f != null) {
+      return f();
+    }
+    throw InvalidPropertyException(
+        '$obj does not have a gettable property named $prop');
+  }
+
+  static void setProperty(String obj, dynamic prop, dynamic val) {
+    Function? func = setters(obj)[prop];
+    if (func != null) {
+      func(val);
+    } else {
+      throw InvalidPropertyException(
+          '$obj does not have a settable property named $prop');
+    }
+  }
+
+  static String replaceWithJsRegex(
+      String input, RegExp regExp, String replacement,
+      {bool replaceFirst = false}) {
+    // The replace function takes a Match object and returns the replaced string
+    String replace(Match match) {
+      String result = replacement;
+
+      // Replace all group references in the replacement string
+      for (int i = 0; i <= match.groupCount; i++) {
+        result = result.replaceAll('\$$i', match.group(i) ?? '');
+      }
+
+      return result;
+    }
+
+    ;
+    // Use replaceFirstMapped if replaceFirst is true, otherwise use replaceAllMapped
+    return replaceFirst && !regExp.global
+        ? input.replaceFirstMapped(regExp, replace)
+        : input.replaceAllMapped(regExp, replace);
+  }
+
+  static Map<String, Function> methods(String val) {
+    return {
+      'indexOf': (String str, [int? fromIndex]) {
+        if (fromIndex == null) {
+          return val.indexOf(str);
+        }
+        return val.indexOf(str, fromIndex);
+      },
+      'lastIndexOf': (String str, [start = -1]) =>
+          (start == -1) ? val.lastIndexOf(str) : val.lastIndexOf(str, start),
+      'charAt': (index) => val[index],
+      'startsWith': (str) => val.startsWith(str),
+      'endsWith': (str) => val.endsWith(str),
+      'includes': (str) => val.contains(str),
+      'toLowerCase': () => val.toLowerCase(),
+      'toUpperCase': () => val.toUpperCase(),
+      'trim': () => val.trim(),
+      'trimStart': () => val.trimLeft(),
+      'trimEnd': () => val.trimRight(),
+      'localeCompare': (String str) => val.compareTo(str), //not locale specific
+      'repeat': (int count) => val * count,
+      'search': (RegExp pattern) =>
+          pattern.hasMatch(val) ? pattern.firstMatch(val)?.start : -1,
+      'charCodeAt': (int index) => val.codeUnitAt(index),
+      'codePointAt': (int index) => val.codeUnitAt(index),
+      'slice': (int start, [int? end]) {
+        int adjustedStart = start < 0 ? val.length + start : start;
+        adjustedStart = adjustedStart.clamp(0, val.length);
+        int adjustedEnd =
+            end == null ? val.length : (end < 0 ? val.length + end : end);
+        adjustedEnd = adjustedEnd.clamp(adjustedStart, val.length);
+        return val.substring(adjustedStart, adjustedEnd);
+      },
+      'substr': (int start, [int? length]) =>
+          val.substring(start, start + (length ?? val.length - start)),
+      'match': (regexp) {
+        RegExp regex = regexp as RegExp;
+        final matches = regex.allMatches(val);
+        List<String> list = [];
+        for (final m in matches) {
+          list.add(m[0]!);
+        }
+        return list;
+      },
+      'matchAll': (regexp) {
+        final matches = (regexp as RegExp).allMatches(val);
+        List<String> list = [];
+        for (final m in matches) {
+          list.add(m[0]!);
+        }
+        return list;
+      },
+      'padStart': (n, [str = ' ']) => val.padLeft(n, str),
+      'padEnd': (n, [str = ' ']) => val.padRight(n, str),
+      'substring': (start, [end = -1]) =>
+          (end == -1) ? val.substring(start) : val.substring(start, end),
+      'split': (String delimiter) => val.split(delimiter),
+      'prettyCurrency': () => InvokablePrimitive.prettyCurrency(val),
+      'prettyDate': () => InvokablePrimitive.prettyDate(val),
+      'prettyDateTime': () => InvokablePrimitive.prettyDateTime(val),
+      'prettyTime': () => InvokablePrimitive.prettyTime(val),
+      'replace': (pattern, replacement) {
+        if (pattern is String) {
+          return val.replaceFirst(pattern, replacement);
+        }
+        return replaceWithJsRegex(val, pattern, replacement,
+            replaceFirst: true);
+      },
+      'replaceAll': (pattern, replacement) {
+        if (pattern is String) {
+          return val.replaceAll(pattern, replacement);
+        }
+        return replaceWithJsRegex(val, pattern, replacement);
+      },
+      'replaceAllMapped': (pattern, replacement) =>
+          replaceWithJsRegex(val, pattern, replacement),
+      'tryParseInt': () => int.tryParse(val),
+      'tryParseDouble': () => double.tryParse(val),
+      'btoa': () => btoa(val),
+      'atob': () => atob(val),
+    };
+  }
+
+  static Map<String, Function> setters(String val) {
+    return {};
+  }
+}
+
+class _Boolean {
+  static Map<String, Function> getters(bool val) {
+    return {};
+  }
+
+  static Map<String, Function> methods(bool val) {
+    return {};
+  }
+
+  static Map<String, Function> setters(bool val) {
+    return {};
+  }
+
+  static dynamic getProperty(bool obj, dynamic prop) {
+    Function? f = getters(obj)[prop];
+    if (f != null) {
+      return f();
+    }
+    throw InvalidPropertyException(
+        '$obj does not have a gettable property named $prop');
+  }
+
+  static void setProperty(bool obj, dynamic prop, dynamic val) {
+    Function? func = setters(obj)[prop];
+    if (func != null) {
+      func(val);
+    } else {
+      throw InvalidPropertyException(
+          '$obj does not have a settable property named $prop');
+    }
+  }
+}
+
+class _Number {
+  static Map<String, Function> getters(num val) {
+    return {};
+  }
+
+  static Map<String, Function> methods(num val) {
+    return {
+      'prettyCurrency': () => InvokablePrimitive.prettyCurrency(val),
+      'prettyDate': () => InvokablePrimitive.prettyDate(val),
+      'prettyDateTime': () => InvokablePrimitive.prettyDateTime(val),
+      'prettyDuration': () => InvokablePrimitive.prettyDuration(val),
+      'toFixed': (int fractionDigits) => val.toStringAsFixed(fractionDigits),
+      'toString': ([int? radix]) {
+        if (radix != null) {
+          return val.toInt().toRadixString(radix);
+        }
+        return val.toString();
+      },
+      'toLocaleString': ([String? locale, dynamic options]) {
+        // If called without parameters, use default formatting
+        if (locale == null && options == null) {
+          try {
+            return NumberFormat.decimalPattern().format(val);
+          } catch (e) {
+            return val.toString();
+          }
+        }
+
+        String? localeStr;
+        if (locale != null) {
+          // Handle both hyphen and underscore formats
+          List<String> parts = locale.split(RegExp(r'[-_]'));
+          if (parts.length > 1) {
+            localeStr = '${parts[0]}_${parts[1]}';
+          } else {
+            localeStr = locale;
+          }
+        }
+
+        // Handle options if provided
+        if (options != null && options is Map) {
+          try {
+            Map<String, dynamic> optionsMap =
+                Map<String, dynamic>.from(options);
+            String style = optionsMap['style'] ?? 'decimal';
+
+            switch (style) {
+              case 'currency':
+                String currencyCode = optionsMap['currency'] ?? 'USD';
+                return NumberFormat.currency(
+                  locale: localeStr,
+                  symbol: currencyCode,
+                  decimalDigits: optionsMap['minimumFractionDigits'] ?? 2,
+                  customPattern: '#,##0.00',
+                  name: currencyCode,
+                ).format(val);
+
+              case 'percent':
+                return NumberFormat.percentPattern(localeStr).format(val);
+
+              case 'decimal':
+              default:
+                int? minimumFractionDigits =
+                    optionsMap['minimumFractionDigits'];
+                int? maximumFractionDigits =
+                    optionsMap['maximumFractionDigits'];
+
+                var formatter = NumberFormat.decimalPattern(localeStr);
+                if (minimumFractionDigits != null) {
+                  formatter.minimumFractionDigits = minimumFractionDigits;
+                }
+                if (maximumFractionDigits != null) {
+                  formatter.maximumFractionDigits = maximumFractionDigits;
+                }
+                return formatter.format(val);
+            }
+          } catch (e) {
+            // If any error occurs during formatting, return string representation
+            return val.toString();
+          }
+        }
+
+        // Default decimal formatting with locale if provided
+        try {
+          return NumberFormat.decimalPattern(localeStr).format(val);
+        } catch (e) {
+          return val.toString();
+        }
+      }
+    };
+  }
+
+  static Map<String, Function> setters(num val) {
+    return {};
+  }
+
+  static dynamic getProperty(num obj, dynamic prop) {
+    Function? f = getters(obj)[prop];
+    if (f != null) {
+      return f();
+    }
+    throw InvalidPropertyException(
+        '$obj does not have a gettable property named $prop');
+  }
+
+  static void setProperty(num obj, dynamic prop, dynamic val) {
+    Function? func = setters(obj)[prop];
+    if (func != null) {
+      func(val);
+    } else {
+      throw InvalidPropertyException(
+          '$obj does not have a settable property named $prop');
+    }
+  }
+}
+
+class _Map {
+  static Map<String, Function> getters(Map map) {
+    return {};
+  }
+
+  static Map<String, Function> methods(Map map) {
+    return {
+      'path': (String path, Function? mapFunction) {
+        return JsonPath(path)
+            .read(map)
+            .map((match) => (mapFunction != null)
+                ? mapFunction([match.value])
+                : match.value)
+            .toList();
+      },
+      'keys': () => map.keys.toList(),
+      'values': () => map.values.toList(),
+      'entries': () {
+        List<Map> list = [];
+        map.forEach((key, value) {
+          list.add({'key': key, 'value': value});
+        });
+        return list;
+      },
+      'hasOwnProperty': (dynamic key) => map.containsKey(key),
+    };
+  }
+
+  static Map<String, Function> setters(Map val) {
+    return {};
+  }
+
+  static dynamic getProperty(Map map, dynamic prop) {
+    return map[prop];
+  }
+
+  static void setProperty(Map map, dynamic prop, dynamic val) {
+    map[prop] = val;
+  }
+}
+
+class _List {
+  static Map<String, Function> getters(List list) {
+    return {'length': () => list.length};
+  }
+
+  // ignore: unused_element
+  static List filter(List list, Function f) {
+    return list.where((e) => f([e])).toList();
+  }
+
+  static Map<String, Function> methods(List list) {
+    return {
+      'map': (Function f) => list
+          .asMap()
+          .entries
+          .map((entry) => f([entry.value, entry.key]))
+          .toList(),
+      'filter': (Function f) => list
+          .asMap()
+          .entries
+          .where((entry) => f([entry.value, entry.key]))
+          .map((entry) => entry.value)
+          .toList(),
+      'forEach': (Function f) =>
+          list.asMap().forEach((index, element) => f([element, index])),
+      'add': (dynamic val) => list.add(val),
+      'push': (dynamic val) => list.add(val),
+      'indexOf': (dynamic searchElement, [int? fromIndex]) {
+        if (fromIndex == null) {
+          return list.indexOf(searchElement);
+        }
+        return list.indexOf(searchElement, fromIndex);
+      },
+      'lastIndexOf': (dynamic val) => list.lastIndexOf(val),
+      'unique': () => list.toSet().toList(),
+      'sort': ([Function? f]) {
+        if (f == null) {
+          list.sort();
+        } else {
+          list.sort((a, b) {
+            dynamic result = f([a, b]);
+            // Convert floating point comparison to integer
+            if (result is double) {
+              if (result > 0) return 1;
+              if (result < 0) return -1;
+              return 0;
+            }
+            return result;
+          });
+        }
+        return list;
+      },
+      'sortF': ([Function? f]) {
+        if (f == null) {
+          list.sort();
+        } else {
+          list.sort((a, b) => f([a, b]));
+        }
+        return list;
+      },
+      'at': (int index) => list[index],
+      'concat': (List arr) => list + arr,
+      'find': (Function f) => list.firstWhere((e) => f([e]), orElse: () => -1),
+      'includes': (dynamic v) => list.contains(v),
+      'contains': (dynamic v) => list.contains(v),
+      'join': ([String str = ',']) => list.join(str),
+      'pop': () => (list.isNotEmpty) ? list.removeLast() : null,
+      'reduce': (Function f, [dynamic initialValue]) {
+        // Check if an initial value is provided
+        if (initialValue != null) {
+          // Use fold when an initial value is provided
+          return list.fold(initialValue,
+              (currentValue, element) => f([currentValue, element]));
+        } else {
+          // Use reduce directly when no initial value is provided
+          // This will throw if the list is empty, similar to JS reduce without an initial value
+          return list
+              .reduce((currentValue, element) => f([currentValue, element]));
+        }
+      },
+      'reduceRight': (Function f, [dynamic initialValue]) {
+        List reversed = list.reversed.toList();
+        if (initialValue != null) {
+          return reversed.fold(initialValue,
+              (currentValue, element) => f([currentValue, element]));
+        } else {
+          return reversed
+              .reduce((currentValue, element) => f([currentValue, element]));
+        }
+      },
+      'reverse': () => list.reversed.toList(),
+      'slice': ([int? start, int? end]) {
+        // If no arguments provided, create a shallow copy of the entire list
+        if (start == null) {
+          return List.from(list);
+        }
+        return list.sublist(start, end ?? list.length);
+      },
+      'shift': () => list.isNotEmpty ? list.removeAt(0) : null,
+      'unshift': (dynamic val) {
+        list.insert(0, val);
+        return list.length;
+      },
+      'splice': (int start, int deleteCount, [dynamic items]) {
+        var removedItems = list.sublist(start, start + deleteCount);
+        list.removeRange(start, start + deleteCount);
+        if (items != null) {
+          if (items is List) {
+            list.insertAll(start, items);
+          } else {
+            list.insert(start, items);
+          }
+        }
+        return removedItems;
+      },
+      'some': (Function f) => list.any((element) => f([element])),
+      'every': (Function f) => list.every((element) => f([element])),
+      'findIndex': (Function f) => list.indexWhere((e) => f([e])),
+      'fill': (dynamic value, [int start = 0, int? end]) {
+        end ??= list.length;
+        for (int i = start; i < end; i++) {
+          if (i >= 0 && i < list.length) {
+            list[i] = value;
+          }
+        }
+        return list;
+      },
+      'flat': ([int depth = 1]) {
+        List flatten(List input, int d) {
+          if (d == 0) return List.from(input);
+          List out = [];
+          for (var e in input) {
+            if (e is List) {
+              out.addAll(flatten(e, d - 1));
+            } else {
+              out.add(e);
+            }
+          }
+          return out;
+        }
+
+        return flatten(list, depth);
+      },
+      'flatMap': (Function f) {
+        List out = [];
+        list.asMap().forEach((i, e) {
+          var mapped = f([e, i]);
+          if (mapped is List) {
+            out.addAll(mapped);
+          } else {
+            out.add(mapped);
+          }
+        });
+        return out;
+      },
+      'keys': () => list.asMap().keys.toList(),
+      'values': () => List.from(list),
+      'entries': () => list
+          .asMap()
+          .entries
+          .map((e) => {'key': e.key, 'value': e.value})
+          .toList(),
+      'copyWithin': (int target, int start, [int? end]) {
+        int len = list.length;
+        int to = target < 0 ? len + target : target;
+        int from = start < 0 ? len + start : start;
+        int finalIndex = end == null ? len : (end < 0 ? len + end : end);
+        int count = (finalIndex - from).clamp(0, len - to);
+        if (count <= 0) return list;
+        List<dynamic> slice = [];
+        for (int i = 0; i < count; i++) {
+          int src = from + i;
+          slice.add(src < len ? list[src] : null);
+        }
+        for (int i = 0; i < count; i++) {
+          int dest = to + i;
+          if (dest < len) {
+            list[dest] = slice[i];
+          }
+        }
+        return list;
+      },
+    };
+  }
+
+  static Map<String, Function> setters(List list) {
+    return {};
+  }
+
+  static dynamic getProperty(List list, dynamic prop) {
+    if (prop is int) {
+      return list[prop];
+    }
+    Function? f = getters(list)[prop];
+    if (f != null) {
+      return f();
+    }
+    throw InvalidPropertyException(
+        'List or Array does not have a gettable property named $prop');
+  }
+
+  static void setProperty(List list, dynamic prop, dynamic val) {
+    if (prop is int) {
+      if (prop >= 0 && prop < list.length) {
+        list[prop] = val;
+      } else if (list.length == prop) {
+        list.add(val);
+      }
+    } else {
+      throw InvalidPropertyException(
+          'List or Array does not have a settable property named $prop');
+    }
+  }
+}
+
+class _RegExp {
+  static Map<String, Function> getters(RegExp val) {
+    return {};
+  }
+
+  static Map<String, Function> methods(RegExp val) {
+    return {
+      'test': (String input) => val.hasMatch(input),
+      'exec': (String input) {
+        final match = val.firstMatch(input);
+        if (match == null) return null;
+        List<dynamic> groups = [];
+        for (int i = 0; i <= match.groupCount; i++) {
+          groups.add(match.group(i));
+        }
+        groups.add({'index': match.start, 'input': input});
+        return groups;
+      },
+    };
+  }
+
+  static Map<String, Function> setters(RegExp val) {
+    return {};
+  }
+
+  static dynamic getProperty(RegExp obj, dynamic prop) {
+    Function? f = getters(obj)[prop];
+    if (f != null) {
+      return f();
+    }
+    throw InvalidPropertyException(
+        'RegExp does not have a gettable property named $prop');
+  }
+
+  static void setProperty(RegExp obj, dynamic prop, dynamic val) {
+    Function? func = setters(obj)[prop];
+    if (func != null) {
+      func(val);
+    } else {
+      throw InvalidPropertyException(
+          'RegExp does not have a settable property named $prop');
+    }
+  }
+}

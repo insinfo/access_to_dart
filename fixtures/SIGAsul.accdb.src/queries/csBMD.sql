@@ -1,0 +1,25 @@
+﻿SELECT
+  TbBeneficiosMunicipais.CodBenef,
+  TbPessoa.Nome,
+  TbBeneficiosMunicipais.TipoBeneficio,
+  TbBeneficiosMunicipais.DataDesl,
+  TbPessoa.CodPessoa,
+  TbPessoa.CodFam,
+  TbPessoa.CPF,
+  TbPessoa.RG
+FROM
+  TbPessoa
+  INNER JOIN TbBeneficiosMunicipais ON TbPessoa.CodPessoa = TbBeneficiosMunicipais.Nome
+WHERE
+  (
+    (
+      (
+        TbBeneficiosMunicipais.TipoBeneficio
+      )= "bmd"
+    )
+    AND (
+      (
+        TbBeneficiosMunicipais.DataDesl
+      ) Is Null
+    )
+  );

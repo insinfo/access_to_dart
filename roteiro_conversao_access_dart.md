@@ -1,613 +1,125 @@
-# Roteiro de Conversão de Microsoft Access para Dart Web
+# Roteiro Unificado de Conversão: MS Access (`.accdb`) para Dart Web 🚀
 
-## 1. Objetivo 
+## Status Atual em 14/03/2026
+- O núcleo `jackcess_dart` já abre `.accdb` nativamente e detecta o formato ACE/Jet (`VERSION_14` validado na fixture `fixtures/teste1/teste1.accdb`).
+- A leitura binária de `MSysObjects` já funciona sem Access instalado, incluindo navegação via `UsageMap` e varredura das páginas de dados do catálogo.
+- A base alvo real `fixtures/SIGAsul.accdb` já é inspecionada com sucesso como frontend Access com tabelas vinculadas:
+  - 0 tabelas locais
+  - 38 linked tables
+  - 426 queries
+  - 85 forms
+  - 147 reports
+  - 1 macro
+  - 2 modules
+- A CLI `inspect-accdb` já lista objetos binários reais da fixture:
+  - 1 tabela (`Contatos`)
+  - 5 queries
+  - 3 forms
+  - 3 reports
+  - 1 macro
+  - 1 módulo
+- O parser de TDEF já extrai:
+  - nomes e tipos de colunas
+  - offsets fixos/variáveis
+  - flags de coluna
+  - marcação de `AutoNumber`
+  - marcação de campos calculados
+- O `analysis.json` já inclui:
+  - esquema de tabelas
+  - DDL PostgreSQL preliminar
+  - amostras de linhas (`sampleRows`)
+  - SQL semântico reconstruído para queries `SELECT` já detectadas em `MSysQueries`, incluindo `ORDER BY` inline já decodificado na fixture
+  - reconstrutor estrutural testado para `JOIN`, `WHERE`, `GROUP BY` e `HAVING` a partir de linhas sintéticas compatíveis com `MSysQueries`
+  - AST de expressões Access para expressões textuais já decodificadas
+  - forms/reports/macros/modules detectados no catálogo
+- Campos calculados da fixture `Contatos` já estão sendo desempacotados no leitor binário:
+  - `NomeDoContato` -> `dfs sdf`
+  - `ArquivoComo` -> `sdf, dfs`
+- O parser de `.accdb.src` segue funcionando em paralelo para comparação e validação semântica.
+- O parser de `fixtures/SIGAsul.accdb.src` já cobre o layout exportado pelo add-in de versionamento para essa base:
+  - linked tables em `tbldefs/*.json`
+  - queries em `queries/*.sql`
+  - AST textual de query em `queries/*.bas`
+  - imagens compartilhadas em `images/*`
+- O comando `analyze --accdb fixtures/SIGAsul.accdb --src fixtures/SIGAsul.accdb.src` já gera `build/SIGAsul/analysis.json` com overlay de source para linked tables e SQL.
+- O backend vinculado principal `fixtures/SIGA2021-SUL_be_senha_4462.accdb` agora abre nativamente com senha:
+  - criptografia Agile Office 4.4 detectada (`AES-256`, `SHA512`, `spinCount=100000`)
+  - `inspect-accdb --password 4462` já lê `39` tabelas reais do backend
+  - `analyze --password 4462` já gera `build/SIGA2021-SUL/analysis.json`
+  - ainda existe uma pendência residual em leitura de linhas da tabela `CadResidencia`, hoje emitida como warning de `RangeError`
 
-Construir uma ferramenta em Dart capaz de:
+## Backlog Técnico Imediato
+1. Corrigir a leitura de linhas da tabela `CadResidencia` no backend real `SIGA2021-SUL_be_senha_4462.accdb`, eliminando o warning de `RangeError`.
+2. Validar e reconciliar em binário real a reconstrução semântica de `MSysQueries` do frontend `SIGAsul.accdb` contra os `.sql` e `.bas` exportados em `SIGAsul.accdb.src`, incluindo queries com `JOIN`, `WHERE`, `GROUP BY` e `HAVING`.
+3. Expandir a leitura do backend real para relacionamentos, índices e metadados ricos de coluna:
+   - required/nullability real
+   - default value
+   - expression de coluna calculada
+   - precision/scale
+4. Começar a materializar a camada canônica `access_analysis` para separar leitura binária de geração de código.
+5. Decodificar blobs mais profundos de objetos não-tabulares:
+   - formulários
+   - relatórios
+   - macros
+   - módulos VBA
 
-Premissa obrigatória: no estado final a ferramenta não pode depender de nada em `C:\MyDartProjects\access_to_dart\referencias`. Tudo o que for necessário para Dart precisa ser portado ou internalizado se for arquivos de coisas como fixtures ou assets no próprio repositório. O alvo técnico é fazer engenharia reversa do `.accdb` para não depender de Microsoft Access instalado no computador.
+## 1. Visão Geral e Objetivo
+Construir uma ferramenta de linha de comando (CLI) profissional (sem gambiaras e regex) e nativa em Dart capaz de realizar a **engenharia reversa profunda e direta de arquivos `.accdb`**, extraindo nativamente componentes fundamentais como **Tabelas, Consultas (Queries), Formulários (Forms), e Macros** diretamente da estrutura binária, **sem depender de instalações locais do Microsoft Access** (eliminando a necessidade do `win32com` ou do export manual para `.accdb.src`).
 
-1. Ler um arquivo Access `.accdb`, com foco inicial em `C:\MyDartProjects\access_to_dart\fixtures\teste1\teste1.accdb`.
-2. Aproveitar, quando existir, um export textual do Access em pasta `.accdb.src`, como `C:\MyDartProjects\access_to_dart\fixtures\teste1\teste1.accdb.src`. gerado pelo plugin C:\MyDartProjects\access_to_dart\referencias\Version_Control_v4.1.2\Version Control.accda 
-C:\MyDartProjects\access_to_dart\referencias\msaccess-vcs-addin-main\msaccess-vcs-addin-main
- 
-3. Gerar uma aplicação web moderna em Dart com esta estrutura:
+O objetivo é que, ao apontar a ferramenta unicamente para um arquivo bruto como `teste1.accdb`, o processamento produza automaticamente um projeto completo ("Full-Stack") rodando Dart moderno sob uma arquitetura de três camadas:
 
 ```text
-/nome_app
-  /core
-  /backend
-  /frontend
-  conversion-report.md
+/teste1_app_generated
+  |-- /core       (Modelos OOP, classes estruturais, serialização JSON e DTOs cruzados)
+  |-- /backend    (API RESTful usando servidor `shelf` 1.4.2 com rotas e Repositories manuais com `eloquent` 3.4.3 para PostgreSQL conectando script de migrando esquema)
+  |-- /frontend   (SPA em AngularDart `ngdart` 8.0.0-dev.4, construindo telas visuais baseadas em componentes ricos e Bootstrap CSS)
+  |-- conversion-report.md (Warning logs e registros do motor)
 ```
 
-4. Produzir:
-   - `core`: entidades, DTOs, contratos, mapeamentos, validações e metadados compartilhados.
-   - `backend`: API HTTP com `shelf`, acesso a PostgreSQL e rotas CRUD. usando MVC like Controllers, Repositories etc
-   - `frontend`: SPA em `ngdart` com Bootstrap CSS.
-   - scripts e arquivos de configuração suficientes para instalar, migrar, subir e testar a aplicação gerada.
-
-## 2. Conclusão da Revisão do Roteiro Atual
-
-O roteiro atual está bom como visão geral, mas ainda não está completo nem está suficientemente alinhado ao que as referências locais realmente entregam.
-
-Pontos fortes do roteiro atual:
-
-- define bem o objetivo final;
-- já separa `core`, `backend` e `frontend`;
-- escolhe uma stack coerente com o objetivo;
-- identifica `jackcess` como base para leitura do `.accdb`.
-
-Lacunas que precisam ser corrigidas:
-
-- mistura duas frentes diferentes: leitura binária de `.accdb` e conversão de UI/objetos do Access;
-- trata `Access-Tool` como algo a ser "portado", mas ele não é um parser binário de `.accdb`: ele usa automação do Access para exportar objetos;
-- não diferencia claramente MVP, fase intermediária e automação avançada;
-- não define um modelo intermediário canônico para a conversão;
-- não define estratégia para macros, VBA, consultas complexas, anexos e campos calculados;
-- não define critérios de aceite por etapa;
-- não explicita riscos e itens fora do escopo do MVP.
-
-## 3. O Que as Referências Locais Mostram
-
-### 3.1 `jackcess-master`
-
-`jackcess` é uma biblioteca Java para ler e escrever bancos Access. Ele é a base correta para o parser binário do `.accdb`, principalmente para:
-
-- schema;
-- tipos;
-- índices;
-- relacionamentos;
-- leitura de linhas;
-- colunas complexas.
-
-### 3.2 `Access-Tool-main`
-
-`Access-Tool` não é um parser direto de `.accdb`. Ele usa Access/COM para exportar:
-
-- forms;
-- queries;
-- reports;
-- propriedades;
-- imagens;
-- partes do projeto VBA.
-
-Portanto, a decisão correta é "portar o Access-Tool inteiro". A decisão correta é usando win32 https://pub.dev/packages/win32
-
-1. reaproveitar o formato de saída dele como fonte textual de alto valor;
-2. reimplementar em Dart tudo que for útil para consumir esse material;
-3. manter opcionalmente um adaptador externo para gerar `.accdb.src` quando o usuário tiver Access no Windows.
-
-### 3.3 `teste1.accdb.src`
-
-O export já mostra que existe material suficiente para orientar uma conversão rica:
-
-- `tbldefs/Contatos.sql` e `tbldefs/Contatos.xml` trazem schema, índices, captions, required, expressões e campo complexo de anexos;
-- `queries/ContatosEstendidos.sql` traz SQL exportável;
-- `forms/*.bas` trazem layout, nomes de controles, `ControlSource`, captions e macros embutidas;
-- `reports/*` e `images/*` trazem metadados úteis para relatórios e assets.
-
-Conclusão prática:
-
-- o `.accdb` é a melhor fonte para dados e estrutura binária;
-- o `.accdb.src` é a melhor fonte para UI, consultas exportadas, captions, expressões e metadados visuais.
-
-## 4. Decisão Arquitetural Central
-
-Observação de repositório:
-
-- `fixtures/` é o corpus interno de testes e regressão;
-- `third_party/` contém o subconjunto curado das fontes upstream necessário para o port;
-- `referencias/` passa a ser apenas origem histórica de pesquisa, não base operacional do projeto.
-
-A ferramenta deve trabalhar com duas entradas complementares:
-
-1. `input.accdb`
-   - fonte principal para schema e dados;
-2. `input.accdb.src`
-   - fonte preferencial para forms, queries, reports, imagens, captions e parte dos eventos.
-
-Se o `.accdb.src` existir, ele deve ter prioridade para a camada de apresentação.
-
-Se o `.accdb.src` não existir, a ferramenta ainda deve gerar uma aplicação funcional baseada apenas em schema e dados, usando telas CRUD padrão.
-
-## 5. Escopo do MVP
-
-O MVP deve converter bem o caso `teste1.accdb`, mesmo que ainda não cubra 100% do Access.
-
-### 5.1 O que o MVP deve fazer
-
-- ler tabelas, colunas, PKs, índices e dados do `.accdb`;
-- importar o export textual de `teste1.accdb.src`;
-- gerar tabela PostgreSQL equivalente;
-- migrar os registros para PostgreSQL;
-- gerar backend `shelf` com CRUD;
-- gerar frontend `ngdart` com:
-  - listagem;
-  - tela de detalhes/edição;
-  - suporte básico a pesquisa;
-  - suporte básico a anexos;
-- gerar relatório de conversão informando:
-  - itens convertidos;
-  - itens parcialmente convertidos;
-  - itens não suportados.
-
-### 5.2 O que o MVP não precisa fazer
-
-- converter VBA arbitrário para Dart automaticamente;
-- reproduzir pixel a pixel todos os forms do Access;
-- converter relatórios complexos para impressão idêntica;
-- suportar todos os tipos exóticos e todos os dialetos de expressão Access;
-- recriar integralmente macros de Access que dependem do runtime do Office.
-
-## 6. Modelo Canônico de Conversão
-
-Antes de gerar código, a ferramenta deve normalizar tudo em um modelo intermediário próprio.
-
-Sugestão de pacotes:
-
-```text
-/packages
-  /access_model
-  /access_src_reader
-  /accdb_reader
-  /access_to_dart_cli
-  /dart_codegen
-  /postgres_migrator
-```
-
-### 6.1 Estruturas mínimas do modelo
-
-- `AccessProject`
-- `AccessTable`
-- `AccessColumn`
-- `AccessIndex`
-- `AccessRelationship`
-- `AccessQuery`
-- `AccessForm`
-- `AccessControl`
-- `AccessMacro`
-- `AccessReport`
-- `AccessAttachmentSpec`
-- `ConversionWarning`
-
-### 6.2 Regra importante
-
-Nenhum gerador deve ler diretamente o `.accdb` ou o `.accdb.src`.
-
-Todo gerador deve receber apenas o modelo intermediário.
-
-Isso reduz acoplamento e permite:
-
-- testar geração sem reprocessar o Access;
-- suportar novas origens depois;
-- inspecionar a conversão em JSON.
-
-## 7. Estratégia de Conversão por Fonte
-
-### 7.1 Leitura binária do `.accdb`
-
-Responsabilidade do futuro port parcial de `jackcess`:
-
-- páginas;
-- catalog;
-- tabelas;
-- colunas;
-- tipos;
-- índices;
-- relacionamentos;
-- leitura de linhas;
-- colunas complexas, com foco inicial em attachments.
-
-### 7.2 Leitura da pasta `.accdb.src`
-
-Responsabilidade do leitor textual Dart:
-
-- `tbldefs/*.sql` e `tbldefs/*.xml`;
-- `queries/*.sql` e `queries/*.bas`;
-- `forms/*.bas`;
-- `reports/*.bas` e `reports/*.json`;
-- `images/*.json`;
-- propriedades em `*.json`.
-
-### 7.3 Regra de precedência
-
-- tipos físicos e dados: preferir `.accdb`;
-- captions, labels, layout e hints de UI: preferir `.accdb.src`;
-- SQL exportado de queries: preferir `.accdb.src`;
-- campos calculados: combinar `tbldefs/*.xml` com queries exportadas.
-
-## 8. Mapeamentos Obrigatórios
-
-### 8.1 Tipos Access para PostgreSQL/Dart
-
-Mapa inicial mínimo:
-
-- `AUTOINCREMENT` -> `bigserial` ou `generated by default as identity` -> `int`
-- `VARCHAR(n)` -> `varchar(n)` -> `String`
-- `LONGTEXT`/`memo` -> `text` -> `String`
-- `datetime` -> `timestamp` -> `DateTime`
-- `boolean` -> `boolean` -> `bool`
-- `longinteger` -> `integer` -> `int`
-- `hyperlink` -> `text` -> `String`
-- `attachment/complex` -> tabela filha + metadados -> objeto/lista
-
-### 8.2 Campos calculados
-
-O exemplo local já exige suporte a campos calculados, como:
-
-- `NomeDoContato`
-- `ArquivoComo`
-- `Pesquisável`
-
-Regra do MVP:
-
-- quando a expressão for simples e conhecida, gerar:
-  - coluna computada em camada de domínio; ou
-  - `VIEW` no PostgreSQL; ou
-  - campo derivado no backend.
-- quando a expressão não puder ser convertida com segurança, gerar TODO explícito no `conversion-report.md`.
-
-### 8.3 Anexos
-
-O arquivo `tbldefs/Contatos.xml` mostra um campo complexo de anexos. No Dart/PostgreSQL isso deve virar:
-
-- tabela filha, por exemplo `contatos_anexos`;
-- colunas como:
-  - `id`
-  - `contato_id`
-  - `file_name`
-  - `content_type`
-  - `file_size`
-  - `file_data` ou caminho externo
-  - `created_at`
-
-O backend deve expor upload, download e listagem de anexos.
-
-### 8.4 Forms
-
-Os arquivos `forms/*.bas` mostram:
-
-- `RecordSource`;
-- `Caption`;
-- `ControlSource`;
-- nomes de controles;
-- macros em `OnClickEmMacro` e `OnLoadEmMacro`.
-
-Regra do MVP:
-
-- mapear forms para telas web sem tentar preservar o motor visual do Access;
-- usar os controles apenas como guia de layout e semântica;
-- converter ações simples de macro para comportamento web quando houver equivalente claro;
-- emitir TODO para eventos não convertidos.
-
-### 8.5 Queries
-
-Consultas devem ser classificadas em:
-
-- selecionáveis;
-- agregações;
-- ação (`INSERT`, `UPDATE`, `DELETE`);
-- auxiliares de pesquisa;
-- não convertíveis automaticamente.
-
-Para o MVP:
-
-- suportar bem `SELECT`;
-- gerar repository/query service com SQL parametrizado ou `eloquent`;
-- manter SQL original em comentário ou arquivo de referência.
-
-## 9. Arquitetura da Ferramenta
-
-### 9.1 CLI principal
-
-Comandos sugeridos:
-
-```text
-access_to_dart inspect --accdb fixtures/teste1/teste1.accdb
-access_to_dart import-src --src fixtures/teste1/teste1.accdb.src
+## 2. Bases Técnicas e Referências Locais Curadas
+A ferramenta baseia-se num parser profundo e cross-platform em fase de construção (`jackcess_dart`). Para garantir parsers avançados com Tokenizers e analisadores sintáticos sólidos (ASTs) e evitar gambiarras com Regex brutas, o time utilizará como inspiração os seguintes ativos já disponíveis em `C:\MyDartProjects\access_to_dart\referencias\`:
+
+- **A Trilha Jackcess (Análise Binária Pura do Access)**: O repositório Java `jackcess-master` (e seu JAR `jackcess-4.0.10-sources.jar`) fornecem o guia arquitetônico e os algoritmos exatos de OLE, FileBlocks, ACE / JetFormat, etc. Este núcleo será traduzido linha por linha para Dart e mantido internamente isolado no pacote em `packages/jackcess_dart` focando primordialmente nas engrenagens de "Ler Dados" e "Decodificar Páginas" binárias.
+- **A Trilha Parser AST (Para código gerado)**: O pacote `sqlparser-0.44.2` serve de forte inspiração de boas práticas na criação de compiladores utilizando tokens em contraposto a quebras inseguras de string.
+- **Estruturas de Árvore VBA e Layouts (Aces VCS)**: O formato da pasta `.accdb.src` é decodificado baseando-se em ferramentas como `vbs_access_export-master` e `msaccess-vcs-addin-main`, usando o pacote nativo Dart `xml`. 
+- **Estudos Avançados**: A documentação não-oficial de `Microsoft Access ACCDB File Format Family.html` e a arquitetura do projeto C `mdbtools-dev` complementam gaps documentais sobre decodificação de senhas ou formatos obscuros do binário ACCDB.
+
+## 3. Escopo de Camadas (Arquitetura)
+O sistema terá no final uma modularidade robusta e pura orientada ao binário, reduzindo drasticamente o acoplamento:
+
+1. **`accdb_reader` / `jackcess_dart`**: A fundação central (Motor de Engenharia Reversa). Lê os fluxos binários e não apenas extrai o esquema relacional, mas **navega intensivamente pelas tabelas de sistema do Access (como `MSysObjects`, `MSysQueries`, e blobs OLE)**. É a responsabilidade principal deste núcleo decifrar **Formulários (conteúdo binário UI), Macros compiladas, Módulos VBA e Relatórios**, traduzindo esses dados opacos em estruturas semânticas, resolvendo de vez a dependência do MS Access para resgatar lógicas embarcadas.
+2. **`access_analysis` / Modelo Canônico (`access_model`)**: Uma AST que unifica o "Esquema" Binário ACCDB lido em uma camada de tradução intermediária rica e universal, exportando um superarquivo unificado de metadados interpretáveis como `analysis.json`.
+3. **`postgres_migrator`**: Consegue instanciar consultas de transação em PostgreSQL ativo no sistema via DDLs extraídas para criar e formatar automaticamente o DataPump inicial vazio e sem dados legados, carregando os registros extraídos em disco rígido pelo `accdb_reader`.
+4. **`dart_codegen`**: Scaffold final contendo templates (ejs/string/mustache styles) capaz de materializar Controllers, Repositories manuais, Modelos e os Componentes AngularDart responsivos e consistentes.
+
+## 4. O CLI Alvo 🛠️ 
+A aplicação Dart CLI implementará comandos precisos baseando-se no escopo traçado acima:
+```bash
+access_to_dart inspect-accdb --accdb fixtures/teste1/teste1.accdb
+access_to_dart inspect-accdb --accdb fixtures/SIGA2021-SUL_be_senha_4462.accdb --password 4462
+access_to_dart read-src --src fixtures/teste1/teste1.accdb.src
 access_to_dart analyze --accdb fixtures/teste1/teste1.accdb --src fixtures/teste1/teste1.accdb.src
+access_to_dart analyze --accdb fixtures/SIGA2021-SUL_be_senha_4462.accdb --password 4462 --output build/SIGA2021-SUL
 access_to_dart migrate --analysis build/teste1/analysis.json --pg <connection-string>
 access_to_dart generate --analysis build/teste1/analysis.json --output generated/teste1_app
 access_to_dart doctor --analysis build/teste1/analysis.json
 ```
 
-### 9.2 Artefatos intermediários
-
-A ferramenta deve gerar:
-
-```text
-/build/teste1
-  analysis.json
-  schema.sql
-  data-summary.json
-  ui-map.json
-  conversion-report.md
-```
-
-### 9.3 Projeto gerado
-
-```text
-/generated/teste1_app
-  /core
-  /backend
-  /frontend
-  README.md
-  docker-compose.yml
-  conversion-report.md
-```
-
-## 10. Estrutura do Projeto Gerado
-
-### 10.1 `core`
-
-Responsabilidades:
-
-- entidades;
-- DTOs;
-- enums;
-- serialização;
-- validações comuns;
-- metadados de tela e campo;
-- contratos compartilhados.
-
-### 10.2 `backend`
-
-Stack alvo:
-
-- `shelf: ^1.4.2`
-- `shelf_router`
-- `eloquent`
-- driver PostgreSQL compatível com a estratégia escolhida
-
-Responsabilidades:
-
-- CRUD;
-- filtros;
-- paginação;
-- busca;
-- anexos;
-- rotas derivadas de queries suportadas;
-- scripts de migração e bootstrap.
-
-### 10.3 `frontend`
-
-Stack alvo:
-
-- `ngdart`
-- Bootstrap CSS
-
-Responsabilidades:
-
-- telas CRUD;
-- formulários reativos ou equivalentes;
-- componentes reutilizáveis;
-- rotas;
-- serviços HTTP;
-- tratamento de erro;
-- upload/download de anexos.
-
-## 11. Fases de Implementação
-
-## Fase 0. Base técnica e corpus de testes
-
-Entregáveis:
-
-- workspace Dart organizado em pacotes;
-- fixture oficial interno com `fixtures/teste1/teste1.accdb` e `fixtures/teste1/teste1.accdb.src`;
-- script de comparação entre artefatos extraídos e esperados;
-- documento de mapeamento de tipos.
-
-Critério de aceite:
-
-- rodar a suíte local e validar que os fixtures internos estão sendo lidos corretamente, sem depender de `referencias/`.
-
-## Fase 1. Leitor de `.accdb.src`
-
-Objetivo:
-
-Entregar valor rápido sem depender do parser binário completo.
-
-Entregáveis:
-
-- parser de `tbldefs/*.sql`, `tbldefs/*.xml`, `queries/*.sql`, `forms/*.bas` e `*.json`;
-- construção do `AccessProject`;
-- export para `analysis.json`.
-
-Critério de aceite:
-
-- `analysis.json` precisa conter ao menos:
-  - tabela `Contatos`;
-  - query `ContatosEstendidos`;
-  - forms `ListaDeContatos`, `DetalhesDoContato` e `FolhaDeDadosDoContato`.
-
-## Fase 2. Port parcial de `jackcess` para leitura de `.accdb`
-
-Objetivo:
-
-Cobrir o necessário para schema e dados do caso real.
-
-Entregáveis:
-
-- abertura do `.accdb`;
-- leitura de catálogo;
-- leitura de tabelas e colunas;
-- leitura de linhas;
-- leitura mínima de anexos ou fallback controlado.
-
-Critério de aceite:
-
-- conseguir listar registros de `Contatos` diretamente do `teste1.accdb`.
-
-## Fase 3. Consolidação do modelo canônico
-
-Entregáveis:
-
-- merge do que veio do `.accdb` e do `.accdb.src`;
-- resolução de precedência;
-- warnings estruturados;
-- `conversion-report.md`.
-
-Critério de aceite:
-
-- relatório explícito de tudo que foi convertido, parcial ou ignorado.
-
-## Fase 4. Migração para PostgreSQL
-
-Entregáveis:
-
-- gerador de DDL PostgreSQL;
-- criação de tabelas;
-- carga de dados;
-- carga de anexos;
-- validação de contagem por tabela.
-
-Critério de aceite:
-
-- número de registros em PostgreSQL igual ao extraído do Access para o escopo suportado.
-
-## Fase 5. Geração do backend
-
-Entregáveis:
-
-- projeto `backend` funcional;
-- config de conexão;
-- repositórios e controllers;
-- rotas CRUD;
-- busca para `Contatos`;
-- endpoints de anexos.
-
-Critério de aceite:
-
-- `dart run` sobe sem erro;
-- endpoints respondem para leitura, criação, edição e exclusão.
-
-## Fase 6. Geração do frontend
-
-Entregáveis:
-
-- app `ngdart` funcional;
-- páginas de lista e detalhe;
-- busca;
-- formulários com validação;
-- navegação coerente com os forms exportados.
-
-Critério de aceite:
-
-- o usuário consegue listar contatos, abrir detalhes, editar e manipular anexos.
-
-## Fase 7. Conversão assistida de macros e eventos
-
-Entregáveis:
-
-- suporte a um subconjunto de macros simples;
-- mapeamento de ações comuns para frontend/backend;
-- geração de TODOs quando não houver conversão segura.
-
-Critério de aceite:
-
-- eventos simples, como foco inicial, abrir detalhe e salvar, ficam operacionais.
-
-## Fase 8. Empacotamento e experiência final
-
-Entregáveis:
-
-- CLI consistente;
-- templates refinados;
-- README da aplicação gerada;
-- `docker-compose.yml` para PostgreSQL;
-- relatório final de conversão.
-
-Critério de aceite:
-
-- um terceiro consegue gerar a aplicação a partir do input e executá-la localmente.
-
-## 12. Estratégia de Testes
-
-### 12.1 Testes de parser
-
-- validar leitura de schema;
-- validar tipos;
-- validar campos calculados;
-- validar forms e controles extraídos.
-
-### 12.2 Testes de geração
-
-- snapshot de arquivos gerados;
-- validação de nomes, imports e estrutura.
-
-### 12.3 Testes de integração
-
-- gerar projeto;
-- subir PostgreSQL;
-- aplicar schema;
-- importar dados;
-- subir backend;
-- executar fluxo mínimo via HTTP.
-
-### 12.4 Testes de regressão
-
-Cada bug de conversão deve virar fixture nova e teste automatizado.
-
-## 13. Riscos Reais
-
-- parser completo de `.accdb` é trabalho grande; o ideal é port parcial orientado a caso de uso;
-- macros e VBA não têm equivalência direta em Dart web;
-- attachments e tipos complexos exigem modelagem própria;
-- queries Access usam funções e sintaxe próprias;
-- `ngdart` em versão dev exige cuidado extra com compatibilidade e tooling;
-- forms do Access têm muita informação visual, mas nem toda ela faz sentido em uma UI web moderna.
-
-## 14. Regras de Produto
-
-- a ferramenta deve preferir gerar uma aplicação funcional a tentar replicar o Access literalmente;
-- toda perda semântica deve aparecer no `conversion-report.md`;
-- toda conversão incerta deve ser marcada explicitamente;
-- a UI gerada deve usar os forms como referência, não como obrigação de clone visual.
-
-## 15. Definição de Pronto
-
-O objetivo será considerado atingido quando o fluxo abaixo funcionar:
-
-1. ler `teste1.accdb`;
-2. ler `teste1.accdb.src`, quando presente;
-3. gerar `analysis.json`;
-4. criar schema PostgreSQL;
-5. migrar dados;
-6. gerar projeto `core/backend/frontend`;
-7. subir backend com `shelf`;
-8. abrir frontend `ngdart`;
-9. listar, pesquisar, visualizar e editar contatos;
-10. registrar no relatório o que ainda não foi convertido integralmente.
-
-## 16. Próximos Passos Imediatos
-
-1. Implementar primeiro o leitor de `teste1.accdb.src`, porque ele entrega valor mais rápido e reduz incerteza.
-2. Definir o formato de `analysis.json`.
-3. Mapear completamente a tabela `Contatos`, a query `ContatosEstendidos` e os forms principais.
-4. Em paralelo, iniciar o port parcial de `jackcess` apenas para schema e rows.
-5. Só depois disso começar o codegen de `backend` e `frontend`.
-
-## 16.1 Status atual da implementação
-
-- `inspect-accdb` já abre `fixtures/teste1/teste1.accdb` sem depender de `referencias/`;
-- `read-src` já lê `fixtures/teste1/teste1.accdb.src` em Dart puro;
-- o parser atual de `.accdb.src` já extrai:
-  - tabela `Contatos`;
-  - índices `PrimaryKey` e `ZIP_PostalCode`;
-  - campo complexo `Anexos` com subcampos;
-  - campos calculados `NomeDoContato` e `ArquivoComo`;
-  - query `ContatosEstendidos`;
-  - forms `DetalhesDoContato`, `ListaDeContatos` e `FolhaDeDadosDoContato`;
-- o próximo passo técnico é sair de inspeção de páginas no `.accdb` e entrar em catálogo, tabelas e colunas do binário.
-
-## 17. Resumo Executivo
-
-O caminho mais seguro não é tentar portar `jackcess` e `Access-Tool` por inteiro. O caminho certo é:
-
-1. portar parcialmente `jackcess` para leitura do `.accdb`;
-2. criar em Dart um leitor do formato exportado em `.accdb.src`;
-3. consolidar tudo em um modelo intermediário;
-4. gerar uma aplicação Dart web moderna funcional;
-5. tratar macros, relatórios complexos e fidelidade visual total como evolução posterior.
-
-Esse plano é mais completo, tecnicamente viável e alinhado ao material já internalizado em `fixtures/` e `third_party/`.
+## 5. Mapeamentos Críticos 
+Regras base de transformação dos tipos de Access primitivos que o código portado via Jackcess precisará refletir dentro das abstrações de UI e Postgres:
+- Auto-Numerações / Autoincrement 👉 Vira `postgresql sequence ( database object used to generate a unique series of numbers,)` e `int` ou `BigInt` Dart.
+- Tabela do `.accdb` onde o Tipo de LongText/Memo 👉 Vira `String` rica e o PG migra com dados.
+- Módulos / Complexos / Attachments 👉 O sistema separa como Relational Data "File_Path/Data".
+- Forms e Macros binárias nativas 👉 Serão extraídas do formato OLE/Blob das tabelas dinâmicas do Access em `MSysObjects` servindo apenas por semântica. Telas Access são orientadas ao input; A Web pede telas responsivas CRUD que consomem "Detalhes do Contato" baseado via JSON REST.
+- Calculated Expressions Internas 👉 O Access guarda as expressões como fields calculados de texto encapsulados ou AST nativo. Transformam-se em `Computed fields` na View SQL ou Domain Model.
+
+## 6. Marcos da Fase de Projeto (Definition of Done)
+1. Extração bem sucedida de schemas `MSysObjects` usando portagens parciais das rotinas Java Jackcess de catálogos via código local interno do projeto.
+Status: parcialmente concluído. O catálogo binário, tabelas, queries, forms, reports, macros e modules já são detectados na fixture `.accdb`.
+Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, aliases, `FROM` e `ORDER BY` reconstruídos a partir de `MSysQueries`. No frontend real `SIGAsul.accdb`, a leitura binária já enumera 426 queries e o overlay `.src` já disponibiliza SQL/Ast textual para validação cruzada. No backend real `SIGA2021-SUL_be_senha_4462.accdb`, a leitura criptografada já abre e enumera 39 tabelas com senha, restando corrigir a leitura completa de `CadResidencia`.
+2. Capacidade da CLI iterar propriedades cruciais dentro e fora das hierarquias DOM via XML parse limpo da pasta `.accdb.src`, gerando um JSON abstrato do mapa do sistema.
+Status: concluído para `teste1.accdb.src` e adaptado para o layout específico de `SIGAsul.accdb.src` no caso de linked tables e queries. Ainda não há export estruturado de forms/reports nesse layout do add-in.
+3. Geração limpa e assíncrona da pasta `/generated/teste1_app_generated`.
+Status: pendente.
+4. Quando entrarmos na pasta `/backend/` e rodarmos localmente `dart run bin/server.dart` associado à pasta `/frontend/` no Webdev (AngularDart), conseguirmos consultar visualmente de fato uma "Folha de Contatos".
+Status: pendente.

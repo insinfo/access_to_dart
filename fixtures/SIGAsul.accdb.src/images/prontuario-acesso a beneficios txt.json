@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "prontuario-acesso a beneficios txt",
+    "FileName": "prontuario-acesso a beneficios txt.png",
+    "Extension": "png",
+    "ContentHash": "b0a5c7f"
+  }
+}

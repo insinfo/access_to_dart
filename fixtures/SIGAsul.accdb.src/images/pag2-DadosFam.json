@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag2-DadosFam",
+    "FileName": "pag2-DadosFam.jpg",
+    "Extension": "jpg",
+    "ContentHash": "f3c76ab"
+  }
+}

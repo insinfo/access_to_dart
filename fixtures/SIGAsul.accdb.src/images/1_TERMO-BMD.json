@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_TERMO-BMD",
+    "FileName": "TERMO-BMD.PNG",
+    "Extension": "PNG",
+    "ContentHash": "0e04906"
+  }
+}

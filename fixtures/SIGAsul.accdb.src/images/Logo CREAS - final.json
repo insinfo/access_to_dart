@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "Logo CREAS - final",
+    "FileName": "Logo CREAS - final.jpg",
+    "Extension": "jpg",
+    "ContentHash": "2ca721d"
+  }
+}

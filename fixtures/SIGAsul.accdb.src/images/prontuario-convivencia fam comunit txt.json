@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "prontuario-convivencia fam comunit txt",
+    "FileName": "prontuario-convivencia fam comunit txt.png",
+    "Extension": "png",
+    "ContentHash": "db0cf8e"
+  }
+}

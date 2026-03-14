@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "Formulário de Cadastro Benefícios",
+    "FileName": "Formulário de Cadastro Benefícios.gif",
+    "Extension": "gif",
+    "ContentHash": "bf6b497"
+  }
+}

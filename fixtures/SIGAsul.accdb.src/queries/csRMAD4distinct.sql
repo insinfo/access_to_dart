@@ -1,0 +1,5 @@
+﻿SELECT
+  DISTINCT csRMAD4.Nome,
+  csRMAD4.Idade
+FROM
+  csRMAD4;

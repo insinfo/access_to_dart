@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "frm-2",
+    "FileName": "frm-2.png",
+    "Extension": "png",
+    "ContentHash": "bcf75ee"
+  }
+}

@@ -1,0 +1,17 @@
+name: web_worker_example
+description: Simple web app showing how to compile a custom drift worker with build_web_compilers.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  drift:
+  web: ^1.1.0
+
+dev_dependencies:
+  build_runner: ^2.1.11
+  build_web_compilers: ^4.0.0
+  lints: any # resolved by workspace, updated globally
+  drift_dev:

@@ -1,0 +1,13 @@
+﻿SELECT
+  DISTINCT TbPBF08.TITULAR,
+  TbPBF08.CRAS
+FROM
+  TbPBF08
+WHERE
+  (
+    (
+      (TbPBF08.CRAS) Like [DIGITE O CRAS] + "*"
+    )
+  )
+ORDER BY
+  TbPBF08.TITULAR;

@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "1_prontuario-planej e evolucao fam txt",
+    "FileName": "prontuario-planej e evolucao fam txt.png",
+    "Extension": "png",
+    "ContentHash": "246d81e"
+  }
+}

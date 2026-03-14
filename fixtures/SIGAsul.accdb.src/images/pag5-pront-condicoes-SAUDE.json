@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "pag5-pront-condicoes-SAUDE",
+    "FileName": "pag5-pront-condicoes-SAUDE.jpg",
+    "Extension": "jpg",
+    "ContentHash": "bc8d6fe"
+  }
+}

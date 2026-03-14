@@ -1,0 +1,12 @@
+﻿{
+  "Info": {
+    "Class": "clsDbSharedImage",
+    "Description": "Shared Image Gallery Item"
+  },
+  "Items": {
+    "Name": "LOGO-SEMAS",
+    "FileName": "LOGO-SEMAS.jpg",
+    "Extension": "jpg",
+    "ContentHash": "e417561"
+  }
+}

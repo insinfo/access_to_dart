@@ -1,0 +1,48 @@
+name: drift_devtools_extension
+description: A Flutter web app contribution drift tools to DevTools
+publish_to: 'none'
+resolution: workspace
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  devtools_extensions: ^0.4.0
+  devtools_app_shared: ^0.4.0
+  db_viewer:
+  drift_db_viewer:
+  rxdart: ^0.28.0
+  flutter_riverpod: ^3.0.0-dev.0
+  vm_service: ^15.0.0
+  path: ^1.8.3
+  drift: ^2.12.1
+  logging: ^1.2.0
+  url_launcher: ^6.1.14
+  drift_dev: ^2.13.1
+  sqlite3: ^3.0.0
+  web: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+dependency_overrides:
+  db_viewer:
+    git:
+      url: https://github.com/simolus3/db_viewer.git
+      path: db_viewer
+      ref: 0e360314c992859dba566018f9dc4029fc9b691b
+  drift_db_viewer:
+    git:
+      url: https://github.com/simolus3/db_viewer.git
+      path: drift_db_viewer
+      ref: 0e360314c992859dba566018f9dc4029fc9b691b
+
+flutter:
+  uses-material-design: true
