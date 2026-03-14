@@ -44,27 +44,26 @@
 - O comando `analyze --accdb fixtures/SIGAsul.accdb --src fixtures/SIGAsul.accdb.src` já gera `build/SIGAsul/analysis.json` com overlay de source para linked tables e SQL.
 - O backend vinculado principal `fixtures/SIGA2021-SUL_be_senha_4462.accdb` agora abre nativamente com senha:
   - criptografia Agile Office 4.4 detectada (`AES-256`, `SHA512`, `spinCount=100000`)
-  - `inspect-accdb --password 4462` já lê `39` tabelas reais do backend
+  - `inspect-accdb --password 4462` já lê `40` tabelas reais do backend
   - `analyze --password 4462` já gera `build/SIGA2021-SUL/analysis.json`
-  - ainda existe uma pendência residual em leitura de linhas da tabela `CadResidencia`, hoje emitida como warning de `RangeError`
+  - o `TableDef` encadeado de `CadResidencia` já é lido corretamente, eliminando o warning anterior de `RangeError`
 
 ## Backlog Técnico Imediato
-1. Corrigir a leitura de linhas da tabela `CadResidencia` no backend real `SIGA2021-SUL_be_senha_4462.accdb`, eliminando o warning de `RangeError`.
-2. Validar e reconciliar em binário real a reconstrução semântica de `MSysQueries` do frontend `SIGAsul.accdb` contra os `.sql` e `.bas` exportados em `SIGAsul.accdb.src`, incluindo queries com `JOIN`, `WHERE`, `GROUP BY` e `HAVING`.
-3. Expandir a leitura do backend real para relacionamentos, índices e metadados ricos de coluna:
+1. Validar e reconciliar em binário real a reconstrução semântica de `MSysQueries` do frontend `SIGAsul.accdb` contra os `.sql` e `.bas` exportados em `SIGAsul.accdb.src`, incluindo queries com `JOIN`, `WHERE`, `GROUP BY` e `HAVING`.
+2. Expandir a leitura do backend real para relacionamentos, índices e metadados ricos de coluna:
    - required/nullability real
    - default value
    - expression de coluna calculada
    - precision/scale
-4. Começar a materializar a camada canônica `access_analysis` para separar leitura binária de geração de código.
-5. Decodificar blobs mais profundos de objetos não-tabulares:
+3. Começar a materializar a camada canônica `access_analysis` para separar leitura binária de geração de código.
+4. Decodificar blobs mais profundos de objetos não-tabulares:
    - formulários
    - relatórios
    - macros
    - módulos VBA
 
 ## 1. Visão Geral e Objetivo
-Construir uma ferramenta de linha de comando (CLI) profissional (sem gambiaras e regex) e nativa em Dart capaz de realizar a **engenharia reversa profunda e direta de arquivos `.accdb`**, extraindo nativamente componentes fundamentais como **Tabelas, Consultas (Queries), Formulários (Forms), e Macros** diretamente da estrutura binária, **sem depender de instalações locais do Microsoft Access** (eliminando a necessidade do `win32com` ou do export manual para `.accdb.src`).
+Construir uma ferramenta de linha de comando (CLI) profissional (sem gambiaras e regex) e nativa em Dart capaz de realizar a **engenharia reversa profunda e direta de arquivos `.accdb`**, extraindo nativamente componentes fundamentais como **Tabelas, Consultas (Queries), Formulários (Forms), e Macros, VB... etc** diretamente da estrutura binária, **sem depender de instalações locais do Microsoft Access** (eliminando a necessidade do `win32com` ou do export manual para `.accdb.src`).
 
 O objetivo é que, ao apontar a ferramenta unicamente para um arquivo bruto como `teste1.accdb`, o processamento produza automaticamente um projeto completo ("Full-Stack") rodando Dart moderno sob uma arquitetura de três camadas:
 
@@ -116,10 +115,13 @@ Regras base de transformação dos tipos de Access primitivos que o código port
 ## 6. Marcos da Fase de Projeto (Definition of Done)
 1. Extração bem sucedida de schemas `MSysObjects` usando portagens parciais das rotinas Java Jackcess de catálogos via código local interno do projeto.
 Status: parcialmente concluído. O catálogo binário, tabelas, queries, forms, reports, macros e modules já são detectados na fixture `.accdb`.
-Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, aliases, `FROM` e `ORDER BY` reconstruídos a partir de `MSysQueries`. No frontend real `SIGAsul.accdb`, a leitura binária já enumera 426 queries e o overlay `.src` já disponibiliza SQL/Ast textual para validação cruzada. No backend real `SIGA2021-SUL_be_senha_4462.accdb`, a leitura criptografada já abre e enumera 39 tabelas com senha, restando corrigir a leitura completa de `CadResidencia`.
+Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, aliases, `FROM` e `ORDER BY` reconstruídos a partir de `MSysQueries`. No frontend real `SIGAsul.accdb`, a leitura binária já enumera 426 queries e o overlay `.src` já disponibiliza SQL/Ast textual para validação cruzada. No backend real `SIGA2021-SUL_be_senha_4462.accdb`, a leitura criptografada já abre e enumera 40 tabelas com senha, incluindo `CadResidencia`.
 2. Capacidade da CLI iterar propriedades cruciais dentro e fora das hierarquias DOM via XML parse limpo da pasta `.accdb.src`, gerando um JSON abstrato do mapa do sistema.
 Status: concluído para `teste1.accdb.src` e adaptado para o layout específico de `SIGAsul.accdb.src` no caso de linked tables e queries. Ainda não há export estruturado de forms/reports nesse layout do add-in.
 3. Geração limpa e assíncrona da pasta `/generated/teste1_app_generated`.
 Status: pendente.
 4. Quando entrarmos na pasta `/backend/` e rodarmos localmente `dart run bin/server.dart` associado à pasta `/frontend/` no Webdev (AngularDart), conseguirmos consultar visualmente de fato uma "Folha de Contatos".
 Status: pendente.
+
+
+o próximo passo natural agora é atacar relações/índices reais do backend e reconciliar as queries do SIGAsul.accdb com o overlay 

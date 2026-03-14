@@ -58,11 +58,33 @@ class TableDefReader {
     required this.pageNumber,
   });
 
+  Future<Uint8List> readTableDefinitionData() async {
+    final firstPageBuffer = await pageChannel.readPage(pageNumber);
+    final firstPage = firstPageBuffer.asUint8List();
+
+    if (firstPage[0] != 0x02) {
+      throw FormatException('Page $pageNumber is not a TableDef page');
+    }
+
+    final out = BytesBuilder(copy: false)..add(firstPage);
+    var nextPage = ByteData.sublistView(firstPage)
+        .getUint32(format.offsetNextTableDefPage, Endian.little);
+
+    while (nextPage != 0) {
+      final nextBuffer = await pageChannel.readPage(nextPage);
+      final nextBytes = nextBuffer.asUint8List();
+      out.add(nextBytes.sublist(8));
+      nextPage = ByteData.sublistView(nextBytes)
+          .getUint32(format.offsetNextTableDefPage, Endian.little);
+    }
+
+    return out.takeBytes();
+  }
+
   /// Reads the core table definition.
   Future<List<ColumnDef>> readColumns() async {
-    final buffer = await pageChannel.readPage(pageNumber);
-    final bytes = ByteData.view(buffer);
-    final uint8List = buffer.asUint8List();
+    final uint8List = await readTableDefinitionData();
+    final bytes = ByteData.sublistView(uint8List);
 
     // Verify it's a TableDef page (0x02)
     if (uint8List[0] != 0x02) {

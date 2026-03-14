@@ -18,20 +18,16 @@ class TableReader {
   /// Returns the [AccessTableSchema] for a table at [tdefPage].
   Future<AccessTableSchema> readSchema(
       String tableName, int tdefPage) async {
-    final buffer = await pageChannel.readPage(tdefPage);
-    final bytes = ByteData.view(buffer);
-    final uint8 = buffer.asUint8List();
-
-    if (uint8[0] != 0x02) {
+    final tdefReader =
+        TableDefReader(format: format, pageChannel: pageChannel, pageNumber: tdefPage);
+    final tdefData = await tdefReader.readTableDefinitionData();
+    final bytes = ByteData.sublistView(tdefData);
+    if (tdefData[0] != 0x02) {
       throw FormatException(
           'Page $tdefPage for table $tableName is not a TDEF');
     }
 
-    // Row count is at offset 16 in Jet4
     final rowCount = bytes.getInt32(format.offsetNumRows, Endian.little);
-
-    final tdefReader =
-        TableDefReader(format: format, pageChannel: pageChannel, pageNumber: tdefPage);
     final cols = await tdefReader.readColumns();
 
     return AccessTableSchema(
@@ -60,14 +56,11 @@ class TableReader {
 
   /// Reads all rows from a table at [tdefPage].
   Future<List<Map<String, dynamic>>> readAllRows(int tdefPage) async {
-    final buffer = await pageChannel.readPage(tdefPage);
-    final uint8 = buffer.asUint8List();
-
-    if (uint8[0] != 0x02) return [];
-
-    // Phase 1: read column defs
     final tdefReader =
         TableDefReader(format: format, pageChannel: pageChannel, pageNumber: tdefPage);
+    final tdefData = await tdefReader.readTableDefinitionData();
+    if (tdefData[0] != 0x02) return [];
+
     final cols = await tdefReader.readColumns();
     final rowReader =
         RowReader(format: format, columns: cols, pageChannel: pageChannel);
@@ -80,7 +73,7 @@ class TableReader {
     final usageMap = await UsageMap.readFromTdef(
       pageChannel: pageChannel,
       format: format,
-      tdefData: uint8,
+      tdefData: tdefData,
       tdefOffset: usageMapOffset,
     );
 

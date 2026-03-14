@@ -196,31 +196,36 @@ void main() {
     expect(err.toString(), contains('Retry with --password'));
   });
 
-  test('inspects encrypted SIGA backend when password is provided', () async {
-    final fixture = File.fromUri(
-      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
-    );
-    expect(await fixture.exists(), isTrue);
+  test(
+    'inspects encrypted SIGA backend when password is provided',
+    () async {
+      final fixture = File.fromUri(
+        Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+      );
+      expect(await fixture.exists(), isTrue);
 
-    final out = StringBuffer();
-    final err = StringBuffer();
+      final out = StringBuffer();
+      final err = StringBuffer();
 
-    final exitCode = await run(
-      <String>[
-        'inspect-accdb',
-        '--accdb',
-        fixture.path,
-        '--password',
-        '4462',
-      ],
-      out: out,
-      err: err,
-    );
+      final exitCode = await run(
+        <String>[
+          'inspect-accdb',
+          '--accdb',
+          fixture.path,
+          '--password',
+          '4462',
+        ],
+        out: out,
+        err: err,
+      );
 
-    expect(exitCode, 0);
-    expect(out.toString(), contains('Encryption: Office 4.4 AES-256'));
-    expect(out.toString(), contains('Tables (39):'));
-    expect(out.toString(), contains('[TABLE] TbPessoa'));
-    expect(err.toString(), isEmpty);
-  });
+      expect(exitCode, 0);
+      expect(out.toString(), contains('Encryption: Office 4.4 AES-256'));
+      expect(out.toString(), contains('Tables (40):'));
+      expect(out.toString(), contains('[TABLE] CadResidencia'));
+      expect(out.toString(), contains('[TABLE] TbPessoa'));
+      expect(err.toString(), isEmpty);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 }
