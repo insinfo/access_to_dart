@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "aco por tecnico Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.2368,
+      "TopMargin": 0.25,
+      "RightMargin": 0.2368,
+      "BotMargin": 0.25,
+      "DataOnly": false,
+      "Width": 11.1021,
+      "Height": 0.2188,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

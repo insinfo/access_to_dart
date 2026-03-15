@@ -1,0 +1,49 @@
+﻿-------------------------------------
+Beginning Export of Source Files
+SIGAsul.accdb
+VCS Version 4.1.2
+Full Path: C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb
+Export Folder: C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb.src\
+Using Fast Save
+14/03/2026 16:56:47
+-------------------------------------
+Scanning for changes...
+No modified modules found in this database.
+No modified forms found in this database.
+No modified reports found in this database.
+-------------------------------------
+Done. (0,35 seconds)
+
+--------------------------------------------------
+                PERFORMANCE REPORTS
+--------------------------------------------------
+Category                      Count     Seconds
+--------------------------------------------------
+Reports                       0         0,16
+Forms                         0         0,11
+Modules                       0         0,01
+--------------------------------------------------
+TOTALS:                       0         0,28
+--------------------------------------------------
+
+--------------------------------------------------
+Operations                    Count     Seconds
+--------------------------------------------------
+Scan DB Objects               1         0,12
+Clear Orphaned Files          3         0,09
+Get VBA Hash                  265       0,05
+Parse JSON                    1         0,03
+Increment Progress            516       0,02
+Console Updates               2         0,01
+Parse JSON ISO Date           267       0,01
+Convert to JSON               57        0,00
+Close Open Objects            1         0,00
+Compute SHA256                66        0,00
+Quick Count Files             1         0,00
+Read File                     1         0,00
+Quick Count Objects           1         0,00
+--------------------------------------------------
+Other Operations                        0,02
+--------------------------------------------------
+
+

@@ -1,0 +1,27 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "IMPRIMIR-BENEFICIOS MUNICIPAIS Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape"
+    },
+    "Margins": {
+      "LeftMargin": 0.2361,
+      "TopMargin": 0.2361,
+      "RightMargin": 0.2361,
+      "BotMargin": 0.2361,
+      "DataOnly": false,
+      "Width": 11.1771,
+      "Height": 4.7083,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

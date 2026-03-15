@@ -18,6 +18,8 @@ class ColumnDef {
   final int length;
   final int flags;
   final int extFlags;
+  final int? precision;
+  final int? scale;
 
   const ColumnDef({
     required this.name,
@@ -28,6 +30,8 @@ class ColumnDef {
     required this.length,
     required this.flags,
     required this.extFlags,
+    required this.precision,
+    required this.scale,
   });
 
   bool get isVariableLength => (flags & fixedLengthFlagMask) == 0;
@@ -36,18 +40,87 @@ class ColumnDef {
       (flags & (autoNumberFlagMask | autoNumberGuidFlagMask)) != 0;
 
   bool get isCalculated => (extFlags & calculatedExtFlagMask) != 0;
+}
 
-  @override
-  String toString() {
-    return 'ColumnDef(name: $name, type: $type, colNum: $columnNumber, '
-        'varColNum: $variableColumnNumber, fixedOffset: $fixedOffset, '
-        'len: $length, flags: 0x${flags.toRadixString(16)}, '
-        'extFlags: 0x${extFlags.toRadixString(16)})';
-  }
+class IndexColumnDef {
+  static const int ascendingFlagMask = 0x01;
+
+  final int columnNumber;
+  final int flags;
+
+  const IndexColumnDef({required this.columnNumber, required this.flags});
+
+  bool get ascending => (flags & ascendingFlagMask) != 0;
+}
+
+class IndexDef {
+  static const int uniqueFlagMask = 0x01;
+  static const int ignoreNullsFlagMask = 0x02;
+  static const int requiredFlagMask = 0x08;
+  static const int primaryKeyType = 1;
+  static const int foreignKeyType = 2;
+
+  final int indexNumber;
+  final int backingDataNumber;
+  final int indexType;
+  final int flags;
+  final int? relatedTablePageNumber;
+  final int? relatedIndexNumber;
+  final bool cascadeUpdates;
+  final bool cascadeDeletes;
+  final bool cascadeNullOnDelete;
+  final List<IndexColumnDef> columns;
+  final String name;
+
+  const IndexDef({
+    required this.indexNumber,
+    required this.backingDataNumber,
+    required this.indexType,
+    required this.flags,
+    required this.relatedTablePageNumber,
+    required this.relatedIndexNumber,
+    required this.cascadeUpdates,
+    required this.cascadeDeletes,
+    required this.cascadeNullOnDelete,
+    required this.columns,
+    required this.name,
+  });
+
+  bool get isPrimaryKey => indexType == primaryKeyType;
+  bool get isForeignKey => indexType == foreignKeyType;
+  bool get isUnique => isPrimaryKey || (flags & uniqueFlagMask) != 0;
+  bool get isRequired => (flags & requiredFlagMask) != 0;
+  bool get ignoreNulls => (flags & ignoreNullsFlagMask) != 0;
+}
+
+class TableDefinition {
+  final List<ColumnDef> columns;
+  final List<IndexDef> indexes;
+
+  const TableDefinition({required this.columns, required this.indexes});
 }
 
 /// Parses Table Definition (TDEF) pages.
 class TableDefReader {
+  static const int _offsetNumCols = 45;
+  static const int _offsetNumLogicalIndexes = 47;
+  static const int _offsetNumIndexes = 51;
+  static const int _offsetIndexDefBlock = 63;
+  static const int _sizeIndexDefinition = 12;
+  static const int _sizeColumnDefBlock = 25;
+  static const int _sizeIndexColumnBlock = 52;
+  static const int _skipBeforeIndex = 4;
+  static const int _sizeInlineUsageMapPointer = 4;
+  static const int _skipBeforeIndexFlags = 4;
+  static const int _skipAfterIndexFlags = 5;
+  static const int _skipBeforeIndexSlot = 4;
+  static const int _skipAfterIndexSlot = 4;
+  static const int _maxIndexColumns = 10;
+  static const int _columnUnused = -1;
+  static const int _invalidIndexNumber = -1;
+  static const int _cascadeFlag = 0x01;
+  static const int _cascadeNullFlag = 0x02;
+
   final JetFormat format;
   final PageChannel pageChannel;
   final int pageNumber;
@@ -81,95 +154,202 @@ class TableDefReader {
     return out.takeBytes();
   }
 
-  /// Reads the core table definition.
-  Future<List<ColumnDef>> readColumns() async {
+  Future<TableDefinition> readDefinition() async {
     final uint8List = await readTableDefinitionData();
     final bytes = ByteData.sublistView(uint8List);
 
-    // Verify it's a TableDef page (0x02)
     if (uint8List[0] != 0x02) {
       throw FormatException('Page $pageNumber is not a TableDef page');
     }
 
-    int offsetNumCols = 45;
-    int offsetNumRealIndex = 51;
-    
-    int colCount = bytes.getInt16(offsetNumCols, Endian.little);
-    
-    // TDEF header size in Jet4 is 63 absolute offset (defined by OffsetIndexDefBlock).
-    int tdefHeaderEnd = 63; 
-    
-    int indexCount = bytes.getInt32(offsetNumRealIndex, Endian.little);
-    
-    // Jackcess SIZE_INDEX_COLUMN_BLOCK + (idxCount * SIZE_INDEX_INFO_BLOCK) 
-    // real sizes in Jet4: SIZE_INDEX_COLUMN_BLOCK=52, SIZE_INDEX_INFO_BLOCK=28
-    // However TableImpl.readColumnDefinitions calculates the col offset as:
-    // colOffset = getFormat().OFFSET_INDEX_DEF_BLOCK + indexCount * getFormat().SIZE_INDEX_DEFINITION;
-    // For Jet4: OFFSET_INDEX_DEF_BLOCK is 63, SIZE_INDEX_DEFINITION is 12 (plus column count * SIZE_COLUMN_HEADER)
-    int colRecordSize = 25; // Jet4 SIZE_COLUMN_DEF_BLOCK is 25
-    int colOffset = tdefHeaderEnd + (indexCount * 12);
-    
-    // Column records
-    List<Map<String, dynamic>> rawCols = [];
-    int currentOffset = colOffset;
-    for (int i = 0; i < colCount; i++) {
-        int colType = bytes.getUint8(currentOffset);
-        int colNum = bytes.getInt16(currentOffset + 5, Endian.little);
-        int varColNum = bytes.getInt16(currentOffset + 7, Endian.little);
-        int flags = bytes.getUint8(currentOffset + 15);
-        int extFlags = bytes.getUint8(currentOffset + 16);
-        int fixedOffset = bytes.getInt16(currentOffset + 21, Endian.little);
-        int length = bytes.getInt16(currentOffset + 23, Endian.little);
-        
-        rawCols.add({
-           'type': colType,
-           'colNum': colNum,
-           'varColNum': varColNum,
-           'flags': flags,
-           'extFlags': extFlags,
-           'fixedOffset': fixedOffset,
-           'length': length,
-        });
-        currentOffset += colRecordSize;
+    final colCount = bytes.getInt16(_offsetNumCols, Endian.little);
+    final logicalIndexCount =
+        bytes.getInt32(_offsetNumLogicalIndexes, Endian.little);
+    final indexCount = bytes.getInt32(_offsetNumIndexes, Endian.little);
+    final colOffset =
+        _offsetIndexDefBlock + (indexCount * _sizeIndexDefinition);
+
+    final rawColumns = <ColumnDef>[];
+    var currentOffset = colOffset;
+    for (var i = 0; i < colCount; i++) {
+      rawColumns.add(
+        ColumnDef(
+          name: '',
+          type: bytes.getUint8(currentOffset),
+          columnNumber: bytes.getInt16(currentOffset + 5, Endian.little),
+          variableColumnNumber:
+              bytes.getInt16(currentOffset + 7, Endian.little),
+          precision: bytes.getUint8(currentOffset) == 0x10
+              ? bytes.getUint8(currentOffset + 11)
+              : null,
+          scale: bytes.getUint8(currentOffset) == 0x10
+              ? bytes.getUint8(currentOffset + 12)
+              : null,
+          flags: bytes.getUint8(currentOffset + 15),
+          extFlags: bytes.getUint8(currentOffset + 16),
+          fixedOffset: bytes.getInt16(currentOffset + 21, Endian.little),
+          length: bytes.getInt16(currentOffset + 23, Endian.little),
+        ),
+      );
+      currentOffset += _sizeColumnDefBlock;
     }
 
-    // Column Names block
-    // According to Jackcess, column names are stored right after the column definitions block.
-    int namesOffset = colOffset + (colCount * colRecordSize);
-    currentOffset = namesOffset;
-    
-    List<String> colNames = [];
-    for (int i = 0; i < colCount; i++) {
-        int nameLen = bytes.getInt16(currentOffset, Endian.little);
-        currentOffset += 2;
-        
-        String name = '';
-        if (nameLen > 0 && currentOffset + nameLen <= uint8List.length) {
-            name = _decodeUtf16Le(uint8List, currentOffset, nameLen);
+    final namedColumns = <ColumnDef>[];
+    for (final rawColumn in rawColumns) {
+      final nameLength = bytes.getInt16(currentOffset, Endian.little);
+      currentOffset += 2;
+      final name =
+          (nameLength > 0 && currentOffset + nameLength <= uint8List.length)
+              ? _decodeUtf16Le(uint8List, currentOffset, nameLength)
+              : '';
+      currentOffset += nameLength;
+      namedColumns.add(
+        ColumnDef(
+          name: name,
+          type: rawColumn.type,
+          columnNumber: rawColumn.columnNumber,
+          variableColumnNumber: rawColumn.variableColumnNumber,
+          fixedOffset: rawColumn.fixedOffset,
+          length: rawColumn.length,
+          flags: rawColumn.flags,
+          extFlags: rawColumn.extFlags,
+          precision: rawColumn.precision,
+          scale: rawColumn.scale,
+        ),
+      );
+    }
+
+    namedColumns.sort((a, b) => a.columnNumber.compareTo(b.columnNumber));
+
+    final indexDataColumns = <List<IndexColumnDef>>[];
+    final indexDataFlags = <int>[];
+
+    for (var i = 0; i < indexCount; i++) {
+      currentOffset += _skipBeforeIndex;
+      final columns = <IndexColumnDef>[];
+      for (var j = 0; j < _maxIndexColumns; j++) {
+        final columnNumber = bytes.getInt16(currentOffset, Endian.little);
+        final flags = bytes.getUint8(currentOffset + 2);
+        currentOffset += 3;
+        if (columnNumber != _columnUnused) {
+          columns.add(IndexColumnDef(columnNumber: columnNumber, flags: flags));
         }
-        colNames.add(name);
-        currentOffset += nameLen;
+      }
+      currentOffset += _sizeInlineUsageMapPointer;
+      final rootPageNumber = bytes.getInt32(currentOffset, Endian.little);
+      currentOffset += 4;
+      currentOffset += _skipBeforeIndexFlags;
+      final indexFlags = bytes.getUint8(currentOffset);
+      currentOffset += 1;
+      currentOffset += _skipAfterIndexFlags;
+
+      assert(
+        (_skipBeforeIndex +
+                (_maxIndexColumns * 3) +
+                _sizeInlineUsageMapPointer +
+                4 +
+                _skipBeforeIndexFlags +
+                1 +
+                _skipAfterIndexFlags) ==
+            _sizeIndexColumnBlock,
+        'Index block layout no longer matches Jet4/ACE expectations',
+      );
+
+      indexDataColumns.add(columns);
+      indexDataFlags.add(rootPageNumber == 0 ? indexFlags : indexFlags);
     }
-    
-    List<ColumnDef> columns = [];
-    for (int i = 0; i < colCount; i++) {
-        var raw = rawCols[i];
-        columns.add(ColumnDef(
-            name: colNames[i],
-            type: raw['type'] as int,
-            columnNumber: raw['colNum'] as int,
-            variableColumnNumber: raw['varColNum'] as int,
-            fixedOffset: raw['fixedOffset'] as int,
-            length: raw['length'] as int,
-            flags: raw['flags'] as int,
-            extFlags: raw['extFlags'] as int,
-        ));
+
+    final logicalIndexMetas = <Map<String, dynamic>>[];
+    for (var i = 0; i < logicalIndexCount; i++) {
+      currentOffset += _skipBeforeIndexSlot;
+      final indexNumber = bytes.getInt32(currentOffset, Endian.little);
+      currentOffset += 4;
+      final backingDataNumber = bytes.getInt32(currentOffset, Endian.little);
+      currentOffset += 4;
+      final relIndexType = bytes.getUint8(currentOffset);
+      currentOffset += 1;
+      final relIndexNumber = bytes.getInt32(currentOffset, Endian.little);
+      currentOffset += 4;
+      final relTablePageNumber = bytes.getInt32(currentOffset, Endian.little);
+      currentOffset += 4;
+      final cascadeUpdatesFlag = bytes.getUint8(currentOffset);
+      currentOffset += 1;
+      final cascadeDeletesFlag = bytes.getUint8(currentOffset);
+      currentOffset += 1;
+      final indexType = bytes.getUint8(currentOffset);
+      currentOffset += 1;
+      currentOffset += _skipAfterIndexSlot;
+
+      logicalIndexMetas.add(<String, dynamic>{
+        'indexNumber': indexNumber,
+        'backingDataNumber': backingDataNumber,
+        'relIndexType': relIndexType,
+        'relIndexNumber': relIndexNumber,
+        'relTablePageNumber': relTablePageNumber,
+        'cascadeUpdates': (cascadeUpdatesFlag & _cascadeFlag) != 0,
+        'cascadeDeletes': (cascadeDeletesFlag & _cascadeFlag) != 0,
+        'cascadeNullOnDelete': (cascadeDeletesFlag & _cascadeNullFlag) != 0,
+        'indexType': indexType,
+      });
     }
-    
-    columns.sort((a, b) => a.columnNumber.compareTo(b.columnNumber));
-    
-    return columns;
+
+    final indexNames = <String>[];
+    for (var i = 0; i < logicalIndexCount; i++) {
+      final nameLength = bytes.getInt16(currentOffset, Endian.little);
+      currentOffset += 2;
+      final name =
+          (nameLength > 0 && currentOffset + nameLength <= uint8List.length)
+              ? _decodeUtf16Le(uint8List, currentOffset, nameLength)
+              : '';
+      currentOffset += nameLength;
+      indexNames.add(name);
+    }
+
+    final indexes = <IndexDef>[];
+    for (var i = 0; i < logicalIndexCount; i++) {
+      final meta = logicalIndexMetas[i];
+      final backingDataNumber = meta['backingDataNumber'] as int;
+      final flags =
+          (backingDataNumber >= 0 && backingDataNumber < indexDataFlags.length)
+              ? indexDataFlags[backingDataNumber]
+              : 0;
+      final columns = (backingDataNumber >= 0 &&
+              backingDataNumber < indexDataColumns.length)
+          ? indexDataColumns[backingDataNumber]
+          : const <IndexColumnDef>[];
+      indexes.add(
+        IndexDef(
+          indexNumber: meta['indexNumber'] as int,
+          backingDataNumber: backingDataNumber,
+          indexType: meta['indexType'] as int,
+          flags: flags,
+          relatedTablePageNumber: (meta['relTablePageNumber'] as int) > 0
+              ? meta['relTablePageNumber'] as int
+              : null,
+          relatedIndexNumber:
+              (meta['relIndexNumber'] as int) != _invalidIndexNumber
+                  ? meta['relIndexNumber'] as int
+                  : null,
+          cascadeUpdates: meta['cascadeUpdates'] as bool,
+          cascadeDeletes: meta['cascadeDeletes'] as bool,
+          cascadeNullOnDelete: meta['cascadeNullOnDelete'] as bool,
+          columns: columns,
+          name: i < indexNames.length ? indexNames[i] : '',
+        ),
+      );
+    }
+
+    indexes.sort((a, b) => a.indexNumber.compareTo(b.indexNumber));
+
+    return TableDefinition(columns: namedColumns, indexes: indexes);
   }
+
+  /// Reads the core table definition columns.
+  Future<List<ColumnDef>> readColumns() async =>
+      (await readDefinition()).columns;
+
+  Future<List<IndexDef>> readIndexes() async =>
+      (await readDefinition()).indexes;
 
   String _decodeUtf16Le(Uint8List bytes, int offset, int length) {
     final evenLength = length - (length % 2);
@@ -180,3 +360,5 @@ class TableDefReader {
     return String.fromCharCodes(codeUnits);
   }
 }
+
+

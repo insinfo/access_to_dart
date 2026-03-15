@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "IMPRIMIR FICHA INSCRIÇÃO SCFV GERAL-gru e fx etaria Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Portrait",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.2757,
+      "TopMargin": 0.25,
+      "RightMargin": 0.25,
+      "BotMargin": 0.25,
+      "DataOnly": false,
+      "Width": 7.5965,
+      "Height": 4.7465,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

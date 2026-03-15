@@ -90,11 +90,33 @@ class AccessSrcReader {
         .toList();
     sqlFiles.sort((a, b) => a.path.compareTo(b.path));
 
+    final basFiles = await queriesDir
+        .list()
+        .where((entity) => entity is File && entity.path.endsWith('.bas'))
+        .cast<File>()
+        .toList();
+    basFiles.sort((a, b) => a.path.compareTo(b.path));
+    final basByName = <String, File>{
+      for (final file in basFiles) _basenameWithoutExtension(file.path): file,
+    };
+    final sqlByName = <String, File>{
+      for (final file in sqlFiles) _basenameWithoutExtension(file.path): file,
+    };
+    final queryNames = <String>{...sqlByName.keys, ...basByName.keys}.toList()
+      ..sort();
+
     return Future.wait(
-      sqlFiles.map((file) async {
+      queryNames.map((name) async {
+        final sqlFile = sqlByName[name];
+        final basFile = basByName[name];
+        final sql = sqlFile == null ? '' : (await sqlFile.readAsString()).trim();
+        final basText = basFile == null ? null : await basFile.readAsString();
         return AccessSrcQuery(
-          name: _basenameWithoutExtension(file.path),
-          sql: (await file.readAsString()).trim(),
+          name: name,
+          sql: sql,
+          basText: basText,
+          semanticSql:
+              _reconstructQuerySqlFromBas(basText) ?? (sql.isEmpty ? null : sql),
         );
       }),
     );
@@ -446,12 +468,297 @@ class AccessSrcReader {
   }
 
   String _unquoteBasValue(String rawValue) {
+    final normalizedEscapes =
+        rawValue.replaceAll(r'\015\012', '\r\n').replaceAll(r'\"', '"');
     if (rawValue.startsWith('"') &&
         rawValue.endsWith('"') &&
         rawValue.length >= 2) {
-      return rawValue.substring(1, rawValue.length - 1).replaceAll('""', '"');
+      return normalizedEscapes
+          .substring(1, normalizedEscapes.length - 1)
+          .replaceAll('""', '"');
     }
-    return rawValue;
+    return normalizedEscapes;
+  }
+
+  String? _reconstructQuerySqlFromBas(String? text) {
+    if (text == null || text.trim().isEmpty) {
+      return null;
+    }
+
+    final lines = _mergeBasContinuationLines(text);
+    int operation = 0;
+    String? where;
+    String? having;
+    String? orderBy;
+    final tables = <String>[];
+    final groups = <String>[];
+    final columns = <_BasQueryColumn>[];
+    final joins = <_BasQueryJoin>[];
+    String currentSection = '';
+    String? pendingAlias;
+    _BasQueryJoin? currentJoin;
+
+    void flushJoin() {
+      if (currentJoin != null &&
+          currentJoin!.leftTable != null &&
+          currentJoin!.rightTable != null &&
+          currentJoin!.expression != null) {
+        joins.add(currentJoin!);
+      }
+      currentJoin = null;
+    }
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+
+      if (trimmed == 'End') {
+        if (currentSection == 'Joins') {
+          flushJoin();
+        }
+        currentSection = '';
+        continue;
+      }
+
+      if (trimmed.startsWith('Begin ')) {
+        if (currentSection == 'Joins') {
+          flushJoin();
+        }
+        currentSection = trimmed.substring('Begin '.length).trim();
+        if (currentSection == 'Joins') {
+          currentJoin = _BasQueryJoin();
+        }
+        continue;
+      }
+
+      final equalIndex = trimmed.indexOf('=');
+      if (equalIndex <= 0) {
+        continue;
+      }
+
+      final rawKey = trimmed.substring(0, equalIndex).trim();
+      final key = _extractBasPropertyName(rawKey);
+      final value =
+          _decodeBasAssignedValue(trimmed.substring(equalIndex + 1).trim());
+
+      switch (currentSection) {
+        case 'InputTables':
+          if (key == 'Name' && value.isNotEmpty) {
+            tables.add(value);
+          }
+          break;
+        case 'OutputColumns':
+          if (key == 'Alias') {
+            pendingAlias = value;
+          } else if (key == 'Expression' && value.isNotEmpty) {
+            columns.add(_BasQueryColumn(expression: value, alias: pendingAlias));
+            pendingAlias = null;
+          }
+          break;
+        case 'Joins':
+          currentJoin ??= _BasQueryJoin();
+          if (key == 'LeftTable') {
+            if (currentJoin!.leftTable != null &&
+                currentJoin!.rightTable != null &&
+                currentJoin!.expression != null) {
+              flushJoin();
+              currentJoin = _BasQueryJoin();
+            }
+            currentJoin!.leftTable = value;
+          } else if (key == 'RightTable') {
+            currentJoin!.rightTable = value;
+          } else if (key == 'Expression') {
+            currentJoin!.expression = value;
+          } else if (key == 'Flag') {
+            currentJoin!.flag = int.tryParse(value) ?? 0;
+          }
+          break;
+        case 'Groups':
+          if (key == 'Expression' && value.isNotEmpty) {
+            groups.add(value);
+          }
+          break;
+        default:
+          if (key == 'Operation') {
+            operation = int.tryParse(value) ?? 0;
+          } else if (key == 'SQL' && value.isNotEmpty) {
+            return _normalizeBasSqlText(value);
+          } else if (key == 'Where') {
+            where = value;
+          } else if (key == 'Having') {
+            having = value;
+          } else if (key == 'OrderBy') {
+            orderBy = value;
+          }
+      }
+    }
+
+    if (currentSection == 'Joins') {
+      flushJoin();
+    }
+
+    if (operation != 1 || columns.isEmpty) {
+      return null;
+    }
+
+    final sql = StringBuffer();
+    sql.writeln('SELECT');
+    sql.writeln(columns.map((column) => '  ${column.toSql()}').join(',\n'));
+
+    final fromSql = _buildBasFromClause(tables, joins);
+    if (fromSql != null && fromSql.isNotEmpty) {
+      sql.writeln('FROM');
+      sql.writeln('  $fromSql');
+    }
+
+    if (where != null && where.trim().isNotEmpty) {
+      sql.writeln('WHERE');
+      sql.writeln('  ${where.trim()}');
+    }
+
+    if (groups.isNotEmpty) {
+      sql.writeln('GROUP BY');
+      sql.writeln(groups.map((group) => '  $group').join(',\n'));
+    }
+
+    if (having != null && having.trim().isNotEmpty) {
+      sql.writeln('HAVING');
+      sql.writeln('  ${having.trim()}');
+    }
+
+    if (orderBy != null && orderBy.trim().isNotEmpty) {
+      sql.writeln('ORDER BY');
+      sql.writeln('  ${orderBy.trim()}');
+    }
+
+    return _normalizeBasSqlText(sql.toString());
+  }
+
+  List<String> _mergeBasContinuationLines(String text) {
+    final merged = <String>[];
+    String? current;
+
+    for (final rawLine in text.split('\n')) {
+      final line = rawLine.replaceAll('\r', '');
+      final trimmedLeft = line.trimLeft();
+      if (trimmedLeft.startsWith('"') && current != null) {
+        current += trimmedLeft;
+        continue;
+      }
+      if (current != null) {
+        merged.add(current);
+      }
+      current = line;
+    }
+
+    if (current != null) {
+      merged.add(current);
+    }
+
+    return merged;
+  }
+
+  String? _buildBasFromClause(List<String> tables, List<_BasQueryJoin> joins) {
+    if (tables.isEmpty) {
+      return null;
+    }
+    if (joins.isEmpty) {
+      return tables.first;
+    }
+
+    final sources = <String, String>{for (final table in tables) table: table};
+
+    for (final join in joins) {
+      final leftTable = join.leftTable;
+      final rightTable = join.rightTable;
+      final expression = join.expression;
+      if (leftTable == null || rightTable == null || expression == null) {
+        continue;
+      }
+      final left = sources[leftTable] ?? leftTable;
+      final right = sources[rightTable] ?? rightTable;
+      final joinSql =
+          '($left ${join.joinType} $right ON ${expression.trim()})';
+      sources[leftTable] = joinSql;
+      sources[rightTable] = joinSql;
+    }
+
+    for (final table in tables) {
+      final source = sources[table];
+      if (source != null && source.startsWith('(')) {
+        return source;
+      }
+    }
+
+    return tables.join(', ');
+  }
+
+  String _extractBasPropertyName(String rawKey) {
+    final quotedStart = rawKey.indexOf('"');
+    final quotedEnd = rawKey.lastIndexOf('"');
+    if (quotedStart >= 0 && quotedEnd > quotedStart) {
+      return rawKey.substring(quotedStart + 1, quotedEnd);
+    }
+    return rawKey;
+  }
+
+  String _decodeBasAssignedValue(String rawValue) {
+    final trimmed = rawValue.trim();
+    if (!trimmed.startsWith('"')) {
+      return _unquoteBasValue(trimmed);
+    }
+
+    final buffer = StringBuffer();
+    var index = 0;
+    while (index < trimmed.length) {
+      while (index < trimmed.length &&
+          (trimmed[index] == ' ' || trimmed[index] == '\t')) {
+        index++;
+      }
+      if (index >= trimmed.length || trimmed[index] != '"') {
+        break;
+      }
+      index++;
+      while (index < trimmed.length) {
+        final char = trimmed[index];
+        if (char == r'\') {
+          if ((index + 1) < trimmed.length && trimmed[index + 1] == '"') {
+            buffer.write('"');
+            index += 2;
+            continue;
+          }
+          if ((index + 8) <= trimmed.length) {
+            final escape = trimmed.substring(index, index + 8);
+            if (escape == r'\015\012') {
+              buffer.write('\r\n');
+              index += 8;
+              continue;
+            }
+          }
+        }
+        if (char == '"') {
+          if ((index + 1) < trimmed.length && trimmed[index + 1] == '"') {
+            index += 2;
+            continue;
+          }
+          index++;
+          break;
+        }
+        buffer.write(char);
+        index++;
+      }
+    }
+    return buffer.toString();
+  }
+
+  String _normalizeBasSqlText(String value) {
+    return value
+        .replaceAll(r'\015\012', '\r\n')
+        .replaceAll(r'\"', '"')
+        .replaceAll('\r', '')
+        .trimRight();
   }
 
   _BasNode _parseBasTree(String text) {
@@ -487,8 +794,10 @@ class AccessSrcReader {
 
       int equalIndex = trimmed.indexOf('=');
       if (equalIndex > 0) {
-        String propName = trimmed.substring(0, equalIndex).trim();
-        String propValue = trimmed.substring(equalIndex + 1).trim();
+        String propName =
+            _extractBasPropertyName(trimmed.substring(0, equalIndex).trim());
+        String propValue =
+            _decodeBasAssignedValue(trimmed.substring(equalIndex + 1).trim());
 
         if (propName.endsWith('EmMacro') && propValue == 'Begin') {
           final node = _BasNode('macro:$propName');
@@ -499,7 +808,7 @@ class AccessSrcReader {
           stack.last.children.add(node);
           stack.add(node);
         } else {
-          stack.last.properties[propName] = _unquoteBasValue(propValue);
+          stack.last.properties[propName] = propValue;
         }
       }
     }
@@ -553,4 +862,39 @@ class _BasNode {
   final List<_BasNode> children = <_BasNode>[];
 
   _BasNode(this.type);
+}
+
+class _BasQueryColumn {
+  final String expression;
+  final String? alias;
+
+  const _BasQueryColumn({
+    required this.expression,
+    required this.alias,
+  });
+
+  String toSql() {
+    if (alias == null || alias!.isEmpty) {
+      return expression;
+    }
+    return '$expression AS [$alias]';
+  }
+}
+
+class _BasQueryJoin {
+  String? leftTable;
+  String? rightTable;
+  String? expression;
+  int flag = 0;
+
+  String get joinType {
+    switch (flag) {
+      case 2:
+        return 'LEFT JOIN';
+      case 3:
+        return 'RIGHT JOIN';
+      default:
+        return 'INNER JOIN';
+    }
+  }
 }

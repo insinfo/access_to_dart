@@ -10,3 +10,5 @@ export 'src/row_reader.dart';
 export 'src/table_def_reader.dart';
 export 'src/table_reader.dart';
 export 'src/usage_map.dart';
+export 'src/ole/compound_file_reader.dart';
+export 'src/ole/vba_project_reader.dart';

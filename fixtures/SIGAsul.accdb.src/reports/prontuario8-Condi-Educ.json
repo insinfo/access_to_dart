@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "prontuario8-Condi-Educ Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.1667,
+      "TopMargin": 0.1667,
+      "RightMargin": 0.55,
+      "BotMargin": 0.1667,
+      "DataOnly": false,
+      "Width": 10.7479,
+      "Height": 0.3146,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

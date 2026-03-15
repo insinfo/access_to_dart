@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "IMPRIMIR-OFIC PALESTRAS CARATER NCONT Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Portrait",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.1667,
+      "TopMargin": 0.1667,
+      "RightMargin": 0.1667,
+      "BotMargin": 0.1667,
+      "DataOnly": false,
+      "Width": 7.6861,
+      "Height": 8.7514,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

@@ -175,9 +175,77 @@ void main() {
     );
   });
 
+  test('analyze emits query reconciliation for SIGAsul overlay', () async {
+    final fixture = File.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGAsul.accdb'),
+    );
+    final fixtureDir = Directory.fromUri(
+      Directory.current.uri.resolve('fixtures/SIGAsul.accdb.src/'),
+    );
+    expect(await fixture.exists(), isTrue);
+    expect(await fixtureDir.exists(), isTrue);
+
+    final tempDir = await Directory.systemTemp.createTemp('sigasul_analysis_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>[
+        'analyze',
+        '--accdb',
+        fixture.path,
+        '--src',
+        fixtureDir.path,
+        '--output',
+        tempDir.path,
+      ],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 0);
+    expect(err.toString(), isEmpty);
+    expect(out.toString(), contains('Query match :'));
+    expect(out.toString(), contains('Query relax :'));
+    expect(out.toString(), contains('Query shape :'));
+    expect(out.toString(), contains('Query order :'));
+    expect(out.toString(), contains('Query join  :'));
+    expect(out.toString(), contains('Query from  :'));
+    expect(out.toString(), contains('Query setop :'));
+    expect(out.toString(), contains('Bin SQL miss:'));
+
+    final analysisFile =
+        File('${tempDir.path}${Platform.pathSeparator}analysis.json');
+    final parsed =
+        jsonDecode(await analysisFile.readAsString()) as Map<String, dynamic>;
+    final reconciliation =
+        parsed['query_reconciliation'] as Map<String, dynamic>;
+    final summary = reconciliation['summary'] as Map<String, dynamic>;
+    final featureCoverage =
+        reconciliation['featureCoverage'] as Map<String, dynamic>;
+    final binaryCoverage = featureCoverage['binary'] as Map<String, dynamic>;
+    final sourceCoverage = featureCoverage['source'] as Map<String, dynamic>;
+
+    expect(summary['binaryQueries'], 426);
+    expect(summary['sourceQueries'], greaterThanOrEqualTo(409));
+    expect(summary['matchedRelaxed'], greaterThan(0));
+    expect(summary['matchedStructural'], greaterThan(0));
+    expect(summary['matchedOrderEquivalent'], greaterThan(0));
+    expect(summary['matchedJoinGraph'], greaterThan(0));
+    expect(summary['matchedFromOmitted'], greaterThanOrEqualTo(0));
+    expect(summary['matchedSetOperation'], greaterThan(0));
+    expect(summary['mismatched'], greaterThan(0));
+    expect(summary['missingInBinary'], greaterThan(0));
+    expect(binaryCoverage['hasJoin'], greaterThan(0));
+    expect(sourceCoverage['hasGroupBy'], greaterThan(0));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   test('reports encrypted backend metadata when password is missing', () async {
     final fixture = File.fromUri(
-      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+      Directory.current.uri
+          .resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
     );
     expect(await fixture.exists(), isTrue);
 
@@ -200,7 +268,8 @@ void main() {
     'inspects encrypted SIGA backend when password is provided',
     () async {
       final fixture = File.fromUri(
-        Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+        Directory.current.uri
+            .resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
       );
       expect(await fixture.exists(), isTrue);
 

@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "MONITORAMENTO DE ENCAMINHAMENTO Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.1667,
+      "TopMargin": 0.1667,
+      "RightMargin": 0.1667,
+      "BotMargin": 0.1667,
+      "DataOnly": false,
+      "Width": 22,
+      "Height": 0.4792,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

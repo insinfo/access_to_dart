@@ -1,0 +1,1482 @@
+﻿Version =20
+VersionRequired =20
+Begin Report
+    LayoutForPrint = NotDefault
+    PopUp = NotDefault
+    DividingLines = NotDefault
+    AllowDesignChanges = NotDefault
+    DefaultView =0
+    DateGrouping =1
+    GrpKeepTogether =1
+    PictureAlignment =2
+    DatasheetGridlinesBehavior =3
+    GridY =10
+    Width =10988
+    DatasheetFontHeight =11
+    ItemSuffix =216
+    Left =4395
+    Top =2535
+    RecSrcDt = Begin
+        0xf2bf47a854cbe540
+    End
+    RecordSource ="csBenefEventuais"
+    DatasheetFontName ="Calibri"
+    FilterOnLoad =0
+    FitToPage =1
+    DisplayOnSharePointSite =1
+    DatasheetAlternateBackColor =15921906
+    DatasheetGridlinesColor12 =0
+    FitToScreen =1
+    DatasheetBackThemeColorIndex =1
+    BorderThemeColorIndex =3
+    ThemeFontIndex =1
+    ForeThemeColorIndex =0
+    AlternateBackThemeColorIndex =1
+    AlternateBackShade =95.0
+    Begin
+        Begin Label
+            BackStyle =0
+            FontSize =11
+            FontName ="Calibri"
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =0
+            BorderTint =50.0
+            ForeThemeColorIndex =0
+            ForeTint =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Rectangle
+            BorderLineStyle =0
+            Width =850
+            Height =850
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Line
+            BorderLineStyle =0
+            Width =1701
+            BorderThemeColorIndex =0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Image
+            OldBorderStyle =0
+            BorderLineStyle =0
+            SizeMode =3
+            PictureAlignment =2
+            Width =1701
+            Height =1701
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin CheckBox
+            BorderLineStyle =0
+            LabelX =230
+            LabelY =-30
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin TextBox
+            AddColon = NotDefault
+            FELineBreak = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            FontName ="Calibri"
+            AsianLineBreak =1
+            ShowDatePicker =0
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ThemeFontIndex =1
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin ComboBox
+            AddColon = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            FontName ="Calibri"
+            AllowValueListEdits =1
+            InheritValueList =1
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ForeThemeColorIndex =2
+            ForeShade =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin UnboundObjectFrame
+            OldBorderStyle =1
+            Width =4536
+            Height =2835
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ForeThemeColorIndex =2
+            ForeShade =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Attachment
+            BackStyle =0
+            BorderLineStyle =0
+            PictureSizeMode =3
+            Width =1701
+            Height =1701
+            LabelX =-1701
+            AddColon =0
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin EmptyCell
+            Height =240
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin BreakLevel
+            ControlSource ="DataBenef"
+        End
+        Begin BreakLevel
+            ControlSource ="TbPessoa.NOME"
+        End
+        Begin FormHeader
+            KeepTogether = NotDefault
+            Height =0
+            Name ="CabeçalhoDoRelatório"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =2
+            BackTint =20.0
+        End
+        Begin PageHeader
+            Height =3540
+            Name ="PageHeaderSection"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin Label
+                    Left =4875
+                    Top =60
+                    Width =5970
+                    Height =375
+                    FontSize =14
+                    BorderColor =8355711
+                    ForeColor =8355711
+                    Name ="Rótulo183"
+                    Caption ="CENTRO DE REFERÊNCIA DE ASSISTÊNCIA SOCIAL - "
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =4875
+                    LayoutCachedTop =60
+                    LayoutCachedWidth =10845
+                    LayoutCachedHeight =435
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin ComboBox
+                    RowSourceTypeInt =1
+                    OldBorderStyle =0
+                    TextAlign =1
+                    IMESentenceMode =3
+                    ListWidth =1440
+                    Left =4875
+                    Top =453
+                    Width =3531
+                    Height =390
+                    FontSize =14
+                    FontWeight =700
+                    TabIndex =1
+                    BorderColor =10921638
+                    ForeColor =3484194
+                    Name ="CRAS"
+                    ControlSource ="TbUnidade.NOME"
+                    RowSourceType ="Value List"
+                    RowSource ="Norte;Centro;Sul;Rocha Leão"
+                    ColumnWidths ="1444"
+                    GridlineColor =-2147483609
+
+                    LayoutCachedLeft =4875
+                    LayoutCachedTop =453
+                    LayoutCachedWidth =8406
+                    LayoutCachedHeight =843
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin Label
+                    TextAlign =2
+                    Left =4140
+                    Top =1305
+                    Width =2670
+                    Height =345
+                    FontSize =13
+                    FontWeight =700
+                    BorderColor =8355711
+                    Name ="Rótulo5"
+                    Caption ="BENEFÍCIOS EVENTUAIS"
+                    GridlineColor =-2147483609
+                    LayoutCachedLeft =4140
+                    LayoutCachedTop =1305
+                    LayoutCachedWidth =6810
+                    LayoutCachedHeight =1650
+                    ForeTint =100.0
+                    GridlineThemeColorIndex =-1
+                    GridlineShade =100.0
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =630
+                    Top =2145
+                    Width =930
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo0"
+                    Caption ="DATA"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =630
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =1560
+                    LayoutCachedHeight =3510
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =1620
+                    Top =2145
+                    Width =2445
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo1"
+                    Caption ="NOME DO TITULAR"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =1620
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =4065
+                    LayoutCachedHeight =3510
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =4125
+                    Top =2145
+                    Width =915
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo3"
+                    Caption ="CPF"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =4125
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =5040
+                    LayoutCachedHeight =3510
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =5100
+                    Top =2145
+                    Width =450
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo4"
+                    Caption ="QTD"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5100
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =5550
+                    LayoutCachedHeight =3510
+                    ColumnStart =4
+                    ColumnEnd =4
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Attachment
+                    BackStyle =1
+                    OldBorderStyle =0
+                    Width =4875
+                    Height =1305
+                    BorderColor =16777215
+                    Name ="LOGO"
+                    ControlSource ="LOGO"
+                    GridlineColor =10921638
+
+                    LayoutCachedWidth =4875
+                    LayoutCachedHeight =1305
+                    BorderShade =100.0
+                End
+                Begin Label
+                    Vertical = NotDefault
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =5610
+                    Top =2145
+                    Width =450
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo11"
+                    Caption ="Apoio Alimentar"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5610
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =6060
+                    LayoutCachedHeight =3510
+                    ColumnStart =5
+                    ColumnEnd =5
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    Vertical = NotDefault
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =6120
+                    Top =2145
+                    Width =390
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo12"
+                    Caption ="Aux. Natalidade"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6120
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =6510
+                    LayoutCachedHeight =3510
+                    ColumnStart =6
+                    ColumnEnd =6
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    Vertical = NotDefault
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =6570
+                    Top =2145
+                    Width =405
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo13"
+                    Caption ="Cobertor"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6570
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =6975
+                    LayoutCachedHeight =3510
+                    ColumnStart =7
+                    ColumnEnd =7
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    Vertical = NotDefault
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =7035
+                    Top =2145
+                    Width =405
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo14"
+                    Caption ="Colchonete"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7035
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =7440
+                    LayoutCachedHeight =3510
+                    ColumnStart =8
+                    ColumnEnd =8
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    Vertical = NotDefault
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =7500
+                    Top =2145
+                    Width =390
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo15"
+                    Caption ="Outro"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7500
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =7890
+                    LayoutCachedHeight =3510
+                    ColumnStart =9
+                    ColumnEnd =9
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =7950
+                    Top =2145
+                    Width =1815
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo16"
+                    Caption ="Descrição"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7950
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =9765
+                    LayoutCachedHeight =3510
+                    ColumnStart =10
+                    ColumnEnd =10
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =9825
+                    Top =2145
+                    Width =420
+                    Height =1365
+                    FontSize =9
+                    BackColor =14277081
+                    Name ="Rótulo9"
+                    Caption ="Proprio"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =9825
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =10245
+                    LayoutCachedHeight =3510
+                    ColumnStart =11
+                    ColumnEnd =11
+                    LayoutGroup =1
+                    BackShade =85.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =10950
+                    Top =2145
+                    Width =0
+                    Height =1365
+                    FontSize =9
+                    BackColor =14277081
+                    Name ="Rótulo10"
+                    Caption ="Doação"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =10950
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =10950
+                    LayoutCachedHeight =3510
+                    ColumnStart =13
+                    ColumnEnd =13
+                    LayoutGroup =1
+                    BackShade =85.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =10305
+                    Top =2145
+                    Width =585
+                    Height =1365
+                    FontSize =9
+                    BackColor =14277081
+                    Name ="Rótulo184"
+                    Caption ="Doação"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =10305
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =10890
+                    LayoutCachedHeight =3510
+                    ColumnStart =12
+                    ColumnEnd =12
+                    LayoutGroup =1
+                    BackShade =85.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin Label
+                    BackStyle =1
+                    OldBorderStyle =1
+                    TextAlign =2
+                    Left =30
+                    Top =2145
+                    Width =546
+                    Height =1365
+                    FontSize =9
+                    BackColor =15921906
+                    Name ="Rótulo207"
+                    Caption ="CodBenef"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =30
+                    LayoutCachedTop =2145
+                    LayoutCachedWidth =576
+                    LayoutCachedHeight =3510
+                    LayoutGroup =1
+                    BackShade =95.0
+                    BorderTint =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =1
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =5556
+                    Top =1695
+                    Width =1821
+                    Height =315
+                    TabIndex =2
+                    BorderColor =10921638
+                    ForeColor =4210752
+                    Name ="Texto432"
+                    ControlSource ="@mês/ano"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =5556
+                    LayoutCachedTop =1695
+                    LayoutCachedWidth =7377
+                    LayoutCachedHeight =2010
+                    Begin
+                        Begin Label
+                            Left =3465
+                            Top =1695
+                            Width =2070
+                            Height =315
+                            BorderColor =8355711
+                            ForeColor =8355711
+                            Name ="Rótulo433"
+                            Caption ="PERÍODO (Mês/Ano): "
+                            GridlineColor =10921638
+                            LayoutCachedLeft =3465
+                            LayoutCachedTop =1695
+                            LayoutCachedWidth =5535
+                            LayoutCachedHeight =2010
+                        End
+                    End
+                End
+            End
+        End
+        Begin Section
+            KeepTogether = NotDefault
+            Height =488
+            Name ="Detalhe"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =630
+                    Top =30
+                    Width =930
+                    Height =420
+                    FontSize =8
+                    TabIndex =1
+                    Name ="Data"
+                    ControlSource ="DataBenef"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    ShowDatePicker =1
+
+                    LayoutCachedLeft =630
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =1560
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    TextAlign =1
+                    IMESentenceMode =3
+                    Left =1620
+                    Top =30
+                    Width =2445
+                    Height =420
+                    ColumnWidth =5475
+                    FontSize =8
+                    TabIndex =2
+                    Name ="LETRAS AZ.Nome"
+                    ControlSource ="TbPessoa.NOME"
+                    Format =">"
+                    EventProcPrefix ="LETRAS_AZ_Nome"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =1620
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =4065
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =4125
+                    Top =30
+                    Width =915
+                    Height =420
+                    ColumnWidth =1800
+                    FontSize =8
+                    TabIndex =3
+                    Name ="CPF"
+                    ControlSource ="CPF"
+                    InputMask ="000\\.000\\.000\\-00;;_"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =4125
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =5040
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =5610
+                    Top =30
+                    Width =450
+                    Height =420
+                    TabIndex =5
+                    BorderColor =10921638
+                    Name ="Seleção17"
+                    ControlSource ="ApoioAlim"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =5610
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =6060
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =5
+                    ColumnEnd =5
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =6120
+                    Top =30
+                    Width =390
+                    Height =420
+                    TabIndex =6
+                    BorderColor =10921638
+                    Name ="Seleção19"
+                    ControlSource ="AuxNatal"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =6120
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =6510
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =6
+                    ColumnEnd =6
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =6570
+                    Top =30
+                    Width =405
+                    Height =420
+                    TabIndex =7
+                    BorderColor =10921638
+                    Name ="Seleção20"
+                    ControlSource ="Cobertor"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =6570
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =6975
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =7
+                    ColumnEnd =7
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =7035
+                    Top =30
+                    Width =405
+                    Height =420
+                    TabIndex =8
+                    BorderColor =10921638
+                    Name ="Seleção21"
+                    ControlSource ="Colchonete"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =7035
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =7440
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =8
+                    ColumnEnd =8
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =9825
+                    Top =30
+                    Width =420
+                    Height =420
+                    TabIndex =11
+                    BorderColor =10921638
+                    Name ="Seleção23"
+                    ControlSource ="Proprio"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =9825
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =10245
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =11
+                    ColumnEnd =11
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =7500
+                    Top =30
+                    Width =390
+                    Height =420
+                    TabIndex =9
+                    BorderColor =10921638
+                    Name ="Seleção22"
+                    ControlSource ="Outro"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =7500
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =7890
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =9
+                    ColumnEnd =9
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =5100
+                    Top =30
+                    Width =450
+                    Height =420
+                    FontSize =8
+                    TabIndex =4
+                    Name ="Cesta Básica"
+                    ControlSource ="Qtd"
+                    EventProcPrefix ="Cesta_Básica"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =5100
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =5550
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =4
+                    ColumnEnd =4
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =7950
+                    Top =30
+                    Width =1815
+                    Height =420
+                    FontSize =7
+                    TabIndex =10
+                    Name ="OutroDescrever"
+                    ControlSource ="DescreverItem"
+                    Format =">"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =7950
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =9765
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =10
+                    ColumnEnd =10
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =10950
+                    Top =30
+                    Width =0
+                    Height =420
+                    Name ="CélulaVazia170"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =10950
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =10950
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =13
+                    ColumnEnd =13
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin CheckBox
+                    OldBorderStyle =0
+                    Left =10305
+                    Top =30
+                    Width =585
+                    Height =420
+                    TabIndex =12
+                    BorderColor =10921638
+                    Name ="Seleção192"
+                    ControlSource ="Doação"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =10305
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =10890
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    ColumnStart =12
+                    ColumnEnd =12
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =30
+                    Top =30
+                    Width =546
+                    Height =420
+                    FontSize =8
+                    Name ="CodBenef"
+                    ControlSource ="CodBenef"
+                    GroupTable =2
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =30
+                    LayoutCachedTop =30
+                    LayoutCachedWidth =576
+                    LayoutCachedHeight =450
+                    RowStart =1
+                    RowEnd =1
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+            End
+        End
+        Begin PageFooter
+            Height =1817
+            Name ="PageFooterSection"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Width =10941
+                    Height =270
+                    FontSize =10
+                    FontWeight =700
+                    BorderColor =10921638
+                    Name ="DIRETOR(A)"
+                    ControlSource ="DIRETOR(A)"
+                    Format =">"
+                    EventProcPrefix ="DIRETOR_A_"
+                    GridlineColor =10921638
+
+                    LayoutCachedWidth =10941
+                    LayoutCachedHeight =270
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Top =285
+                    Width =10941
+                    FontSize =8
+                    TabIndex =1
+                    BorderColor =10921638
+                    Name ="FUNÇÃO"
+                    ControlSource ="FUNÇÃO"
+                    Format =">"
+                    GridlineColor =10921638
+
+                    LayoutCachedTop =285
+                    LayoutCachedWidth =10941
+                    LayoutCachedHeight =525
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Top =495
+                    Width =10941
+                    FontSize =8
+                    TabIndex =2
+                    BorderColor =10921638
+                    Name ="MATRICULA"
+                    ControlSource ="MATRICULA"
+                    GridlineColor =10921638
+
+                    LayoutCachedTop =495
+                    LayoutCachedWidth =10941
+                    LayoutCachedHeight =735
+                    ForeTint =100.0
+                End
+                Begin Attachment
+                    OldBorderStyle =0
+                    Left =1133
+                    Top =737
+                    Width =8790
+                    Height =1080
+                    BorderColor =10921638
+                    Name ="RODAPE"
+                    ControlSource ="RODAPE"
+                    GridlineColor =10921638
+                    TabIndex =3
+
+                    LayoutCachedLeft =1133
+                    LayoutCachedTop =737
+                    LayoutCachedWidth =9923
+                    LayoutCachedHeight =1817
+                    TextAlign =2
+                End
+            End
+        End
+        Begin FormFooter
+            KeepTogether = NotDefault
+            Height =465
+            Name ="RodapéDoRelatório"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =5100
+                    Top =195
+                    Width =450
+                    FontSize =7
+                    Name ="AccessTotalsCesta Básica"
+                    ControlSource ="=Count([Qtd])"
+                    EventProcPrefix ="AccessTotalsCesta_Básica"
+                    ControlTipText ="Qtd Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =5100
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =5550
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =4
+                    ColumnEnd =4
+                    LayoutGroup =1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =630
+                    Top =195
+                    Width =930
+                    Name ="CélulaVazia194"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =630
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =1560
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =1
+                    ColumnEnd =1
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =1620
+                    Top =195
+                    Width =2445
+                    Name ="CélulaVazia195"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =1620
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =4065
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =2
+                    ColumnEnd =2
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =4125
+                    Top =195
+                    Width =915
+                    Name ="CélulaVazia196"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =4125
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =5040
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =3
+                    ColumnEnd =3
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =7950
+                    Top =195
+                    Width =1815
+                    Name ="CélulaVazia203"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7950
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =9765
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =10
+                    ColumnEnd =10
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =10950
+                    Top =195
+                    Width =0
+                    Name ="CélulaVazia206"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =10950
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =10950
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =13
+                    ColumnEnd =13
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =5610
+                    Top =195
+                    Width =450
+                    FontSize =7
+                    TabIndex =1
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção17"
+                    ControlSource ="=-Sum([ApoioAlim])"
+                    ControlTipText ="ApoioAlim Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =5610
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =6060
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =5
+                    ColumnEnd =5
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =6120
+                    Top =195
+                    Width =390
+                    FontSize =7
+                    TabIndex =2
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção19"
+                    ControlSource ="=-Sum([AuxNatal])"
+                    ControlTipText ="AuxNatal Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =6120
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =6510
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =6
+                    ColumnEnd =6
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =6570
+                    Top =195
+                    Width =405
+                    FontSize =7
+                    TabIndex =3
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção20"
+                    ControlSource ="=-Sum([Cobertor])"
+                    ControlTipText ="Cobertor Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =6570
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =6975
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =7
+                    ColumnEnd =7
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =7035
+                    Top =195
+                    Width =405
+                    FontSize =7
+                    TabIndex =4
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção21"
+                    ControlSource ="=-Sum([Colchonete])"
+                    ControlTipText ="Colchonete Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =7035
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =7440
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =8
+                    ColumnEnd =8
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =7500
+                    Top =195
+                    Width =390
+                    FontSize =7
+                    TabIndex =5
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção22"
+                    ControlSource ="=-Sum([Outro])"
+                    ControlTipText ="Outro Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =7500
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =7890
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =9
+                    ColumnEnd =9
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =9825
+                    Top =195
+                    Width =420
+                    FontSize =7
+                    TabIndex =6
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção23"
+                    ControlSource ="=-Sum([Proprio])"
+                    ControlTipText ="Proprio Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =9825
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =10245
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =11
+                    ColumnEnd =11
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =2
+                    IMESentenceMode =3
+                    Left =10305
+                    Top =195
+                    Width =585
+                    FontSize =7
+                    TabIndex =7
+                    BorderColor =10921638
+                    Name ="AccessTotalsSeleção192"
+                    ControlSource ="=-Sum([Doação])"
+                    ControlTipText ="Doação Contagem de Valores"
+                    GroupTable =2
+                    GridlineStyleTop =1
+                    GridlineColor =10921638
+                    GridlineWidthTop =2
+
+                    LayoutCachedLeft =10305
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =10890
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    ColumnStart =12
+                    ColumnEnd =12
+                    LayoutGroup =1
+                    ForeTint =100.0
+                    GroupTable =2
+                End
+                Begin EmptyCell
+                    Left =30
+                    Top =195
+                    Width =546
+                    Name ="CélulaVazia214"
+                    GroupTable =2
+                    GridlineColor =10921638
+                    LayoutCachedLeft =30
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =576
+                    LayoutCachedHeight =435
+                    RowStart =2
+                    RowEnd =2
+                    LayoutGroup =1
+                    GroupTable =2
+                End
+            End
+        End
+    End
+End

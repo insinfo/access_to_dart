@@ -151,12 +151,51 @@ void main() {
       expect(contatosEstendidos.sqlText, contains('FROM'));
       expect(contatosEstendidos.sqlText, contains('AS [Pesquisável]'));
       expect(contatosEstendidos.sqlText, contains('ORDER BY'));
-      expect(contatosEstendidos.sqlText, contains('[Contatos].[NomeDoContato]'));
+      expect(
+          contatosEstendidos.sqlText, contains('[Contatos].[NomeDoContato]'));
       final searchableRow = contatosEstendidos.rows.singleWhere(
         (row) => row.name1 == 'Pesquisável',
       );
       expect(searchableRow.expressionAst, isNotNull);
     });
+
+    test('extracts backend relationships and real indexes from encrypted ACCDB',
+        () async {
+      final fixture = await _resolveEncryptedBackendFixture();
+      if (!await fixture.exists()) return;
+
+      final database = await AccessDatabase.openPath(
+        fixture.path,
+        password: '4462',
+      );
+      addTearDown(database.close);
+
+      final catalog = AccessCatalog(
+        format: database.format,
+        pageChannel: database.pageChannel,
+      );
+      final model = await catalog.read(fixture.path);
+
+      expect(model.tables, hasLength(40));
+      expect(model.relationships.length, greaterThanOrEqualTo(30));
+
+      final cadResidencia =
+          model.tables.singleWhere((table) => table.name == 'CadResidencia');
+      final primaryKey = cadResidencia.indexes.firstWhere(
+        (index) => index.isPrimaryKey,
+      );
+      expect(primaryKey.columns.map((column) => column.name), ['CodFam']);
+
+      expect(
+        model.relationships.any(
+          (relationship) =>
+              relationship.name == 'CadResidenciaTbPessoa' &&
+              relationship.fromTable == 'TbPessoa' &&
+              relationship.toTable == 'CadResidencia',
+        ),
+        isTrue,
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }
 
@@ -197,10 +236,12 @@ Future<File> _resolveCheckedInFixture() async {
 Future<File> _resolveEncryptedBackendFixture() async {
   final candidates = <File>[
     File.fromUri(
-      Directory.current.uri.resolve('../../fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+      Directory.current.uri
+          .resolve('../../fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
     ),
     File.fromUri(
-      Directory.current.uri.resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+      Directory.current.uri
+          .resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
     ),
   ];
 

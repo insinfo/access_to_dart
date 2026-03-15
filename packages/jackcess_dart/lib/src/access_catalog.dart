@@ -18,13 +18,13 @@ class AccessCatalog {
   static const int _sysCatalogPage = 2;
 
   // Type values from DatabaseImpl
-  static const int _typeTable        = 1;
-  static const int _typeQuery        = 5;
-  static const int _typeForm         = -32768;
-  static const int _typeReport       = -32764;
-  static const int _typeMacro        = -32766;
-  static const int _typeModule       = -32757;
-  static const int _typeContainer    = 3;
+  static const int _typeTable = 1;
+  static const int _typeQuery = 5;
+  static const int _typeForm = -32768;
+  static const int _typeReport = -32764;
+  static const int _typeMacro = -32766;
+  static const int _typeModule = -32757;
+  static const int _typeContainer = 3;
 
   AccessCatalog({required this.format, required this.pageChannel});
 
@@ -49,38 +49,39 @@ class AccessCatalog {
     final tablesContainer = allEntries.firstWhere(
       (e) => e.name == 'Tables' && e.rawType == _typeContainer,
       orElse: () => AccessCatalogEntry(
-          id: 0, parentId: 0, name: '', objectType: AccessObjectType.unknown,
-          flags: 0, rawType: 0),
+          id: 0,
+          parentId: 0,
+          name: '',
+          objectType: AccessObjectType.unknown,
+          flags: 0,
+          rawType: 0),
     );
     final tableParentId = tablesContainer.id;
 
     // 3. User tables: type==1, parentId==tableParentId, and NOT system bit 0x80000000
     final tableEntries = allEntries
-        .where((e) => e.rawType == _typeTable &&
+        .where((e) =>
+            e.rawType == _typeTable &&
             (tableParentId == 0 || e.parentId == tableParentId) &&
             !e.isSystem)
         .toList();
     final linkedTableEntries = allEntries
-        .where((e) => e.rawType == 6 &&
+        .where((e) =>
+            e.rawType == 6 &&
             (tableParentId == 0 || e.parentId == tableParentId) &&
             !e.isSystem)
         .toList();
 
-    final queryEntries = allEntries
-        .where((e) => e.rawType == _typeQuery)
-        .toList();
-    final formEntries = allEntries
-        .where((e) => e.rawType == _typeForm)
-        .toList();
-    final reportEntries = allEntries
-        .where((e) => e.rawType == _typeReport)
-        .toList();
-    final macroEntries = allEntries
-        .where((e) => e.rawType == _typeMacro)
-        .toList();
-    final moduleEntries = allEntries
-        .where((e) => e.rawType == _typeModule)
-        .toList();
+    final queryEntries =
+        allEntries.where((e) => e.rawType == _typeQuery).toList();
+    final formEntries =
+        allEntries.where((e) => e.rawType == _typeForm).toList();
+    final reportEntries =
+        allEntries.where((e) => e.rawType == _typeReport).toList();
+    final macroEntries =
+        allEntries.where((e) => e.rawType == _typeMacro).toList();
+    final moduleEntries =
+        allEntries.where((e) => e.rawType == _typeModule).toList();
 
     // 4. Build table schemas by reading their TDEF pages.
     //    The entry.id IS the TDEF page number for tables.
@@ -89,34 +90,112 @@ class AccessCatalog {
     for (final entry in tableEntries) {
       try {
         final schema = await tblReader.readSchema(entry.name, entry.id);
-        final rows = await tblReader.readAllRows(entry.id);
+        List<Map<String, dynamic>> rows;
+        try {
+          rows = await tblReader.readAllRows(entry.id);
+        } catch (e) {
+          print('[WARN] Failed to read sample rows for table "${entry.name}" '
+              '(page ${entry.id}): $e');
+          rows = const <Map<String, dynamic>>[];
+        }
         tables.add(AccessTableSchema(
           name: schema.name,
           tdefPageNumber: schema.tdefPageNumber,
           rowCount: schema.rowCount,
           columns: schema.columns,
+          indexes: schema.indexes,
           sampleRows: rows.take(10).toList(),
         ));
       } catch (e) {
         // Log error and continue
-        print('[WARN] Failed to read table "${entry.name}" (page ${entry.id}): $e');
+        print(
+            '[WARN] Failed to read table "${entry.name}" (page ${entry.id}): $e');
       }
     }
 
     // 5. Read queries from MSysQueries
     final queries = await _readQueries(queryEntries);
+    final relationships = await _readRelationships(allEntries);
 
     return AccessDatabaseModel(
       path: dbPath,
       formatName: format.name,
       tables: tables,
       linkedTables: linkedTableEntries,
+      relationships: relationships,
       queries: queries,
       forms: formEntries,
       reports: reportEntries,
       macros: macroEntries,
       modules: moduleEntries,
     );
+  }
+
+  Future<List<AccessRelationshipSchema>> _readRelationships(
+    List<AccessCatalogEntry> allEntries,
+  ) async {
+    final msysRelationshipsEntry = allEntries.firstWhere(
+      (e) => e.name == 'MSysRelationships',
+      orElse: () => const AccessCatalogEntry(
+        id: 0,
+        parentId: 0,
+        name: '',
+        objectType: AccessObjectType.unknown,
+        flags: 0,
+        rawType: 0,
+      ),
+    );
+
+    if (msysRelationshipsEntry.id == 0) {
+      return const <AccessRelationshipSchema>[];
+    }
+
+    try {
+      final tableReader = TableReader(format: format, pageChannel: pageChannel);
+      final rows = await tableReader.readAllRows(msysRelationshipsEntry.id);
+      final grouped = <String, List<Map<String, dynamic>>>{};
+
+      for (final row in rows) {
+        final relationshipName = row['szRelationship']?.toString();
+        if (relationshipName == null || relationshipName.isEmpty) {
+          continue;
+        }
+        grouped
+            .putIfAbsent(relationshipName, () => <Map<String, dynamic>>[])
+            .add(row);
+      }
+
+      final relationships = grouped.entries.map((entry) {
+        final rows = entry.value.toList()
+          ..sort((a, b) {
+            final left = (a['icolumn'] as num?)?.toInt() ?? 0;
+            final right = (b['icolumn'] as num?)?.toInt() ?? 0;
+            return left.compareTo(right);
+          });
+
+        final first = rows.first;
+        return AccessRelationshipSchema(
+          name: entry.key,
+          fromTable: first['szObject']?.toString() ?? '',
+          fromColumns: rows
+              .map((row) => row['szColumn']?.toString() ?? '')
+              .where((value) => value.isNotEmpty)
+              .toList(),
+          toTable: first['szReferencedObject']?.toString() ?? '',
+          toColumns: rows
+              .map((row) => row['szReferencedColumn']?.toString() ?? '')
+              .where((value) => value.isNotEmpty)
+              .toList(),
+          flags: (first['grbit'] as num?)?.toInt() ?? 0,
+          columnCount: (first['ccolumn'] as num?)?.toInt() ?? rows.length,
+        );
+      }).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      return relationships;
+    } catch (_) {
+      return const <AccessRelationshipSchema>[];
+    }
   }
 
   // ─── Debug helper ─────────────────────────────────────────────────────────
@@ -127,8 +206,8 @@ class AccessCatalog {
 
   /// Scan every data page of MSysObjects and return all catalog entries.
   Future<List<AccessCatalogEntry>> _readAllCatalogEntries() async {
-    final tdefReader =
-        TableDefReader(format: format, pageChannel: pageChannel, pageNumber: _sysCatalogPage);
+    final tdefReader = TableDefReader(
+        format: format, pageChannel: pageChannel, pageNumber: _sysCatalogPage);
     final cols = await tdefReader.readColumns();
     final rowReader =
         RowReader(format: format, columns: cols, pageChannel: pageChannel);
@@ -189,7 +268,12 @@ class AccessCatalog {
     final msysQueriesEntry = allEntries.firstWhere(
       (e) => e.name == 'MSysQueries',
       orElse: () => AccessCatalogEntry(
-          id: 0, parentId: 0, name: '', objectType: AccessObjectType.unknown, flags: 0, rawType: 0),
+          id: 0,
+          parentId: 0,
+          name: '',
+          objectType: AccessObjectType.unknown,
+          flags: 0,
+          rawType: 0),
     );
 
     if (msysQueriesEntry.id == 0) return [];
@@ -213,7 +297,8 @@ class AccessCatalog {
         tdefOffset: usageMapOffset,
       );
 
-      final dataReader = DataPageReader(format: format, pageChannel: pageChannel);
+      final dataReader =
+          DataPageReader(format: format, pageChannel: pageChannel);
       // Group rows by ObjectId – each query has multiple rows in MSysQueries
       final Map<int, List<Map<String, dynamic>>> grouped = {};
 
@@ -271,7 +356,8 @@ class AccessCatalog {
         attributeName: AccessQueryRow.attributeNameFor(attribute),
         flag: asInt(row['Flag']),
         expression: row['Expression']?.toString(),
-        expressionAst: AccessExpressionParser.tryParse(row['Expression']?.toString()),
+        expressionAst:
+            AccessExpressionParser.tryParse(row['Expression']?.toString()),
         name1: row['Name1']?.toString(),
         name2: row['Name2']?.toString(),
         extra: asInt(row['Extra']),
@@ -289,7 +375,6 @@ class AccessCatalog {
     });
     return mapped;
   }
-
 }
 
 class _AccessQuerySqlBuilder {
@@ -379,12 +464,15 @@ class _AccessQuerySqlBuilder {
     final selectPrefix = _buildSelectPrefix(selectFlags);
     final columns = _buildSelectColumns(columnRows, tableRows, selectFlags);
     final fromTables = _buildFromTables(tableRows, joinRows);
-    final whereExpr = _normalizeNullableExpression(whereRow?['Expression']?.toString());
+    final whereExpr =
+        _normalizeNullableExpression(whereRow?['Expression']?.toString());
     final groupExprs = groupRows
-        .map((row) => _normalizeNullableExpression(row['Expression']?.toString()))
+        .map((row) =>
+            _normalizeNullableExpression(row['Expression']?.toString()))
         .whereType<String>()
         .toList();
-    final havingExpr = _normalizeNullableExpression(havingRow?['Expression']?.toString());
+    final havingExpr =
+        _normalizeNullableExpression(havingRow?['Expression']?.toString());
     final orderExprs = orderRows
         .map((row) => _buildOrdering(row))
         .whereType<String>()
@@ -461,7 +549,8 @@ class _AccessQuerySqlBuilder {
       }
     }
 
-    if (columns.isEmpty || ((selectFlags & 0x01) != 0 && !columns.contains('*'))) {
+    if (columns.isEmpty ||
+        ((selectFlags & 0x01) != 0 && !columns.contains('*'))) {
       if (tableRows.length == 1) {
         columns.insert(
           0,
@@ -498,9 +587,13 @@ class _AccessQuerySqlBuilder {
     for (final row in joinRows) {
       final leftName = row['Name1']?.toString();
       final rightName = row['Name2']?.toString();
-      final onExpr = _normalizeNullableExpression(row['Expression']?.toString());
+      final onExpr =
+          _normalizeNullableExpression(row['Expression']?.toString());
       final joinType = _joinTypeForFlag(_asInt(row['Flag']) ?? 0);
-      if (leftName == null || rightName == null || onExpr == null || joinType == null) {
+      if (leftName == null ||
+          rightName == null ||
+          onExpr == null ||
+          joinType == null) {
         continue;
       }
 
@@ -613,11 +706,16 @@ class _AccessQuerySqlBuilder {
       final isAsciiLetter =
           (char >= 65 && char <= 90) || (char >= 97 && char <= 122);
       final isDigit = char >= 48 && char <= 57;
-      final isTrailingStar =
-          char == 42 && i == value.length - 1 && i > 0 && value.codeUnitAt(i - 1) == 46;
+      final isTrailingStar = char == 42 &&
+          i == value.length - 1 &&
+          i > 0 &&
+          value.codeUnitAt(i - 1) == 46;
       const allowedPunctuation = '._[]';
       final isAllowedPunctuation = allowedPunctuation.codeUnits.contains(char);
-      if (!(isAsciiLetter || isDigit || isAllowedPunctuation || isTrailingStar)) {
+      if (!(isAsciiLetter ||
+          isDigit ||
+          isAllowedPunctuation ||
+          isTrailingStar)) {
         return false;
       }
     }
@@ -630,7 +728,8 @@ class _AccessQuerySqlBuilder {
     }
     return value
         .split('.')
-        .map((part) => part.startsWith('[') && part.endsWith(']') ? part : '[$part]')
+        .map((part) =>
+            part.startsWith('[') && part.endsWith(']') ? part : '[$part]')
         .join('.');
   }
 }
@@ -643,7 +742,8 @@ class _SqlTableSource {
 
   String get lookupKey => tableNames.first;
 
-  bool overlaps(_SqlTableSource other) => tableNames.any(other.tableNames.contains);
+  bool overlaps(_SqlTableSource other) =>
+      tableNames.any(other.tableNames.contains);
 
   static _SqlTableSource fromRow(
     Map<String, dynamic> row,

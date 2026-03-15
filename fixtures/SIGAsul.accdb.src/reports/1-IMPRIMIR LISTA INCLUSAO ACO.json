@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "1-IMPRIMIR LISTA INCLUSAO ACO Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.2361,
+      "TopMargin": 0.2361,
+      "RightMargin": 0.2361,
+      "BotMargin": 0.2361,
+      "DataOnly": false,
+      "Width": 11.1785,
+      "Height": 4.8229,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

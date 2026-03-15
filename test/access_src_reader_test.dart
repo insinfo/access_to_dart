@@ -45,6 +45,7 @@ void main() {
     final query = project.queries
         .singleWhere((item) => item.name == 'ContatosEstendidos');
     expect(query.sql, contains('AS Pesquisável'));
+    expect(query.semanticSql, isNotNull);
 
     final detalhes =
         project.forms.singleWhere((form) => form.name == 'DetalhesDoContato');
@@ -74,7 +75,19 @@ void main() {
     final project = await AccessSrcReader().readDirectory(fixtureDir.path);
 
     expect(project.tables.length, greaterThanOrEqualTo(40));
-    expect(project.queries.length, greaterThanOrEqualTo(300));
+    expect(project.queries.length, greaterThanOrEqualTo(409));
+    expect(
+      project.queries.any(
+        (query) => query.basText != null && query.basText!.trim().isNotEmpty,
+      ),
+      isTrue,
+    );
+    final basOnly = project.queries
+        .singleWhere((query) => query.name == 'Union Perfil Presenca');
+    expect(basOnly.sql, isEmpty);
+    expect(basOnly.basText, isNotEmpty);
+    expect(basOnly.semanticSql, isNotNull);
+    expect(basOnly.semanticSql, isNot(contains(r'\015\012')));
 
     final tbPessoa =
         project.tables.singleWhere((table) => table.name == 'TbPessoa');
@@ -86,7 +99,8 @@ void main() {
     expect(tbPessoa.sourceTableName, 'TbPessoa');
     expect(tbPessoa.primaryKey, '[CodPessoa]');
     expect(
-      tbPessoa.indexes.any((index) => index.primary && index.key == '[CodPessoa]'),
+      tbPessoa.indexes
+          .any((index) => index.primary && index.key == '[CodPessoa]'),
       isTrue,
     );
   });

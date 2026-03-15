@@ -1,0 +1,28 @@
+﻿{
+  "Info": {
+    "Class": "clsDbReport",
+    "Description": "IMPRIMIR-EXCLUSÃO DO ACOMPANHAMENTO Print Settings"
+  },
+  "Items": {
+    "Printer": {
+      "Orientation": "Landscape",
+      "PaperSize": "A4"
+    },
+    "Margins": {
+      "LeftMargin": 0.1972,
+      "TopMargin": 0.1972,
+      "RightMargin": 0.1972,
+      "BotMargin": 0.1972,
+      "DataOnly": false,
+      "Width": 11.1389,
+      "Height": 5.25,
+      "DefaultSize": true,
+      "Columns": 1,
+      "ColumnSpacing": 0.25,
+      "RowSpacing": 0,
+      "ItemLayout": "Horizontal Columns",
+      "FastPrint": 1,
+      "Datasheet": 1
+    }
+  }
+}

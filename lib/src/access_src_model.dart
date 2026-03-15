@@ -123,16 +123,22 @@ class AccessSrcIndex {
 class AccessSrcQuery {
   final String name;
   final String sql;
+  final String? basText;
+  final String? semanticSql;
 
   const AccessSrcQuery({
     required this.name,
     required this.sql,
+    required this.basText,
+    required this.semanticSql,
   });
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'name': name,
       'sql': sql,
+      'basText': basText,
+      'semanticSql': semanticSql,
     };
   }
 }

@@ -16,11 +16,11 @@ class TableReader {
   TableReader({required this.format, required this.pageChannel});
 
   /// Returns the [AccessTableSchema] for a table at [tdefPage].
-  Future<AccessTableSchema> readSchema(
-      String tableName, int tdefPage) async {
-    final tdefReader =
-        TableDefReader(format: format, pageChannel: pageChannel, pageNumber: tdefPage);
+  Future<AccessTableSchema> readSchema(String tableName, int tdefPage) async {
+    final tdefReader = TableDefReader(
+        format: format, pageChannel: pageChannel, pageNumber: tdefPage);
     final tdefData = await tdefReader.readTableDefinitionData();
+    final definition = await tdefReader.readDefinition();
     final bytes = ByteData.sublistView(tdefData);
     if (tdefData[0] != 0x02) {
       throw FormatException(
@@ -28,13 +28,44 @@ class TableReader {
     }
 
     final rowCount = bytes.getInt32(format.offsetNumRows, Endian.little);
-    final cols = await tdefReader.readColumns();
+    final cols = definition.columns;
+    final indexes = definition.indexes;
+    final columnsByNumber = {
+      for (final column in cols) column.columnNumber: column,
+    };
 
     return AccessTableSchema(
       name: tableName,
       tdefPageNumber: tdefPage,
       rowCount: rowCount,
       sampleRows: const [],
+      indexes: indexes
+          .map((index) => AccessIndexSchema(
+                name: index.name,
+                indexNumber: index.indexNumber,
+                backingDataNumber: index.backingDataNumber,
+                isPrimaryKey: index.isPrimaryKey,
+                isForeignKey: index.isForeignKey,
+                isUnique: index.isUnique,
+                isRequired: index.isRequired,
+                ignoreNulls: index.ignoreNulls,
+                flags: index.flags,
+                relatedTablePageNumber: index.relatedTablePageNumber,
+                relatedIndexNumber: index.relatedIndexNumber,
+                cascadeUpdates: index.cascadeUpdates,
+                cascadeDeletes: index.cascadeDeletes,
+                cascadeNullOnDelete: index.cascadeNullOnDelete,
+                columns: index.columns.map((column) {
+                  final sourceColumn = columnsByNumber[column.columnNumber];
+                  return AccessIndexColumnSchema(
+                    name: sourceColumn?.name ?? 'col_${column.columnNumber}',
+                    columnNumber: column.columnNumber,
+                    ascending: column.ascending,
+                    flags: column.flags,
+                  );
+                }).toList(),
+              ))
+          .toList(),
       columns: cols
           .map((c) => AccessColumnSchema(
                 name: c.name,
@@ -49,6 +80,8 @@ class TableReader {
                 isCalculated: c.isCalculated,
                 flags: c.flags,
                 extFlags: c.extFlags,
+                precision: c.precision,
+                scale: c.scale,
               ))
           .toList(),
     );
@@ -56,8 +89,8 @@ class TableReader {
 
   /// Reads all rows from a table at [tdefPage].
   Future<List<Map<String, dynamic>>> readAllRows(int tdefPage) async {
-    final tdefReader =
-        TableDefReader(format: format, pageChannel: pageChannel, pageNumber: tdefPage);
+    final tdefReader = TableDefReader(
+        format: format, pageChannel: pageChannel, pageNumber: tdefPage);
     final tdefData = await tdefReader.readTableDefinitionData();
     if (tdefData[0] != 0x02) return [];
 

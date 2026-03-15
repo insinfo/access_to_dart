@@ -1,0 +1,948 @@
+﻿Version =20
+VersionRequired =20
+Begin Report
+    LayoutForPrint = NotDefault
+    PopUp = NotDefault
+    DividingLines = NotDefault
+    AllowDesignChanges = NotDefault
+    DefaultView =0
+    DateGrouping =1
+    GrpKeepTogether =1
+    PictureAlignment =2
+    DatasheetGridlinesBehavior =3
+    GridY =10
+    Width =10716
+    DatasheetFontHeight =11
+    ItemSuffix =107
+    Left =4680
+    Top =2490
+    RecSrcDt = Begin
+        0xa8dbc504caf3e540
+    End
+    RecordSource ="csCarteiraPAIF"
+    DatasheetFontName ="Calibri"
+    FilterOnLoad =0
+    FitToPage =1
+    DisplayOnSharePointSite =1
+    DatasheetAlternateBackColor =15921906
+    DatasheetGridlinesColor12 =0
+    FitToScreen =1
+    DatasheetBackThemeColorIndex =1
+    BorderThemeColorIndex =3
+    ThemeFontIndex =1
+    ForeThemeColorIndex =0
+    AlternateBackThemeColorIndex =1
+    AlternateBackShade =95.0
+    Begin
+        Begin Label
+            BackStyle =0
+            FontSize =11
+            FontName ="Calibri"
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =0
+            BorderTint =50.0
+            ForeThemeColorIndex =0
+            ForeTint =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Rectangle
+            BorderLineStyle =0
+            Width =850
+            Height =850
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin Image
+            OldBorderStyle =0
+            BorderLineStyle =0
+            SizeMode =3
+            PictureAlignment =2
+            Width =1701
+            Height =1701
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin CheckBox
+            BorderLineStyle =0
+            LabelX =230
+            LabelY =-30
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin BoundObjectFrame
+            AddColon = NotDefault
+            SizeMode =3
+            BorderLineStyle =0
+            Width =4536
+            Height =2835
+            LabelX =-1701
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin TextBox
+            AddColon = NotDefault
+            FELineBreak = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            FontName ="Calibri"
+            AsianLineBreak =1
+            ShowDatePicker =0
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ThemeFontIndex =1
+            ForeThemeColorIndex =0
+            ForeTint =75.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin ComboBox
+            AddColon = NotDefault
+            BorderLineStyle =0
+            Width =1701
+            LabelX =-1701
+            FontSize =11
+            FontName ="Calibri"
+            AllowValueListEdits =1
+            InheritValueList =1
+            ThemeFontIndex =1
+            BackThemeColorIndex =1
+            BorderThemeColorIndex =1
+            BorderShade =65.0
+            ForeThemeColorIndex =2
+            ForeShade =50.0
+            GridlineThemeColorIndex =1
+            GridlineShade =65.0
+        End
+        Begin PageHeader
+            Height =4717
+            Name ="PageHeaderSection"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin Rectangle
+                    Width =10716
+                    Height =4717
+                    BackColor =11259875
+                    BorderColor =10921638
+                    Name ="Caixa43"
+                    GridlineColor =10921638
+                    LayoutCachedWidth =10716
+                    LayoutCachedHeight =4717
+                    BackThemeColorIndex =-1
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =1
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =1560
+                    Top =2730
+                    Width =2481
+                    Height =315
+                    FontWeight =700
+                    BorderColor =10921638
+                    Name ="CodFam"
+                    ControlSource ="CodFam"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =1560
+                    LayoutCachedTop =2730
+                    LayoutCachedWidth =4041
+                    LayoutCachedHeight =3045
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =1
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =165
+                    Top =2295
+                    Width =4821
+                    Height =315
+                    ColumnWidth =3180
+                    FontWeight =700
+                    TabIndex =1
+                    BorderColor =10921638
+                    Name ="TbPessoa.Nome"
+                    ControlSource ="TbPessoa.Nome"
+                    Format =">"
+                    StatusBarText ="Em caso de homônimo, colocar o CPF, RG ou data de nascimento na frente do nome"
+                    EventProcPrefix ="TbPessoa_Nome"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =165
+                    LayoutCachedTop =2295
+                    LayoutCachedWidth =4986
+                    LayoutCachedHeight =2610
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =1
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =765
+                    Top =1110
+                    Width =4341
+                    Height =255
+                    FontSize =10
+                    FontWeight =700
+                    TabIndex =2
+                    BorderColor =10921638
+                    Name ="ENDEREÇO"
+                    ControlSource ="ENDEREÇO"
+                    Format =">"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =765
+                    LayoutCachedTop =1110
+                    LayoutCachedWidth =5106
+                    LayoutCachedHeight =1365
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    TextAlign =1
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =1200
+                    Top =555
+                    Width =3906
+                    Height =390
+                    ColumnWidth =2385
+                    FontSize =15
+                    FontWeight =700
+                    TabIndex =3
+                    BorderColor =10921638
+                    Name ="TbUnidade.Nome"
+                    ControlSource ="TbUnidade.Nome"
+                    Format =">"
+                    EventProcPrefix ="TbUnidade_Nome"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =1200
+                    LayoutCachedTop =555
+                    LayoutCachedWidth =5106
+                    LayoutCachedHeight =945
+                    ForeTint =100.0
+                End
+                Begin TextBox
+                    OldBorderStyle =0
+                    BackStyle =0
+                    IMESentenceMode =3
+                    Left =780
+                    Top =1545
+                    Width =2736
+                    Height =315
+                    FontSize =13
+                    FontWeight =700
+                    TabIndex =4
+                    BorderColor =10921638
+                    Name ="TELEFONEUNID"
+                    ControlSource ="TELEFONEUNID"
+                    InputMask ="!\\(99\") \"!9900\\-0000;0;_"
+                    GridlineColor =10921638
+
+                    LayoutCachedLeft =780
+                    LayoutCachedTop =1545
+                    LayoutCachedWidth =3516
+                    LayoutCachedHeight =1860
+                    ForeTint =100.0
+                End
+                Begin Label
+                    Left =180
+                    Top =615
+                    Width =1020
+                    Height =345
+                    FontSize =12
+                    BorderColor =8355711
+                    ForeColor =5855577
+                    Name ="Rótulo32"
+                    Caption ="Unidade: "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =180
+                    LayoutCachedTop =615
+                    LayoutCachedWidth =1200
+                    LayoutCachedHeight =960
+                    ForeTint =65.0
+                End
+                Begin Label
+                    Left =180
+                    Top =1095
+                    Width =570
+                    Height =345
+                    FontSize =12
+                    BorderColor =8355711
+                    ForeColor =5855577
+                    Name ="Rótulo33"
+                    Caption ="End: "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =180
+                    LayoutCachedTop =1095
+                    LayoutCachedWidth =750
+                    LayoutCachedHeight =1440
+                    ForeTint =65.0
+                End
+                Begin Label
+                    Left =180
+                    Top =1575
+                    Width =495
+                    Height =345
+                    FontSize =12
+                    BorderColor =8355711
+                    ForeColor =5855577
+                    Name ="Rótulo34"
+                    Caption ="Tel: "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =180
+                    LayoutCachedTop =1575
+                    LayoutCachedWidth =675
+                    LayoutCachedHeight =1920
+                    ForeTint =65.0
+                End
+                Begin Label
+                    Left =180
+                    Top =1950
+                    Width =2265
+                    Height =345
+                    FontSize =12
+                    BorderColor =8355711
+                    ForeColor =5855577
+                    Name ="Rótulo35"
+                    Caption ="Responsável Familiar: "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =180
+                    LayoutCachedTop =1950
+                    LayoutCachedWidth =2445
+                    LayoutCachedHeight =2295
+                    ForeTint =65.0
+                End
+                Begin Label
+                    Left =180
+                    Top =2745
+                    Width =1470
+                    Height =345
+                    FontSize =12
+                    BorderColor =8355711
+                    ForeColor =5855577
+                    Name ="Rótulo36"
+                    Caption ="Cód. Familiar: "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =180
+                    LayoutCachedTop =2745
+                    LayoutCachedWidth =1650
+                    LayoutCachedHeight =3090
+                    ForeTint =65.0
+                End
+                Begin Label
+                    Left =8235
+                    Top =165
+                    Width =2010
+                    Height =345
+                    FontSize =13
+                    BorderColor =8355711
+                    Name ="Rótulo37"
+                    Caption ="Ações Estratégicas "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =8235
+                    LayoutCachedTop =165
+                    LayoutCachedWidth =10245
+                    LayoutCachedHeight =510
+                    ForeTint =100.0
+                End
+                Begin Label
+                    Left =6870
+                    Top =180
+                    Width =915
+                    Height =345
+                    FontSize =13
+                    BorderColor =8355711
+                    Name ="Rótulo38"
+                    Caption ="Horário "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6870
+                    LayoutCachedTop =180
+                    LayoutCachedWidth =7785
+                    LayoutCachedHeight =525
+                    ForeTint =100.0
+                End
+                Begin Label
+                    Left =5760
+                    Top =195
+                    Width =615
+                    Height =345
+                    FontSize =13
+                    BorderColor =8355711
+                    Name ="Rótulo39"
+                    Caption ="Data "
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5760
+                    LayoutCachedTop =195
+                    LayoutCachedWidth =6375
+                    LayoutCachedHeight =540
+                    ForeTint =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =135
+                    Width =1431
+                    Height =397
+                    Name ="Caixa71"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =135
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =532
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =135
+                    Width =1071
+                    Height =397
+                    Name ="Caixa72"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =135
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =532
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =135
+                    Width =2706
+                    Height =397
+                    Name ="Caixa73"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =135
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =532
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =540
+                    Width =1431
+                    Height =397
+                    Name ="Caixa74"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =540
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =937
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =540
+                    Width =1071
+                    Height =397
+                    Name ="Caixa75"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =540
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =937
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =540
+                    Width =2706
+                    Height =397
+                    Name ="Caixa76"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =540
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =937
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =945
+                    Width =1431
+                    Height =397
+                    Name ="Caixa77"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =945
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =1342
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =945
+                    Width =1071
+                    Height =397
+                    Name ="Caixa78"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =945
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =1342
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =945
+                    Width =2706
+                    Height =397
+                    Name ="Caixa79"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =945
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =1342
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =1350
+                    Width =1431
+                    Height =397
+                    Name ="Caixa80"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =1350
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =1747
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =1350
+                    Width =1071
+                    Height =397
+                    Name ="Caixa81"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =1350
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =1747
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =1350
+                    Width =2706
+                    Height =397
+                    Name ="Caixa82"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =1350
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =1747
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =1755
+                    Width =1431
+                    Height =397
+                    Name ="Caixa83"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =1755
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =2152
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =1755
+                    Width =1071
+                    Height =397
+                    Name ="Caixa84"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =1755
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =2152
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =1755
+                    Width =2706
+                    Height =397
+                    Name ="Caixa85"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =1755
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =2152
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =2160
+                    Width =1431
+                    Height =397
+                    Name ="Caixa86"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =2160
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =2557
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =2160
+                    Width =1071
+                    Height =397
+                    Name ="Caixa87"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =2160
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =2557
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =2160
+                    Width =2706
+                    Height =397
+                    Name ="Caixa88"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =2160
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =2557
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =2565
+                    Width =1431
+                    Height =397
+                    Name ="Caixa89"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =2565
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =2962
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =2565
+                    Width =1071
+                    Height =397
+                    Name ="Caixa90"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =2565
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =2962
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =2565
+                    Width =2706
+                    Height =397
+                    Name ="Caixa91"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =2565
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =2962
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =2970
+                    Width =1431
+                    Height =397
+                    Name ="Caixa92"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =2970
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =3367
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =2970
+                    Width =1071
+                    Height =397
+                    Name ="Caixa93"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =2970
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =3367
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =2970
+                    Width =2706
+                    Height =397
+                    Name ="Caixa94"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =2970
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =3367
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =3375
+                    Width =1431
+                    Height =397
+                    Name ="Caixa95"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =3375
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =3772
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =3375
+                    Width =1071
+                    Height =397
+                    Name ="Caixa96"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =3375
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =3772
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =3375
+                    Width =2706
+                    Height =397
+                    Name ="Caixa97"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =3375
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =3772
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =3780
+                    Width =1431
+                    Height =397
+                    Name ="Caixa98"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =3780
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =4177
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =3780
+                    Width =1071
+                    Height =397
+                    Name ="Caixa99"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =3780
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =4177
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =3780
+                    Width =2706
+                    Height =397
+                    Name ="Caixa100"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =3780
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =4177
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =5385
+                    Top =4185
+                    Width =1431
+                    Height =397
+                    Name ="Caixa101"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =5385
+                    LayoutCachedTop =4185
+                    LayoutCachedWidth =6816
+                    LayoutCachedHeight =4582
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =6803
+                    Top =4185
+                    Width =1071
+                    Height =397
+                    Name ="Caixa102"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =6803
+                    LayoutCachedTop =4185
+                    LayoutCachedWidth =7874
+                    LayoutCachedHeight =4582
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    BackStyle =0
+                    Left =7880
+                    Top =4185
+                    Width =2706
+                    Height =397
+                    Name ="Caixa103"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =7880
+                    LayoutCachedTop =4185
+                    LayoutCachedWidth =10586
+                    LayoutCachedHeight =4582
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Rectangle
+                    OldBorderStyle =0
+                    Top =15
+                    Width =5332
+                    Height =517
+                    BackColor =15069687
+                    Name ="Caixa106"
+                    GridlineColor =10921638
+                    LayoutCachedTop =15
+                    LayoutCachedWidth =5332
+                    LayoutCachedHeight =532
+                    BackThemeColorIndex =-1
+                    BorderThemeColorIndex =0
+                    BorderShade =100.0
+                End
+                Begin Label
+                    TextAlign =2
+                    Left =690
+                    Top =60
+                    Width =3960
+                    Height =435
+                    FontSize =16
+                    FontWeight =700
+                    BorderColor =8355711
+                    Name ="Rótulo31"
+                    Caption ="Acompanhamento Social PAIF"
+                    GridlineColor =10921638
+                    LayoutCachedLeft =690
+                    LayoutCachedTop =60
+                    LayoutCachedWidth =4650
+                    LayoutCachedHeight =495
+                    ForeTint =100.0
+                End
+            End
+        End
+        Begin Section
+            KeepTogether = NotDefault
+            Height =0
+            Name ="Detalhe"
+            AlternateBackThemeColorIndex =1
+            BackThemeColorIndex =1
+        End
+        Begin PageFooter
+            Height =0
+            Name ="PageFooterSection"
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+        End
+    End
+End
