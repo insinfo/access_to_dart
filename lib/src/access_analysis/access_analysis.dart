@@ -61,6 +61,17 @@ class AccessAnalysis {
       'modules': modules.map((m) => m.toJson()).toList(),
     };
   }
+}
+
+class CanonicalTable {
+  final String name;
+  final List<CanonicalColumn> columns;
+
+  CanonicalTable(this.name, this.columns);
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'columns': columns.map((c) => c.toJson()).toList(),
   };
 }
 
