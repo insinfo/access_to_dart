@@ -42,7 +42,7 @@ final class AccessSqlClauseParser {
         firstWord == 'UPDATE' ||
         firstWord == 'DELETE' ||
         firstWord == 'PARAMETERS';
-    final hasUnion = _containsTopLevelWord(tokens, 'UNION');
+    final hasUnion = _containsTopLevelSetOperator(tokens);
 
     if (isTransform || hasUnion || isActionQuery) {
       return AccessSqlStatement(
@@ -127,8 +127,57 @@ final class AccessSqlClauseParser {
     return null;
   }
 
-  bool _containsTopLevelWord(List<AccessSqlToken> tokens, String word) =>
-      _findTopLevelWord(tokens, word) != -1;
+  bool _containsTopLevelSetOperator(List<AccessSqlToken> tokens) {
+    var depth = 0;
+    for (var index = 0; index < tokens.length; index++) {
+      final token = tokens[index];
+      if (token.lexeme == '(') {
+        depth++;
+        continue;
+      }
+      if (token.lexeme == ')') {
+        depth = depth > 0 ? depth - 1 : 0;
+        continue;
+      }
+      if (depth != 0 || !token.isWord || token.lexeme != 'UNION') {
+        continue;
+      }
+
+      var nextIndex = _nextTopLevelWordIndex(tokens, index + 1);
+      if (nextIndex == -1) {
+        continue;
+      }
+
+      final nextWord = tokens[nextIndex].lexeme;
+      if (nextWord == 'ALL' || nextWord == 'DISTINCT') {
+        nextIndex = _nextTopLevelWordIndex(tokens, nextIndex + 1);
+      }
+
+      if (nextIndex != -1 && tokens[nextIndex].lexeme == 'SELECT') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  int _nextTopLevelWordIndex(List<AccessSqlToken> tokens, int start) {
+    var depth = 0;
+    for (var index = start; index < tokens.length; index++) {
+      final token = tokens[index];
+      if (token.lexeme == '(') {
+        depth++;
+        continue;
+      }
+      if (token.lexeme == ')') {
+        depth = depth > 0 ? depth - 1 : 0;
+        continue;
+      }
+      if (depth == 0 && token.isWord) {
+        return index;
+      }
+    }
+    return -1;
+  }
 
   int _findTopLevelWord(List<AccessSqlToken> tokens, String word) {
     var depth = 0;

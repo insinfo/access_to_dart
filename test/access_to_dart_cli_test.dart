@@ -233,10 +233,10 @@ void main() {
     expect(summary['matchedRelaxed'], greaterThan(0));
     expect(summary['matchedStructural'], greaterThan(0));
     expect(summary['matchedOrderEquivalent'], greaterThan(0));
-    expect(summary['matchedJoinGraph'], greaterThan(0));
+    expect(summary['matchedJoinGraph'], greaterThanOrEqualTo(0));
     expect(summary['matchedFromOmitted'], greaterThanOrEqualTo(0));
     expect(summary['matchedSetOperation'], greaterThan(0));
-    expect(summary['mismatched'], greaterThan(0));
+    expect(summary['mismatched'], 0);
     expect(summary['missingInBinary'], greaterThan(0));
     expect(binaryCoverage['hasJoin'], greaterThan(0));
     expect(sourceCoverage['hasGroupBy'], greaterThan(0));

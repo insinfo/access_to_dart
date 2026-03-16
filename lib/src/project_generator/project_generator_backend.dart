@@ -10,8 +10,12 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
       'bin',
       'lib/src/db',
       'lib/src/di',
+      'lib/src/modules/api/di',
+      'lib/src/public/api/controllers',
+      'lib/src/public/api/routes',
       'lib/src/shared/extensions',
       'lib/src/shared/utils',
+      'lib/src/shared',
       'lib/src/routes',
       'lib/src/modules',
     ];
@@ -27,6 +31,9 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
     await File('${backendDir.path}/bin/server.dart')
         .writeAsString(_backendServerBin(project));
 
+    await File('${backendDir.path}/bin/public_backend.dart')
+      .writeAsString(_backendPublicServerBin(project));
+
     await File('${backendDir.path}/lib/src/db/database_service.dart')
         .writeAsString(_backendDatabaseService(project));
 
@@ -35,6 +42,12 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
 
     await File('${backendDir.path}/lib/src/shared/utils/api_utils.dart')
         .writeAsString(_backendApiUtils(project));
+
+    await File('${backendDir.path}/lib/src/shared/app_config.dart')
+      .writeAsString(_backendAppConfig(project));
+
+    await File('${backendDir.path}/lib/src/generated_data.dart')
+      .writeAsString(_backendGeneratedData(project));
 
     await File(
             '${backendDir.path}/lib/src/shared/extensions/request_extension.dart')
@@ -46,10 +59,14 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
           '${backendDir.path}/lib/src/modules/${table.normalizedName}';
       await Directory('$modDir/controllers').create(recursive: true);
       await Directory('$modDir/repositories').create(recursive: true);
+      await Directory('$modDir/services').create(recursive: true);
       await Directory('$modDir/routes').create(recursive: true);
 
       await File('$modDir/repositories/${table.normalizedName}_repository.dart')
           .writeAsString(_backendRepository(project, table));
+
+      await File('$modDir/services/${table.normalizedName}_service.dart')
+        .writeAsString(_backendService(project, table));
 
       await File('$modDir/controllers/${table.normalizedName}_controller.dart')
           .writeAsString(_backendController(project, table));
@@ -62,8 +79,17 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
     await File('${backendDir.path}/lib/src/di/dependency_injector.dart')
         .writeAsString(_backendDI(project));
 
+    await File('${backendDir.path}/lib/src/modules/api/di/dependency_injector.dart')
+      .writeAsString(_backendModuleApiDI(project));
+
     await File('${backendDir.path}/lib/src/routes/api_routes.dart')
         .writeAsString(_backendApiRoutes(project));
+
+    await File('${backendDir.path}/lib/src/public/api/routes/public_api_routes.dart')
+      .writeAsString(_backendPublicApiRoutes(project));
+
+    await File('${backendDir.path}/lib/src/public/api/controllers/public_api_controller.dart')
+      .writeAsString(_backendPublicApiController(project));
   }
 
   String _backendPubspec(AnalysisProject project) => '''
@@ -122,19 +148,57 @@ void main(List<String> args) async {
 }
 ''';
 
+  String _backendPublicServerBin(AnalysisProject project) => '''
+import 'dart:io';
+
+import 'package:args/args.dart';
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as io;
+import 'package:shelf_router/shelf_router.dart';
+
+import '../lib/src/db/with_database_shelf.dart';
+import '../lib/src/modules/api/di/dependency_injector.dart';
+import '../lib/src/public/api/routes/public_api_routes.dart';
+
+void main(List<String> args) async {
+  final parser = ArgParser()
+    ..addOption('address', abbr: 'a', defaultsTo: '0.0.0.0')
+    ..addOption('port', abbr: 'p', defaultsTo: '8080');
+
+  final argsParsed = parser.parse(args);
+  final address = argsParsed['address'];
+  final port = int.parse(argsParsed['port']);
+
+  setupModuleApiDependencies();
+
+  final app = Router();
+  setupRoutes(app);
+
+  final handler = Pipeline()
+      .addMiddleware(logRequests())
+      .addMiddleware(withDbShelfMiddleware())
+      .addHandler(app);
+
+  final server = await io.serve(handler, address, port);
+  print('Public backend at http://\${server.address.host}:\${server.port}');
+}
+''';
+
   String _backendDatabaseService(AnalysisProject project) => '''
 import 'package:eloquent/eloquent.dart';
+
+import '../shared/app_config.dart';
 
 class DatabaseService {
   late final Manager _manager = Manager()..addConnection(_baseConfig, 'default');
 
   Map<String, dynamic> get _baseConfig => {
         'driver': 'pgsql',
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'generated_db',
-        'username': 'postgres',
-        'password': 'password',
+        'host': AppConfig.databaseHost,
+        'port': AppConfig.databasePort,
+        'database': AppConfig.databaseName,
+        'username': AppConfig.databaseUser,
+        'password': AppConfig.databasePassword,
         'charset': 'utf8',
         'pool': true,
         'poolsize': 10,
@@ -157,16 +221,16 @@ Middleware withDbShelfMiddleware() {
   return (Handler innerHandler) {
     return (Request request) async {
       final dbService = ioc.get<DatabaseService>();
-      Connection? conn;
+      Connection? connection;
 
       try {
         ioc.pushNewScope();
-        conn = await dbService.connect();
-        ioc.registerSingleton<Connection>(conn);
+        connection = await dbService.connect();
+        ioc.registerSingleton<Connection>(connection);
 
         final newRequest = request.change(context: {
           ...request.context,
-          'db_connection': conn,
+          'db.connection': connection,
         });
 
         return await innerHandler(newRequest);
@@ -178,8 +242,33 @@ Middleware withDbShelfMiddleware() {
 }
 ''';
 
+  String _backendAppConfig(AnalysisProject project) => '''
+  import 'dart:io';
+
+class AppConfig {
+  static const apiBasePath = '/api/v1';
+
+    static String get databaseHost =>
+      Platform.environment['ACCESS_TO_DART_DB_HOST'] ?? 'localhost';
+
+    static int get databasePort =>
+      int.tryParse(Platform.environment['ACCESS_TO_DART_DB_PORT'] ?? '') ??
+      5432;
+
+    static String get databaseName =>
+      Platform.environment['ACCESS_TO_DART_DB_NAME'] ?? 'generated_db';
+
+    static String get databaseUser =>
+      Platform.environment['ACCESS_TO_DART_DB_USER'] ?? 'postgres';
+
+    static String get databasePassword =>
+      Platform.environment['ACCESS_TO_DART_DB_PASSWORD'] ?? 'password';
+}
+''';
+
   String _backendApiUtils(AnalysisProject project) => '''
 import 'dart:convert';
+import 'package:${project.dartPackageName}_core/core.dart';
 import 'package:shelf/shelf.dart';
 
 final Map<String, String> defaultHeaders = {
@@ -198,12 +287,28 @@ Response responseError(String message, {int statusCode = 400}) {
 Response responseJson(Object? item) {
   return Response.ok(jsonEncode(item), headers: defaultHeaders);
 }
+
+Response responseValidationError(
+  ValidationContract contract, {
+  int statusCode = 422,
+}) {
+  return Response(
+    statusCode,
+    body: jsonEncode({
+      'is_error': true,
+      'status_code': statusCode,
+      'message': 'Validation failed',
+      'errors': contract.toJsonList(),
+    }),
+    headers: defaultHeaders,
+  );
+}
 ''';
 
   String _backendRequestExtension(AnalysisProject project) => '''
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
-import '../di/dependency_injector.dart';
+import '../../di/dependency_injector.dart';
 
 extension ShelfRequestDI on Request {
   T make<T extends Object>() {
@@ -230,44 +335,76 @@ class ${table.className}Repository {
   ${table.className}Repository(this.db);
 
   Future<List<Map<String, dynamic>>> all() async {
-    final query = db.table('${table.normalizedName}');
+    final query = db.table('${tableRuntimeName(table)}');
     return await query.get();
   }
 
   Future<Map<String, dynamic>?> findById(int id) async {
-    // Assumption: 'id' é a primary key, mude se for diferente no schema
-    return await db.table('${table.normalizedName}').where('id', '=', id).first();
+    return await db.table('${tableRuntimeName(table)}').where('${primaryKeyRuntimeName(table)}', '=', id).first();
   }
 
   Future<int> insert(${table.className} item) async {
-    return await db.table('${table.normalizedName}').insertGetId(item.toMap()) as int;
+    return await db.table('${tableRuntimeName(table)}').insertGetId(item.toMap()) as int;
   }
 
   Future<void> update(int id, ${table.className} item) async {
-    await db.table('${table.normalizedName}').where('id', '=', id).update(item.toMap());
+    await db.table('${tableRuntimeName(table)}').where('${primaryKeyRuntimeName(table)}', '=', id).update(item.toMap());
   }
 
   Future<void> delete(int id) async {
-    await db.table('${table.normalizedName}').where('id', '=', id).delete();
+    await db.table('${tableRuntimeName(table)}').where('${primaryKeyRuntimeName(table)}', '=', id).delete();
+  }
+}
+''';
+
+  String _backendService(AnalysisProject project, AnalysisTable table) => '''
+import 'package:${project.dartPackageName}_core/core.dart';
+
+import '../repositories/${table.normalizedName}_repository.dart';
+
+class ${table.className}Service {
+  static const resourcePath = '/api/v1/${tableRouteName(table)}';
+
+  final ${table.className}Repository repository;
+
+  ${table.className}Service(this.repository);
+
+  Future<List<Map<String, dynamic>>> all() {
+    return repository.all();
+  }
+
+  Future<Map<String, dynamic>?> findById(int id) {
+    return repository.findById(id);
+  }
+
+  Future<int> create(${table.className} item) {
+    return repository.insert(item);
+  }
+
+  Future<void> update(int id, ${table.className} item) {
+    return repository.update(id, item);
+  }
+
+  Future<void> delete(int id) {
+    return repository.delete(id);
   }
 }
 ''';
 
   String _backendController(AnalysisProject project, AnalysisTable table) => '''
 import 'package:shelf/shelf.dart';
-import 'package:shelf_router/shelf_router.dart';
 import 'package:${project.dartPackageName}_core/core.dart';
 
-import '../../shared/extensions/request_extension.dart';
-import '../../shared/utils/api_utils.dart';
-import '../repositories/${table.normalizedName}_repository.dart';
+import '../../../shared/extensions/request_extension.dart';
+import '../../../shared/utils/api_utils.dart';
+import '../services/${table.normalizedName}_service.dart';
 
 class ${table.className}Controller {
 
   static Future<Response> list(Request req) async {
     try {
-      final repo = req.make<${table.className}Repository>();
-      final data = await repo.all();
+      final service = req.make<${table.className}Service>();
+      final data = await service.all();
       return responseJson(data);
     } catch (e, s) {
       print('Erro no list: \$e \$s');
@@ -278,8 +415,8 @@ class ${table.className}Controller {
   static Future<Response> show(Request req, String idRaw) async {
     try {
       final id = int.parse(idRaw);
-      final repo = req.make<${table.className}Repository>();
-      final item = await repo.findById(id);
+      final service = req.make<${table.className}Service>();
+      final item = await service.findById(id);
       if (item == null) return responseError('Not found', statusCode: 404);
       return responseJson(item);
     } catch (e) {
@@ -290,9 +427,13 @@ class ${table.className}Controller {
   static Future<Response> create(Request req) async {
     try {
       final body = await req.bodyAsMap();
+      final validation = ${table.className}ValidationContract.validateDraft(body);
+      if (!validation.isValid) {
+        return responseValidationError(validation);
+      }
       final item = ${table.className}.fromMap(body);
-      final repo = req.make<${table.className}Repository>();
-      final insertedId = await repo.insert(item);
+      final service = req.make<${table.className}Service>();
+      final insertedId = await service.create(item);
       return responseJson({'id': insertedId});
     } catch (e) {
       return responseError(e.toString());
@@ -303,10 +444,14 @@ class ${table.className}Controller {
     try {
       final id = int.parse(idRaw);
       final body = await req.bodyAsMap();
+      final validation = ${table.className}ValidationContract.validateDraft(body);
+      if (!validation.isValid) {
+        return responseValidationError(validation);
+      }
       final item = ${table.className}.fromMap(body);
       
-      final repo = req.make<${table.className}Repository>();
-      await repo.update(id, item);
+      final service = req.make<${table.className}Service>();
+      await service.update(id, item);
       
       return responseJson({'success': true});
     } catch (e) {
@@ -317,8 +462,8 @@ class ${table.className}Controller {
   static Future<Response> delete(Request req, String idRaw) async {
     try {
       final id = int.parse(idRaw);
-      final repo = req.make<${table.className}Repository>();
-      await repo.delete(id);
+      final service = req.make<${table.className}Service>();
+      await service.delete(id);
       
       return responseJson({'success': true});
     } catch (e) {
@@ -341,18 +486,22 @@ void setup${table.className}Routes(Router app, String basePath) {
     ..put('/<id>', ${table.className}Controller.update)
     ..delete('/<id>', ${table.className}Controller.delete);
 
-  app.mount('\$basePath/${table.normalizedName}', group.call);
+  app.mount('\$basePath/${tableRouteName(table)}', group.call);
 }
 ''';
 
   String _backendDI(AnalysisProject project) {
     final imports = project.tables
-        .map((t) =>
-            "import '../modules/${t.normalizedName}/repositories/${t.normalizedName}_repository.dart';")
+      .expand((t) => [
+          "import '../modules/${t.normalizedName}/repositories/${t.normalizedName}_repository.dart';",
+          "import '../modules/${t.normalizedName}/services/${t.normalizedName}_service.dart';",
+        ])
         .join('\n');
     final factories = project.tables
-        .map((t) =>
-            "  regFactoryIfAbs<${t.className}Repository>(() => ${t.className}Repository(ioc.get<Connection>()));")
+      .expand((t) => [
+          "  regFactoryIfAbs<${t.className}Repository>(() => ${t.className}Repository(ioc.get<Connection>()));",
+          "  regFactoryIfAbs<${t.className}Service>(() => ${t.className}Service(ioc.get<${t.className}Repository>()));",
+        ])
         .join('\n');
 
     return '''
@@ -380,6 +529,14 @@ $factories
 ''';
   }
 
+  String _backendModuleApiDI(AnalysisProject project) => '''
+import '../../../di/dependency_injector.dart';
+
+void setupModuleApiDependencies() {
+  setupDependencies();
+}
+''';
+
   String _backendApiRoutes(AnalysisProject project) {
     final imports = project.tables
         .map((t) =>
@@ -400,5 +557,89 @@ void setupApiRoutes(Router app) {
 $setups
 }
 ''';
+  }
+
+  String _backendPublicApiRoutes(AnalysisProject project) {
+    final imports = project.tables
+        .map((t) =>
+        "import '../../../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
+        .join('\n');
+    final setups = project.tables
+        .map((t) => "  setup${t.className}Routes(app, basePath);")
+        .join('\n');
+
+    return '''
+import 'package:shelf/shelf.dart';
+import 'package:shelf_router/shelf_router.dart';
+
+import '../controllers/public_api_controller.dart';
+$imports
+
+void setupRoutes(Router app) {
+  final basePath = '/api/v1';
+
+  app.get('/health', PublicApiController.health);
+$setups
+}
+''';
+  }
+
+  String _backendPublicApiController(AnalysisProject project) => '''
+import 'package:shelf/shelf.dart';
+
+import '../../../shared/utils/api_utils.dart';
+
+class PublicApiController {
+  static Future<Response> health(Request request) async {
+    return responseJson({
+      'status': 'ok',
+      'source': '${project.source.replaceAll("'", "\\'")}',
+    });
+  }
+}
+''';
+
+  String _backendGeneratedData(AnalysisProject project) {
+    final payload = <String, Object?>{
+      for (final table in project.tables)
+        tableRuntimeName(table): table.sampleRows
+            .map(
+              (row) => {
+                for (final entry in row.entries)
+                  _normalizeGeneratedKey(entry.key.toString()):
+                      _jsonSafeGeneratedValue(entry.value),
+              },
+            )
+            .toList(),
+    };
+    final json = const JsonEncoder.withIndent('  ').convert(payload);
+    return """
+import 'dart:convert';
+
+final generatedData =
+    jsonDecode(_generatedDataJson) as Map<String, dynamic>;
+
+const _generatedDataJson = r'''$json''';
+""";
+  }
+
+  Object? _jsonSafeGeneratedValue(Object? value) {
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+    if (value is List) {
+      return value.map(_jsonSafeGeneratedValue).toList();
+    }
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          entry.key.toString(): _jsonSafeGeneratedValue(entry.value),
+      };
+    }
+    return value;
+  }
+
+  String _normalizeGeneratedKey(String key) {
+    return identifierPolicy.columnName(key);
   }
 }

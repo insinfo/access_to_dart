@@ -40,4 +40,22 @@ void main() {
     expect(statement.isSetOrActionQuery, isTrue);
     expect(statement.selectTokens, isEmpty);
   });
+
+  test('nao trata nome de query com Union como set operation', () {
+    final tokens = tokenizer.tokenize(
+      'SELECT Sum([Union Perfil Presenca].[0a5inc]) '
+      'FROM Union Perfil Presenca '
+      'GROUP BY TbUnidade.CRAS '
+      'HAVING (((TbUnidade.CRAS)=Yes))',
+    );
+
+    final statement = parser.parse(tokens);
+
+    expect(statement, isNotNull);
+    expect(statement!.hasUnion, isFalse);
+    expect(statement.isSetOrActionQuery, isFalse);
+    expect(statement.fromTokens, isNotEmpty);
+    expect(statement.groupByTokens, isNotEmpty);
+    expect(statement.havingTokens, isNotEmpty);
+  });
 }

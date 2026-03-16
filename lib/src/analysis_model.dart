@@ -11,6 +11,7 @@ class AnalysisProject {
   final List<AnalysisTable> tables;
   final List<AnalysisLinkedTable> linkedTables;
   final List<AnalysisForm> forms;
+  final AnalysisCanonicalAnalysis? canonicalAnalysis;
   final Map<String, dynamic>? queryReconciliation;
   final Map<String, dynamic> raw;
 
@@ -22,6 +23,7 @@ class AnalysisProject {
     required this.tables,
     required this.linkedTables,
     required this.forms,
+    required this.canonicalAnalysis,
     required this.queryReconciliation,
     required this.raw,
   });
@@ -45,6 +47,11 @@ class AnalysisProject {
           .whereType<Map>()
           .map((form) => AnalysisForm.fromJson(form.cast<String, dynamic>()))
           .toList(),
+      canonicalAnalysis: (json['canonical_analysis'] as Map?) == null
+          ? null
+          : AnalysisCanonicalAnalysis.fromJson(
+              (json['canonical_analysis'] as Map).cast<String, dynamic>(),
+            ),
       queryReconciliation:
           (json['query_reconciliation'] as Map?)?.cast<String, dynamic>(),
       raw: json,
@@ -71,6 +78,130 @@ class AnalysisProject {
   }
 
   String get dartPackageName => '${projectName}_app_generated';
+
+  AnalysisCanonicalForm? canonicalFormForTable(AnalysisTable table) {
+    final candidates = canonicalAnalysis?.forms
+            .where((form) => (form.rawVbaCode ?? '').trim().isNotEmpty)
+            .toList() ??
+        const <AnalysisCanonicalForm>[];
+    if (candidates.isEmpty) {
+      return null;
+    }
+    if (tables.length == 1 && candidates.length == 1) {
+      return candidates.first;
+    }
+
+    final tableKeys = <String>{
+      _lookupKey(table.name),
+      _lookupKey(table.normalizedName),
+      _lookupKey(table.className),
+    };
+    final singularKeys = tableKeys.map(_singularizeKey).toSet();
+
+    for (final form in candidates) {
+      final formKey = _lookupKey(form.name);
+      for (final key in {...tableKeys, ...singularKeys}) {
+        if (key.isEmpty) {
+          continue;
+        }
+        if (formKey.contains(key) || formKey.contains(_singularizeKey(key))) {
+          return form;
+        }
+      }
+    }
+
+    if (tables.length == 1) {
+      return candidates.first;
+    }
+    return null;
+  }
+
+  static String _lookupKey(String value) {
+    final normalized = StringBuffer();
+    for (final codeUnit in foldToAscii(value).toLowerCase().codeUnits) {
+      final isLetter = codeUnit >= 97 && codeUnit <= 122;
+      final isDigit = codeUnit >= 48 && codeUnit <= 57;
+      if (isLetter || isDigit) {
+        normalized.writeCharCode(codeUnit);
+      }
+    }
+    return normalized.toString();
+  }
+
+  static String _singularizeKey(String value) {
+    if (value.endsWith('s') && value.length > 3) {
+      return value.substring(0, value.length - 1);
+    }
+    return value;
+  }
+}
+
+class AnalysisCanonicalAnalysis {
+  final List<AnalysisCanonicalForm> forms;
+  final List<AnalysisCanonicalModule> modules;
+
+  AnalysisCanonicalAnalysis({
+    required this.forms,
+    required this.modules,
+  });
+
+  factory AnalysisCanonicalAnalysis.fromJson(Map<String, dynamic> json) {
+    return AnalysisCanonicalAnalysis(
+      forms: ((json['forms'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (form) =>
+                AnalysisCanonicalForm.fromJson(form.cast<String, dynamic>()),
+          )
+          .toList(),
+      modules: ((json['modules'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (module) => AnalysisCanonicalModule.fromJson(
+              module.cast<String, dynamic>(),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class AnalysisCanonicalForm {
+  final String name;
+  final Map<String, dynamic> components;
+  final String? rawVbaCode;
+
+  AnalysisCanonicalForm({
+    required this.name,
+    required this.components,
+    required this.rawVbaCode,
+  });
+
+  factory AnalysisCanonicalForm.fromJson(Map<String, dynamic> json) {
+    return AnalysisCanonicalForm(
+      name: json['name'] as String? ?? 'Form',
+      components: (json['components'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      rawVbaCode: json['rawVbaCode'] as String?,
+    );
+  }
+}
+
+class AnalysisCanonicalModule {
+  final String name;
+  final String rawVbaCode;
+
+  AnalysisCanonicalModule({
+    required this.name,
+    required this.rawVbaCode,
+  });
+
+  factory AnalysisCanonicalModule.fromJson(Map<String, dynamic> json) {
+    return AnalysisCanonicalModule(
+      name: json['name'] as String? ?? 'Module',
+      rawVbaCode: json['rawVbaCode'] as String? ?? '',
+    );
+  }
 }
 
 class AnalysisTable {

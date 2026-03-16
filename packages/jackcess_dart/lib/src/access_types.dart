@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'access_expression.dart';
 
 /// Access database object types from MSysObjects.Type
@@ -163,8 +165,30 @@ class AccessTableSchema {
         'rowCount': rowCount,
         'columns': columns.map((c) => c.toJson()).toList(),
         'indexes': indexes.map((i) => i.toJson()).toList(),
-        'sampleRows': sampleRows,
+        'sampleRows': sampleRows
+            .map((row) => row.map(
+                  (key, value) => MapEntry(key, _jsonSafeValue(value)),
+                ))
+            .toList(),
       };
+}
+
+Object? _jsonSafeValue(Object? value) {
+  if (value is DateTime) {
+    return value.toIso8601String();
+  }
+  if (value is Uint8List) {
+    return value
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+        .join();
+  }
+  if (value is List) {
+    return value.map(_jsonSafeValue).toList();
+  }
+  if (value is Map) {
+    return value.map((key, nestedValue) => MapEntry('$key', _jsonSafeValue(nestedValue)));
+  }
+  return value;
 }
 
 /// An Access column schema.

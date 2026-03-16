@@ -264,7 +264,10 @@ final class QueryReconciliationBuilder {
 
     final selectTokens = _stripDistinct(statement.selectTokens);
     return _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(selectTokens),
+      selectSql: _canonicalizeSelectListForStatement(
+        selectTokens,
+        statement.groupByTokens,
+      ),
       fromSql: _serialize(statement.fromTokens),
       whereSql: _canonicalizeExpression(_stripWrappingParens(statement.whereTokens)),
       groupBySql: _canonicalizeGroupBy(statement.groupByTokens),
@@ -279,7 +282,10 @@ final class QueryReconciliationBuilder {
       return null;
     }
     return _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(statement.selectTokens),
+      selectSql: _canonicalizeSelectListForStatement(
+        statement.selectTokens,
+        statement.groupByTokens,
+      ),
       whereSql: _canonicalizeExpression(_stripWrappingParens(statement.whereTokens)),
       groupBySql: _canonicalizeGroupBy(statement.groupByTokens),
       havingSql: _canonicalizeHaving(statement.havingTokens),
@@ -292,11 +298,11 @@ final class QueryReconciliationBuilder {
     if (statement == null || statement.isSetOrActionQuery) {
       return null;
     }
-    final selectTokens = statement.groupByTokens.isNotEmpty
-        ? _stripDistinct(statement.selectTokens)
-        : statement.selectTokens;
     return _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(selectTokens),
+      selectSql: _canonicalizeSelectListForStatement(
+        _stripDistinct(statement.selectTokens),
+        statement.groupByTokens,
+      ),
       fromSql: _serialize(statement.fromTokens),
       whereSql: _canonicalizeExpression(_stripWrappingParens(statement.whereTokens)),
       groupBySql: _canonicalizeGroupBy(statement.groupByTokens),
@@ -310,7 +316,10 @@ final class QueryReconciliationBuilder {
       return null;
     }
     return _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(statement.selectTokens),
+      selectSql: _canonicalizeSelectListForStatement(
+        statement.selectTokens,
+        statement.groupByTokens,
+      ),
       fromPlaceholder: '<OMITTED>',
       whereSql: _canonicalizeExpression(_stripWrappingParens(statement.whereTokens)),
       groupBySql: _canonicalizeGroupBy(statement.groupByTokens),
@@ -329,11 +338,18 @@ final class QueryReconciliationBuilder {
       return false;
     }
 
+    final binaryTables = _extractFromTables(binaryStatement.fromTokens);
+    final sourceTables = _extractFromTables(sourceStatement.fromTokens);
+    final knownTables = <String>{...binaryTables, ...sourceTables};
+    final binaryReferencedTables =
+        _extractKnownTableReferences(binaryStatement, knownTables);
+    final sourceReferencedTables =
+        _extractKnownTableReferences(sourceStatement, knownTables);
+
     final binaryWithoutFrom = _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(
-        binaryStatement.groupByTokens.isNotEmpty
-          ? _stripDistinct(binaryStatement.selectTokens)
-          : binaryStatement.selectTokens,
+      selectSql: _canonicalizeSelectListForStatement(
+        _stripDistinct(binaryStatement.selectTokens),
+        binaryStatement.groupByTokens,
       ),
       fromPlaceholder: '<JOIN_GRAPH>',
       whereSql: _canonicalizeExpression(
@@ -343,10 +359,9 @@ final class QueryReconciliationBuilder {
       havingSql: _canonicalizeHaving(binaryStatement.havingTokens),
     );
     final sourceWithoutFrom = _serializeCanonicalStatementParts(
-      selectSql: _canonicalizeSelectList(
-        sourceStatement.groupByTokens.isNotEmpty
-          ? _stripDistinct(sourceStatement.selectTokens)
-          : sourceStatement.selectTokens,
+      selectSql: _canonicalizeSelectListForStatement(
+        _stripDistinct(sourceStatement.selectTokens),
+        sourceStatement.groupByTokens,
       ),
       fromPlaceholder: '<JOIN_GRAPH>',
       whereSql: _canonicalizeExpression(
@@ -359,21 +374,66 @@ final class QueryReconciliationBuilder {
       return false;
     }
 
-    final binaryTables = _extractFromTables(binaryStatement.fromTokens);
-    final sourceTables = _extractFromTables(sourceStatement.fromTokens);
-    if (binaryTables.isEmpty || sourceTables.isEmpty) {
+    final binaryEffectiveTables = <String>{
+      ...binaryTables,
+      ...binaryReferencedTables,
+    };
+    final sourceEffectiveTables = <String>{
+      ...sourceTables,
+      ...sourceReferencedTables,
+    };
+
+    if (binaryEffectiveTables.isEmpty || sourceEffectiveTables.isEmpty) {
       return false;
     }
-    final sourceTableSet = sourceTables.toSet();
-    final binaryTableSet = binaryTables.toSet();
-    if (!binaryTableSet.containsAll(sourceTableSet)) {
+
+    if (!binaryEffectiveTables.containsAll(sourceEffectiveTables)) {
       return false;
     }
-    if (binaryTableSet.length <= sourceTableSet.length) {
+
+    if (sourceEffectiveTables.containsAll(binaryEffectiveTables)) {
+      return true;
+    }
+
+    final sourceHasLostJoinContext =
+        sourceReferencedTables.any((table) => !sourceTables.contains(table)) ||
+            sourceTables.length < binaryTables.length;
+    if (!sourceHasLostJoinContext) {
       return false;
     }
 
     return true;
+  }
+
+  Set<String> _extractKnownTableReferences(
+    AccessSqlStatement statement,
+    Set<String> knownTables,
+  ) {
+    final result = <String>{};
+    final tokens = <AccessSqlToken>[
+      ...statement.selectTokens,
+      ...statement.whereTokens,
+      ...statement.groupByTokens,
+      ...statement.havingTokens,
+      ...statement.orderByTokens,
+    ];
+
+    for (var index = 0; index + 2 < tokens.length; index++) {
+      final current = tokens[index];
+      final separator = tokens[index + 1];
+      final next = tokens[index + 2];
+      if (!current.isWord || !next.isWord) {
+        continue;
+      }
+      if (separator.lexeme != '.' && separator.lexeme != '!') {
+        continue;
+      }
+      if (knownTables.contains(current.lexeme)) {
+        result.add(current.lexeme);
+      }
+    }
+
+    return result;
   }
 
   bool _matchesSetOperationFallback(_ParsedSql? binary, _ParsedSql? source) {
@@ -452,12 +512,108 @@ final class QueryReconciliationBuilder {
     return parts.join(' ');
   }
 
-  String _canonicalizeSelectList(List<AccessSqlToken> tokens) {
-    final expressions = _splitTopLevel(tokens, separatorLexeme: ',');
-    return expressions
+  String _canonicalizeSelectListForStatement(
+    List<AccessSqlToken> selectTokens,
+    List<AccessSqlToken> groupByTokens,
+  ) {
+    final expressions = _selectExpressions(selectTokens);
+    if (expressions.isEmpty) {
+      return '';
+    }
+
+    final canonical = expressions
         .map(_canonicalizeSelectExpression)
         .where((expression) => expression.isNotEmpty)
-        .join(', ');
+        .toList();
+
+    if (_selectExpressionsOnlyGroupKeys(expressions, groupByTokens) ||
+        _selectExpressionsAreSimpleProjectionSet(expressions)) {
+      canonical.sort();
+    }
+
+    return canonical.join(', ');
+  }
+
+  List<List<AccessSqlToken>> _selectExpressions(List<AccessSqlToken> tokens) {
+    final expressions = _splitTopLevel(tokens, separatorLexeme: ',');
+    if (expressions.length <= 1) {
+      return expressions;
+    }
+
+    final filtered = expressions.where((expression) {
+      final stripped = _stripWrappingParens(expression);
+      return !(stripped.length == 1 && stripped.first.lexeme == '*');
+    }).toList();
+
+    return filtered.isEmpty ? expressions : filtered;
+  }
+
+  bool _selectExpressionsOnlyGroupKeys(
+    List<List<AccessSqlToken>> selectExpressions,
+    List<AccessSqlToken> groupByTokens,
+  ) {
+    if (groupByTokens.isEmpty || selectExpressions.isEmpty) {
+      return false;
+    }
+
+    final groupBySet = _splitTopLevel(groupByTokens, separatorLexeme: ',')
+        .map(_canonicalizeExpression)
+        .where((expression) => expression.isNotEmpty)
+        .toSet();
+    if (groupBySet.isEmpty) {
+      return false;
+    }
+
+    for (final expression in selectExpressions) {
+      final canonical = _canonicalizeSelectExpression(expression);
+      if (canonical.isEmpty || canonical.contains(' AS ')) {
+        return false;
+      }
+      if (!groupBySet.contains(canonical)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool _selectExpressionsAreSimpleProjectionSet(
+    List<List<AccessSqlToken>> selectExpressions,
+  ) {
+    if (selectExpressions.length <= 1) {
+      return false;
+    }
+
+    final seen = <String>{};
+    for (final expression in selectExpressions) {
+      final stripped = _stripWrappingParens(expression);
+      if (!_isSimpleProjectionExpression(stripped)) {
+        return false;
+      }
+
+      final canonical = _canonicalizeSelectExpression(stripped);
+      if (canonical.isEmpty || canonical.contains(' AS ') || !seen.add(canonical)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool _isSimpleProjectionExpression(List<AccessSqlToken> tokens) {
+    if (tokens.isEmpty) {
+      return false;
+    }
+    if (tokens.length == 1) {
+      return tokens.first.lexeme == '*' || tokens.first.isWord;
+    }
+    if (tokens.length == 3 &&
+        tokens.first.isWord &&
+        (tokens[1].lexeme == '.' || tokens[1].lexeme == '!') &&
+        (tokens[2].isWord || tokens[2].lexeme == '*')) {
+      return true;
+    }
+    return false;
   }
 
   String _canonicalizeGroupBy(List<AccessSqlToken> tokens) {
@@ -498,6 +654,13 @@ final class QueryReconciliationBuilder {
       return '';
     }
 
+    if (stripped.length == 3 &&
+        stripped.first.isWord &&
+        (stripped[1].lexeme == '.' || stripped[1].lexeme == '!') &&
+        stripped[2].lexeme == '*') {
+      return '*';
+    }
+
     final asIndex = _findTopLevelWordIndex(stripped, 'AS');
     if (asIndex > 0 && asIndex < stripped.length - 1) {
       final expression = _canonicalizeExpression(stripped.sublist(0, asIndex));
@@ -507,6 +670,8 @@ final class QueryReconciliationBuilder {
 
     if (stripped.length >= 2 &&
         stripped.last.isWord &&
+        stripped[stripped.length - 2].lexeme != '.' &&
+        stripped[stripped.length - 2].lexeme != '!' &&
         !_isKeyword(stripped.last.lexeme)) {
       final expressionTokens = stripped.sublist(0, stripped.length - 1);
       final expression = _canonicalizeExpression(expressionTokens);

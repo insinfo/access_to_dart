@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -194,6 +195,37 @@ void main() {
               relationship.toTable == 'CadResidencia',
         ),
         isTrue,
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('does not log row reader errors for encrypted backend sample rows',
+        () async {
+      final fixture = await _resolveEncryptedBackendFixture();
+      if (!await fixture.exists()) return;
+
+      final database = await AccessDatabase.openPath(
+        fixture.path,
+        password: '4462',
+      );
+      addTearDown(database.close);
+
+      final catalog = AccessCatalog(
+        format: database.format,
+        pageChannel: database.pageChannel,
+      );
+
+      final printedLines = <String>[];
+      await runZoned(() async {
+        await catalog.read(fixture.path);
+      }, zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) {
+          printedLines.add(line);
+        },
+      ));
+
+      expect(
+        printedLines.where((line) => line.contains('RowReader Error on col')),
+        isEmpty,
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
   });

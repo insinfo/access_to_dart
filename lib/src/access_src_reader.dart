@@ -487,9 +487,12 @@ class AccessSrcReader {
 
     final lines = _mergeBasContinuationLines(text);
     int operation = 0;
+    int option = 0;
+    String? rowCount;
     String? where;
     String? having;
     String? orderBy;
+    final orderByExpressions = <String>[];
     final tables = <String>[];
     final groups = <String>[];
     final columns = <_BasQueryColumn>[];
@@ -580,9 +583,26 @@ class AccessSrcReader {
             groups.add(value);
           }
           break;
+        case 'OrderBy':
+          if (key == 'Expression' && value.isNotEmpty) {
+            final descending = (pendingAlias == 'D');
+            orderByExpressions.add(
+              descending ? '${value.trim()} DESC' : value.trim(),
+            );
+            pendingAlias = null;
+          } else if (key == 'Flag') {
+            pendingAlias = (value.trim() == '1' || value.trim().toUpperCase() == 'D')
+                ? 'D'
+                : null;
+          }
+          break;
         default:
           if (key == 'Operation') {
             operation = int.tryParse(value) ?? 0;
+          } else if (key == 'Option') {
+            option = int.tryParse(value) ?? 0;
+          } else if (key == 'RowCount') {
+            rowCount = value;
           } else if (key == 'SQL' && value.isNotEmpty) {
             return _normalizeBasSqlText(value);
           } else if (key == 'Where') {
@@ -604,7 +624,8 @@ class AccessSrcReader {
     }
 
     final sql = StringBuffer();
-    sql.writeln('SELECT');
+    final selectPrefix = _buildBasSelectPrefix(option, rowCount);
+    sql.writeln(selectPrefix.isEmpty ? 'SELECT' : 'SELECT $selectPrefix');
     sql.writeln(columns.map((column) => '  ${column.toSql()}').join(',\n'));
 
     final fromSql = _buildBasFromClause(tables, joins);
@@ -628,9 +649,12 @@ class AccessSrcReader {
       sql.writeln('  ${having.trim()}');
     }
 
-    if (orderBy != null && orderBy.trim().isNotEmpty) {
+    final effectiveOrderBy = orderByExpressions.isNotEmpty
+        ? orderByExpressions.join(', ')
+        : orderBy;
+    if (effectiveOrderBy != null && effectiveOrderBy.trim().isNotEmpty) {
       sql.writeln('ORDER BY');
-      sql.writeln('  ${orderBy.trim()}');
+      sql.writeln('  ${effectiveOrderBy.trim()}');
     }
 
     return _normalizeBasSqlText(sql.toString());
@@ -665,10 +689,12 @@ class AccessSrcReader {
       return null;
     }
     if (joins.isEmpty) {
-      return tables.first;
+      return tables.join(', ');
     }
 
-    final sources = <String, String>{for (final table in tables) table: table};
+    final sources = <String, _BasTableSource>{
+      for (final table in tables) table: _BasTableSource.raw(table),
+    };
 
     for (final join in joins) {
       final leftTable = join.leftTable;
@@ -677,22 +703,46 @@ class AccessSrcReader {
       if (leftTable == null || rightTable == null || expression == null) {
         continue;
       }
-      final left = sources[leftTable] ?? leftTable;
-      final right = sources[rightTable] ?? rightTable;
-      final joinSql =
-          '($left ${join.joinType} $right ON ${expression.trim()})';
-      sources[leftTable] = joinSql;
-      sources[rightTable] = joinSql;
-    }
-
-    for (final table in tables) {
-      final source = sources[table];
-      if (source != null && source.startsWith('(')) {
-        return source;
+      final left = sources[leftTable] ?? _BasTableSource.raw(leftTable);
+      final right = sources[rightTable] ?? _BasTableSource.raw(rightTable);
+      final joinSql = _BasTableSource.join(
+        left,
+        right,
+        join.joinType,
+        expression.trim(),
+      );
+      for (final tableName in {...left.tableNames, ...right.tableNames}) {
+        sources[tableName] = joinSql;
       }
     }
 
-    return tables.join(', ');
+    final fromParts = <String>[];
+    final emitted = <_BasTableSource>{};
+    for (final table in tables) {
+      final source = sources[table];
+      if (source == null || emitted.contains(source)) {
+        continue;
+      }
+      emitted.add(source);
+      fromParts.add(source.sql);
+    }
+
+    return fromParts.join(', ');
+  }
+
+  String _buildBasSelectPrefix(int option, String? rowCount) {
+    if ((option & 0x10) == 0) {
+      return '';
+    }
+    final normalizedCount = rowCount?.trim();
+    final buffer = StringBuffer('TOP');
+    if (normalizedCount != null && normalizedCount.isNotEmpty) {
+      buffer.write(' $normalizedCount');
+    }
+    if ((option & 0x20) != 0) {
+      buffer.write(' PERCENT');
+    }
+    return buffer.toString();
   }
 
   String _extractBasPropertyName(String rawKey) {
@@ -896,5 +946,27 @@ class _BasQueryJoin {
       default:
         return 'INNER JOIN';
     }
+  }
+}
+
+class _BasTableSource {
+  final String sql;
+  final Set<String> tableNames;
+
+  const _BasTableSource(this.sql, this.tableNames);
+
+  factory _BasTableSource.raw(String tableName) =>
+      _BasTableSource(tableName, <String>{tableName});
+
+  factory _BasTableSource.join(
+    _BasTableSource left,
+    _BasTableSource right,
+    String joinType,
+    String expression,
+  ) {
+    return _BasTableSource(
+      '(${left.sql} $joinType ${right.sql} ON $expression)',
+      <String>{...left.tableNames, ...right.tableNames},
+    );
   }
 }

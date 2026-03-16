@@ -19,6 +19,16 @@ class DoctorReport {
 
   bool get hasErrors => issues.any((issue) => issue.severity == 'error');
 
+  String get readinessLevel {
+    if (hasErrors) {
+      return 'blocked';
+    }
+    if (issues.any((issue) => issue.severity == 'warning')) {
+      return 'partial';
+    }
+    return 'ready';
+  }
+
   Map<String, int> get summary {
     final result = <String, int>{'error': 0, 'warning': 0, 'info': 0};
     for (final issue in issues) {
@@ -31,6 +41,27 @@ class DoctorReport {
 class AnalysisDoctor {
   DoctorReport inspect(AnalysisProject project) {
     final issues = <DoctorIssue>[];
+  final reconciliation = project.queryReconciliation;
+  final reconciliationSummary =
+    (reconciliation?['summary'] as Map?)?.cast<String, dynamic>() ??
+      const {};
+  final mismatched = reconciliationSummary['mismatched'] as int? ?? 0;
+  final missingInBinary =
+    reconciliationSummary['missingInBinary'] as int? ?? 0;
+  final missingInSource =
+    reconciliationSummary['missingInSource'] as int? ?? 0;
+  final matchedNormalized =
+    reconciliationSummary['matchedNormalized'] as int? ?? 0;
+  final matchedRelaxed =
+    reconciliationSummary['matchedRelaxed'] as int? ?? 0;
+  final matchedStructural =
+    reconciliationSummary['matchedStructural'] as int? ?? 0;
+  final matchedOrderEquivalent =
+    reconciliationSummary['matchedOrderEquivalent'] as int? ?? 0;
+  final matchedJoinGraph =
+    reconciliationSummary['matchedJoinGraph'] as int? ?? 0;
+  final matchedSetOperation =
+    reconciliationSummary['matchedSetOperation'] as int? ?? 0;
 
     if (project.tables.isEmpty && project.linkedTables.isEmpty) {
       issues.add(
@@ -50,6 +81,17 @@ class AnalysisDoctor {
           code: 'analysis.linked_only',
           message:
               'A base parece ser frontend Access com tabelas vinculadas; para gerar backend rico, analise tambem o backend .accdb.',
+        ),
+      );
+    }
+
+    if (project.tables.isNotEmpty && project.linkedTables.isNotEmpty) {
+      issues.add(
+        DoctorIssue(
+          severity: 'info',
+          code: 'analysis.hybrid_topology',
+          message:
+              'A base mistura tabelas locais e vinculadas; valide a fronteira entre frontend Access e backend antes de gerar o projeto final.',
         ),
       );
     }
@@ -89,15 +131,7 @@ class AnalysisDoctor {
       }
     }
 
-    final reconciliation = project.queryReconciliation;
     if (reconciliation != null) {
-      final summary =
-          (reconciliation['summary'] as Map?)?.cast<String, dynamic>() ??
-              const {};
-      final mismatched = summary['mismatched'] as int? ?? 0;
-      final missingInBinary = summary['missingInBinary'] as int? ?? 0;
-      final missingInSource = summary['missingInSource'] as int? ?? 0;
-
       if (mismatched > 0) {
         issues.add(
           DoctorIssue(
@@ -107,14 +141,42 @@ class AnalysisDoctor {
                 'Ainda existem $mismatched queries em mismatch na reconciliacao binario vs .src.',
           ),
         );
-      }
-      if (missingInBinary > 0 || missingInSource > 0) {
+      } else {
         issues.add(
           DoctorIssue(
             severity: 'info',
+            code: 'query.reconciliation_clean',
+            message:
+                'A reconciliacao binario vs .src nao possui mismatches nas queries cobertas.',
+          ),
+        );
+      }
+
+      if (missingInBinary > 0 || missingInSource > 0) {
+        issues.add(
+          DoctorIssue(
+            severity:
+                (missingInBinary + missingInSource) >= 20 ? 'warning' : 'info',
             code: 'query.coverage_gap',
             message:
                 'Persistem gaps de cobertura na reconciliacao: missingInBinary=$missingInBinary, missingInSource=$missingInSource.',
+          ),
+        );
+      }
+
+      final matchedTotal = matchedNormalized +
+          matchedRelaxed +
+          matchedStructural +
+          matchedOrderEquivalent +
+          matchedJoinGraph +
+          matchedSetOperation;
+      if (matchedTotal > 0) {
+        issues.add(
+          DoctorIssue(
+            severity: 'info',
+            code: 'query.coverage_summary',
+            message:
+                'Queries reconciliadas por tier: normalized=$matchedNormalized, relaxed=$matchedRelaxed, structural=$matchedStructural, order=$matchedOrderEquivalent, join=$matchedJoinGraph, setop=$matchedSetOperation.',
           ),
         );
       }
@@ -129,7 +191,32 @@ class AnalysisDoctor {
               'Nenhum form foi decodificado; o frontend sera gerado a partir das tabelas.',
         ),
       );
+      } else if (project.forms.every(
+        (form) =>
+            (form.recordSource == null || form.recordSource!.trim().isEmpty) &&
+            form.controls.isEmpty,
+      )) {
+        issues.add(
+          DoctorIssue(
+            severity: 'warning',
+            code: 'forms.catalog_only',
+            message:
+                'Os forms foram detectados no catalogo, mas ainda sem estrutura util suficiente para gerar telas proximas da UI original.',
+          ),
+        );
     }
+
+      if (project.tables.isNotEmpty &&
+          project.tables.every((table) => table.sampleRows.isEmpty)) {
+        issues.add(
+          DoctorIssue(
+            severity: 'info',
+            code: 'analysis.no_preview_data',
+            message:
+                'Nenhuma tabela local possui sampleRows; o scaffold sera gerado sem dados de preview para telas e testes de smoke.',
+          ),
+        );
+      }
 
     if (issues.isEmpty) {
       issues.add(

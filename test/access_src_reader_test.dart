@@ -89,6 +89,29 @@ void main() {
     expect(basOnly.semanticSql, isNotNull);
     expect(basOnly.semanticSql, isNot(contains(r'\015\012')));
 
+    final listaPresenca = project.queries.singleWhere(
+      (query) => query.name == 'LISTA-PRESENÇA-ENTREGA-KITS',
+    );
+    expect(listaPresenca.semanticSql, contains('FROM'));
+    expect(listaPresenca.semanticSql, contains('TbUnidade'));
+    expect(listaPresenca.semanticSql, contains('ORDER BY'));
+    expect(listaPresenca.semanticSql, contains('PrincipalSCFVExterno.Nome'));
+
+    final relatorioGeral = project.queries.singleWhere(
+      (query) => query.name == 'SISC EXTERNO RELATORIO GERAL',
+    );
+    expect(relatorioGeral.semanticSql, contains('FROM'));
+    expect(
+      relatorioGeral.semanticSql,
+      contains('SISC SCFV EXTERNO GRUPOS E RF, TbUnidade'),
+    );
+    expect(relatorioGeral.semanticSql, contains('ORDER BY'));
+
+    final codfamComposicao = project.queries.singleWhere(
+      (query) => query.name == 'codfam e num composição',
+    );
+    expect(codfamComposicao.semanticSql, contains('SELECT TOP 60'));
+
     final tbPessoa =
         project.tables.singleWhere((table) => table.name == 'TbPessoa');
     expect(tbPessoa.isLinked, isTrue);

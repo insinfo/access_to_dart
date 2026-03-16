@@ -461,7 +461,7 @@ class _AccessQuerySqlBuilder {
     final havingRow = rows.where((r) => r['Attribute'] == 10).firstOrNull;
     final orderRows = rows.where((r) => r['Attribute'] == 11).toList();
 
-    final selectPrefix = _buildSelectPrefix(selectFlags);
+    final selectPrefix = _buildSelectPrefix(selectFlags, flagRow);
     final columns = _buildSelectColumns(columnRows, tableRows, selectFlags);
     final fromTables = _buildFromTables(tableRows, joinRows);
     final whereExpr =
@@ -511,12 +511,20 @@ class _AccessQuerySqlBuilder {
     return builder.toString();
   }
 
-  String _buildSelectPrefix(int flags) {
+  String _buildSelectPrefix(int flags, Map<String, dynamic>? flagRow) {
     if ((flags & 0x02) != 0) {
       return 'DISTINCT';
     }
     if ((flags & 0x08) != 0) {
       return 'DISTINCTROW';
+    }
+    if ((flags & 0x10) != 0) {
+      final topCount = flagRow?['Name1']?.toString();
+      if (topCount == null || topCount.isEmpty) {
+        return 'TOP';
+      }
+      final percentSuffix = (flags & 0x20) != 0 ? ' PERCENT' : '';
+      return 'TOP $topCount$percentSuffix';
     }
     return '';
   }

@@ -15,6 +15,11 @@ final class AccessSqlTokenizer {
         continue;
       }
 
+      if (char == ';') {
+        index++;
+        continue;
+      }
+
       if (char == '[') {
         final buffer = StringBuffer();
         index++;

@@ -20,6 +20,7 @@ dependencies:
   galileo_utf: ^3.0.0
   utf_ext: ^0.3.3
   path: ^1.9.1
+  postgres: ^3.5.7
 
 dev_dependencies:
   build_runner: ^2.4.15

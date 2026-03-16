@@ -1,6 +1,6 @@
 # Roteiro Unificado de Conversão: MS Access (`.accdb`) para Dart Web 🚀
 
-## Status Atual em 14/03/2026
+## Status Atual em 15/03/2026
 - O núcleo `jackcess_dart` já abre `.accdb` nativamente e detecta o formato ACE/Jet (`VERSION_14` validado na fixture `fixtures/teste1/teste1.accdb`).
 - A leitura binária de `MSysObjects` já funciona sem Access instalado, incluindo navegação via `UsageMap` e varredura das páginas de dados do catálogo.
 - A base alvo real `fixtures/SIGAsul.accdb` já é inspecionada com sucesso como frontend Access com tabelas vinculadas:
@@ -42,6 +42,15 @@
   - `doctor --analysis ...` valida cobertura e gaps estruturais
   - `migrate --analysis ...` gera `schema.sql`, `seed.sql` e `migration_manifest.json`
   - `generate --analysis ...` cria scaffold inicial em `/core`, `/backend`, `/frontend` e `conversion-report.md`
+- O `doctor` deixou de ser apenas um checklist superficial e agora já classifica a prontidão do material extraído:
+  - `readinessLevel` em `blocked` / `partial` / `ready`
+  - sinais como `analysis.linked_only`, `analysis.hybrid_topology`, `analysis.no_preview_data`
+  - sinais de reconciliação e cobertura como `query.reconciliation_clean`, `query.coverage_gap` e `query.coverage_summary`
+  - sinalização explícita para catálogo de formulários sem corpo visual em `forms.catalog_only`
+- O `conversion-report.md` gerado passou a refletir readiness real de conversão e próximos passos acionáveis:
+  - seções `Readiness`, `Inventory`, `Findings` e `Next Steps`
+  - resumo de cobertura e reconciliação de queries
+  - recomendações coerentes com o perfil analisado
 - O scaffold gerado agora normaliza contrato de persistência e DTOs:
   - nomes de tabelas e colunas em `snake_case`
   - modelos Dart com constantes de coluna
@@ -54,21 +63,27 @@
   - `http` centralizado em service compartilhado
   - `ngdart 8.0.0-dev.4`, `ngforms 5.0.0-dev.3` e `ngrouter 4.0.0-dev.3` no `pubspec`
   - layout base com assets CDN do `Limitless 4.0`
-  - `sass_builder ^2.4.0+1` com `build.yaml` e geração de `.scss` junto do `.css`
+  - `sass_builder ^2.2.1`, `build_web_compilers ^4.0.9` e `webdev ^3.7.1` com `build.yaml`
+  - `styleUrls` dos componentes apontando para `.css` gerado pelo Sass, sem conflito entre arquivos-fonte `.scss` e artefatos emitidos no build
+  - shell raiz completo com `frontend/lib/app_component.dart`, `frontend/lib/app_component.html`, `frontend/lib/app_component.scss`, `frontend/web/main.dart` e `frontend/web/index.html`
+  - wrappers de página por módulo em `frontend/lib/src/modules/<tabela>/pages/<tabela>_page_component.*`
+  - validação do frontend gerado já exercitada com `dart analyze lib` e `dart run webdev build` em fixture gerada end-to-end
 - O backend gerado começou a sair do modo estático:
   - `backend/lib/src/modules/<tabela>/repositories`
   - `backend/lib/src/modules/<tabela>/controllers`
   - `backend/lib/src/modules/<tabela>/services`
   - `backend/lib/src/modules/<tabela>/routes`
-  - esqueleto de conexão PostgreSQL em `shared/database.dart`
-  - contexto compartilhado de repositório em `shared/repository_context.dart`
-  - endpoints já preparados para consultar repositórios por tabela antes do fallback estático
+  - `backend/lib/src/db/database_service.dart` e `backend/lib/src/db/with_database_shelf.dart` com conexão PostgreSQL por request via `Request.context`
+  - `backend/lib/src/shared/app_config.dart` para parametrização base da aplicação
+  - fallback inicial de preview em `backend/lib/src/generated_data.dart` a partir de `sampleRows`
   - `bin/public_backend.dart` com bootstrap próprio
-  - `lib/src/public/api/{controllers,routes,middleware,extension,utils}`
+  - `lib/src/public/api/{controllers,routes}`
   - `lib/src/modules/api/di/dependency_injector.dart`
-  - `lib/src/shared/dependencies/log_requests_custom.dart`
-  - middleware `with_database_shelf.dart` agora injeta conexão PostgreSQL por request em `Request.context`
-  - CRUD REST básico por módulo (`list`, `show`, `create`, `update`, `delete`)
+  - rotas públicas e CRUD REST básico por módulo (`list`, `show`, `create`, `update`, `delete`)
+- A validação da geração foi fatiada para feedback mais rápido:
+  - `test/generation/fast` cobre `doctor`, `migrate` e smoke checks do scaffold gerado
+  - `test/generation/long` cobre cenários E2E, fixtures via COM e compilação do projeto gerado
+  - `test/generation/support/generation_test_utils.dart` centraliza `dart pub get`, `dart analyze`, compilação do backend e `dart run webdev build` do frontend
 - O mapeamento financeiro do migrador foi endurecido para PostgreSQL sem perda de precisão:
   - `Currency/Money` do Access -> `NUMERIC(19,4)`
   - `Numeric` -> `NUMERIC(precision, scale)` quando os metadados existem
@@ -103,31 +118,18 @@
   - normalização de escapes literais do exportador VBA (`\015\012`, `\"`) no `semanticSql`
   - imagens compartilhadas em `images/*`
 - O comando `analyze --accdb fixtures/SIGAsul.accdb --src fixtures/SIGAsul.accdb.src` já gera `build/SIGAsul/analysis.json` com overlay de source para linked tables e SQL.
-- A reconciliação real do frontend `SIGAsul.accdb` contra `SIGAsul.accdb.src` já foi exercitada com números concretos:
+- A reconciliação real do frontend `SIGAsul.accdb` contra `SIGAsul.accdb.src` já foi exercitada com números concretos e depois endurecida até zerar o delta semântico relevante:
   - 426 queries binárias
   - 409 queries no overlay `.src`
-  - 136 `matched_normalized`
-  - 19 `matched_relaxed` após normalização estrutural baseada em tokens e fallback via `.bas`
-  - 71 `matched_structural` quando `SELECT`/`WHERE`/`GROUP BY`/`HAVING`/`ORDER BY` coincidem mesmo com divergência residual de `FROM`
-  - 48 `matched_order_equivalent` quando a divergência remanescente é só `ORDER BY` exportado ou `DISTINCT` redundante em consulta já agrupada
-  - 22 `matched_join_graph` após normalização estrutural de `FROM/JOIN` por tokenizer/parser dedicado
-  - 0 `matched_from_omitted` no parser novo; essa heurística ficou obsoleta frente ao tier estrutural de join
-  - 1 `matched_set_operation` quando o binário ainda só reconstrói `SELECT *`, mas o overlay traz a `UNION` real
-  - 32 `mismatch`
+  - o pipeline passou por reduções progressivas de `32 -> 18 -> 13 -> 12 -> 10 -> 3 -> 0 mismatch`
+  - o estado validado em `build/SIGAsul_work_after10/analysis.json` chegou a `0 mismatch`
+  - o reconciliador agora tolera `;` terminal, `SELECT *` misturado com projeções explícitas, `tabela.*` equivalente a `*`, reordenação de projeções simples, `DISTINCT` residual junto de `ORDER BY`, `FROM` truncado com tabelas ainda referenciadas e falso `UNION` em nomes de query
   - 80 `missing_in_binary`
   - 97 `missing_in_source`
   - cobertura binária detectada: `JOIN=251`, `WHERE=246`, `GROUP BY=75`, `HAVING=33`, `ORDER BY=85`
   - cobertura do overlay detectada: `JOIN=291`, `WHERE=258`, `GROUP BY=61`, `HAVING=45`, `ORDER BY=80`
   - o parser já aproveita `semanticSql` reconstruído do `.bas` para reduzir falsos positivos causados por diferenças de formatação/quoting do exportador, inclusive resíduos literais do formatter VBA
-- A rodada validada com o parser refatorado em `build/SIGAsul_parser_refactor2/analysis.json` confirmou os mesmos tiers estruturais esperados:
-  - 136 `matched_normalized`
-  - 19 `matched_relaxed`
-  - 71 `matched_structural`
-  - 48 `matched_order_equivalent`
-  - 22 `matched_join_graph`
-  - 0 `matched_from_omitted`
-  - 1 `matched_set_operation`
-  - 32 `mismatch`
+- A reconstrução semântica do `.bas` também foi fortalecida para preservar `TOP`, `RowCount`, `Begin OrderBy` e `InputTables`, reduzindo falsos negativos em queries exportadas pelo add-in.
 - O exportador Access/VCS mostrou falha real no formatter VBA (`clsSqlFormatter.GetNextWords`, erro 6 / overflow) durante export de queries; por isso o `.bas` passou a ser tratado como fallback semântico de primeira classe para reconciliação e saneamento de SQL exportado.
 - O backend vinculado principal `fixtures/SIGA2021-SUL_be_senha_4462.accdb` agora abre nativamente com senha:
   - criptografia Agile Office 4.4 detectada (`AES-256`, `SHA512`, `spinCount=100000`)
@@ -136,6 +138,7 @@
   - o `TableDef` encadeado de `CadResidencia` já é lido corretamente, eliminando o warning anterior de `RangeError`
   - `analysis.json` do backend agora inclui `34` relacionamentos reais
   - o backend real já expõe `114` índices lógicos no total, incluindo `40` chaves primárias
+  - `sampleRows` agora são serializados de forma segura para JSON, inclusive quando trazem `DateTime` ou payload binário, permitindo análises e scaffolds mais estáveis
 
 ## Refatoração da Reconciliação em 14/03/2026
 - O fluxo de reconciliação agora segue a arquitetura:
@@ -150,28 +153,20 @@
   - `dart run bin/access_to_dart.dart analyze --accdb fixtures/SIGAsul.accdb --src fixtures/SIGAsul.accdb.src --output build/SIGAsul_parser_refactor2`
 
 ## Backlog Técnico Imediato
-1. Reduzir o delta remanescente da reconciliação real de `MSysQueries` no frontend `SIGAsul.accdb`, priorizando os `32` casos ainda classificados como `mismatch` e os gaps `missing_in_binary` / `missing_in_source`, com foco especial em:
-   - normalização semântica de `JOIN`
-   - equivalência de `WHERE`
-   - `GROUP BY` / `HAVING`
-   - diferenças de quoting, aliases e layout SQL
-   - suporte semântico para `UNION`, `TRANSFORM`, queries de ação e casos `bas-only`
-   - reconciliação semântica dos `32` casos que sobraram mesmo após tokenizer/parser estrutural
-   - `GROUP BY` / `HAVING` quando o overlay perde tabelas ou agregações intermediárias
-   - joins aninhados com `ON` parcialmente truncado no export
-  - canonização de expressões agregadas em `SELECT`
-  - árvore canônica de `GROUP BY`
-  - normalização semântica de `HAVING`
-  - integração dessas normalizações ao tier estrutural para atacar os `32` casos restantes
+1. Elevar o scaffold gerado de "funcional de bootstrap" para "produção real":
+  - fechar integração ponta a ponta entre backend Shelf, PostgreSQL e frontend AngularDart
+  - trocar fallbacks de preview por acesso real persistente e smoke tests do app gerado
+  - enriquecer rotas públicas, tratamento de erro, configuração e bootstrap do frontend
 2. Expandir os metadados ricos de coluna no backend real:
    - required/nullability real
    - default value
    - expression de coluna calculada
    - enriquecer/validar `precision/scale`
 3. Descomprimir e extrair a lógica e código fonte final em texto plano originários de dentro dos blocos de compressão VBA (`MS-OVBA`), implementando um descompressor dedicado para MS-OVBA no OLE stream.
-4. Integrar o resultado do compilador recém-criado (o pipeline transpilador em `vba_parser`) capaz de cuspir controllers de negócio, juntando as peças nas saídas automatizadas do AngularDart.
-5. Decodificar blobs complexos da UI visual (Formulários, Relatórios) de propriedades de tela legada.
-6. Usar scripts opcionais via COM/`win32` para gerar bases `.accdb` mínimas, reprodutíveis e comparáveis, úteis para validar como o Access grava tabelas, formulários e VBA no binário sem acoplar isso ao runtime principal.
+4. Integrar o resultado do compilador recém-criado (o pipeline transpilador em `vba_parser`) às saídas do gerador, produzindo controllers e regras de negócio reais a partir de módulos/form events.
+5. Decodificar blobs complexos da UI visual de Formulários e Relatórios, indo além do catálogo atual e permitindo scaffolding visual fiel.
+6. Reduzir o gap de cobertura de queries que ainda aparecem como `missing_in_binary` / `missing_in_source`, agora com foco secundário e não mais bloqueante para a reconciliação semântica principal do `SIGAsul`.
+7. Usar scripts opcionais via COM/`win32` para gerar bases `.accdb` mínimas, reprodutíveis e comparáveis, úteis para validar como o Access grava tabelas, formulários e VBA no binário sem acoplar isso ao runtime principal.
 
 
 
@@ -185,6 +180,7 @@ regra sem porcaria de regex sepre prefira implementação de parser AST
 regra evite arquivos gigantes prefira arquivos menores com menos de 4 mil linhas sempre que possivel
 organização em pastas/modulos
 regra sempre implemente e execute  testes
+regra nunca deixe o codigo quebrado; toda vez que alterar codigo rode `dart analyze` e corrija os erros antes de seguir
 
  implementar a ferramenta de converção de access para dart se necssario implemente um parse de VBA e um conversos de VBA para codigo dart para as regras de negocio de formularios access para os formularios angularDart (ngdart 8....) como referencia veja C:\MyDartProjects\access_to_dart\referencias\vbconverter-master  C:\MyDartProjects\access_to_dart\referencias\ViperMonkey-master C:\MyDartProjects\access_to_dart\referencias\vb8-parser-master C:\MyDartProjects\access_to_dart\referencias\jackcess-master C:\MyDartProjects\access_to_dart\referencias\jackcess-encrypt-4.0.3-sources C:\MyDartProjects\access_to_dart\referencias\ensemble-main\packages\parsejs_null_safety C:\MyDartProjects\access_to_dart\referencias\drift-develop\drift-develop\sqlparser C:\MyDartProjects\access_to_dart\referencias\ensemble-main\packages\ensemble_ts_interpreter
 
@@ -244,6 +240,6 @@ Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, a
 2. Capacidade da CLI iterar propriedades cruciais dentro e fora das hierarquias DOM via XML parse limpo da pasta `.accdb.src`, gerando um JSON abstrato do mapa do sistema.
 Status: concluído para `teste1.accdb.src` e adaptado para o layout específico de `SIGAsul.accdb.src` no caso de linked tables e queries. Ainda não há export estruturado de forms/reports nesse layout do add-in.
 3. Geração limpa e assíncrona da pasta `/generated/teste1_app_generated`.
-Status: parcialmente concluído. O comando `generate --analysis ...` já cria scaffold funcional inicial de `core/backend/frontend`, incluindo frontend modular em `modules/.../pages` e `services`, mas ainda falta elevar esse scaffold para o nível final de aplicação completa com persistência PostgreSQL real, rotas mais ricas e frontend AngularDart pronto para produção.
+Status: parcialmente concluído. O comando `generate --analysis ...` já cria scaffold funcional inicial de `core/backend/frontend`, incluindo `conversion-report.md`, shell frontend completo, wrappers de página, service HTTP compartilhado, backend com `repositories/services/controllers/routes`, `generated_data.dart`, `public_backend.dart`, DI e middleware de banco. O scaffold gerado já passa por `dart analyze`, build do frontend com `dart run webdev build` e compilação representativa em testes de geração. Ainda falta elevar esse scaffold para o nível final de aplicação completa com persistência PostgreSQL real, rotas mais ricas e frontend AngularDart pronto para produção.
 4. Quando entrarmos na pasta `/backend/` e rodarmos localmente `dart run bin/server.dart` associado à pasta `/frontend/` no Webdev (AngularDart), conseguirmos consultar visualmente de fato uma "Folha de Contatos".
-Status: parcialmente concluído. O backend e o frontend gerados já possuem estrutura modular, serviços HTTP e esqueleto de repositórios PostgreSQL, mas ainda falta fechar a integração ponta a ponta com banco real, build do frontend AngularDart e navegação/telas mais completas.
+Status: parcialmente concluído. O backend e o frontend gerados já possuem estrutura modular, serviços HTTP, esqueleto de repositórios PostgreSQL e build validado do frontend AngularDart. Ainda falta fechar a integração ponta a ponta com banco real, fluxo HTTP real do frontend contra o backend gerado e navegação/telas mais completas.

@@ -64,7 +64,8 @@ class RowReader {
             if (col.isCalculated) {
               raw = _unwrapCalculatedValue(raw);
             }
-            result[col.name] = _parseFixed(raw, col.type);
+            result[col.name] =
+              _parseFixed(raw, col.type, scale: col.scale);
           }
         } else {
           // Read Variable Length
@@ -81,7 +82,8 @@ class RowReader {
             if (col.isCalculated) {
               raw = _unwrapCalculatedValue(raw);
             }
-            result[col.name] = await _parseVar(raw, col.type);
+            result[col.name] =
+              await _parseVar(raw, col.type, scale: col.scale);
           }
         }
       } catch (e, st) {
@@ -97,27 +99,153 @@ class RowReader {
     return type == 10 || type == 12 || type == 9 || type == 11;
   }
 
-  dynamic _parseFixed(Uint8List data, int type) {
+  dynamic _parseFixed(Uint8List data, int type, {int? scale}) {
+    final expectedLength = _expectedFixedLength(type);
+    if (expectedLength != null && data.length < expectedLength) {
+      return null;
+    }
+
     var bytes = ByteData.view(data.buffer, data.offsetInBytes, data.length);
     switch (type) {
       case 1:
         return data[0] != 0;
       case 4:
         return bytes.getInt32(0, Endian.little);
+      case 0x05:
+        return bytes.getInt64(0, Endian.little) / 10000.0;
+      case 0x06:
+        return bytes.getFloat32(0, Endian.little);
+      case 0x07:
+        return bytes.getFloat64(0, Endian.little);
+      case 0x08:
+        return _parseDateTime(bytes.getFloat64(0, Endian.little));
+      case 0x0F:
+        return _parseGuid(data);
+      case 0x10:
+        return _parseNumeric(data, scale: scale);
       case 3:
         return bytes.getInt16(0, Endian.little);
       case 2:
         return bytes.getInt8(0);
-      case 8:
-        return bytes.getFloat64(0, Endian.little);
       case 0x12:
         return bytes.getInt32(0, Endian.little);
+      case 0x13:
+        return bytes.getInt64(0, Endian.little);
       default:
         return "FixedType($type)";
     }
   }
 
-  Future<dynamic> _parseVar(Uint8List data, int type) async {
+  int? _expectedFixedLength(int type) {
+    switch (type) {
+      case 1:
+      case 2:
+        return 1;
+      case 3:
+        return 2;
+      case 0x04:
+      case 0x06:
+      case 0x12:
+        return 4;
+      case 0x05:
+      case 0x07:
+      case 0x08:
+      case 0x13:
+        return 8;
+      case 0x0F:
+        return 16;
+      case 0x10:
+        return 17;
+      default:
+        return null;
+    }
+  }
+
+  DateTime? _parseDateTime(double value) {
+    if (value.isNaN || value.isInfinite) {
+      return null;
+    }
+
+    final base = DateTime.utc(1899, 12, 30);
+    final micros = (value * Duration.microsecondsPerDay).round();
+    return base.add(Duration(microseconds: micros));
+  }
+
+  String? _parseNumeric(Uint8List data, {int? scale}) {
+    if (data.length < 17) {
+      return null;
+    }
+
+    final negate = data[0] != 0;
+    final bytes = Uint8List.fromList(data.sublist(1, 17));
+    _fixNumericByteOrder(bytes);
+
+    var intValue = BigInt.zero;
+    for (final byte in bytes) {
+      intValue = (intValue << 8) | BigInt.from(byte);
+    }
+    if (negate) {
+      intValue = -intValue;
+    }
+
+    return _formatScaledBigInt(intValue, scale ?? 0);
+  }
+
+  void _fixNumericByteOrder(Uint8List bytes) {
+    var position = 0;
+    if ((bytes.length % 8) != 0) {
+      _reverseRange(bytes, 0, 4);
+      position += 4;
+    }
+    for (; position < bytes.length; position += 8) {
+      _reverseRange(bytes, position, position + 8);
+    }
+  }
+
+  void _reverseRange(Uint8List bytes, int start, int endExclusive) {
+    var left = start;
+    var right = endExclusive - 1;
+    while (left < right) {
+      final temp = bytes[left];
+      bytes[left] = bytes[right];
+      bytes[right] = temp;
+      left++;
+      right--;
+    }
+  }
+
+  String _formatScaledBigInt(BigInt value, int scale) {
+    final negative = value.isNegative;
+    final digits = value.abs().toString();
+    if (scale <= 0) {
+      return negative ? '-$digits' : digits;
+    }
+
+    final padded = digits.padLeft(scale + 1, '0');
+    final split = padded.length - scale;
+    final integerPart = padded.substring(0, split);
+    final fractionalPart = padded.substring(split);
+    final formatted = '$integerPart.$fractionalPart';
+    return negative ? '-$formatted' : formatted;
+  }
+
+  String? _parseGuid(Uint8List data) {
+    if (data.length < 16) {
+      return null;
+    }
+
+    final bytes = Uint8List.fromList(data.sublist(0, 16));
+    _reverseRange(bytes, 0, 4);
+    _reverseRange(bytes, 4, 6);
+    _reverseRange(bytes, 6, 8);
+
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+        .join();
+    return '{${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}}';
+  }
+
+  Future<dynamic> _parseVar(Uint8List data, int type, {int? scale}) async {
     if (type == 12 || type == 11) {
       return _parseLongValue(data, type);
     }
@@ -131,7 +259,7 @@ class RowReader {
       return data;
     }
     // Fallback to fixed parsing for normally-fixed types stored in var block
-    return _parseFixed(data, type);
+    return _parseFixed(data, type, scale: scale);
   }
 
   Future<dynamic> _parseLongValue(Uint8List definition, int type) async {

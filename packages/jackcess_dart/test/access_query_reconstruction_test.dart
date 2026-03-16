@@ -105,5 +105,17 @@ void main() {
 
       expect(sql, 'SELECT 1');
     });
+
+    test('reconstructs top select flag', () {
+      final sql = AccessCatalog.reconstructSqlFromRows([
+        {'Attribute': 3, 'Flag': 0x10, 'Name1': '50'},
+        {'Attribute': 5, 'Name1': 'Filtro'},
+        {'Attribute': 6, 'Expression': 'Filtro.Idade'},
+      ], 1);
+
+      expect(sql, isNotNull);
+      expect(sql, contains('SELECT TOP 50'));
+      expect(sql, contains('[Filtro].[Idade]'));
+    });
   });
 }

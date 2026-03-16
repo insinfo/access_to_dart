@@ -5,10 +5,15 @@ import 'package:args/args.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'src/accdb_analyzer.dart';
+import 'src/access_table_rows_reader.dart';
 import 'src/access_src_reader.dart';
 import 'src/analysis_doctor.dart';
 import 'src/analysis_model.dart';
+import 'src/migration_identifier_style.dart';
 import 'src/migration_writer.dart';
+import 'src/postgres_connection_options.dart';
+import 'src/postgres_migration_executor.dart';
+import 'src/migration_statement_builder.dart';
 import 'src/project_generator/project_generator.dart';
 import 'src/query_reconciliation/query_reconciliation.dart';
 
@@ -336,7 +341,12 @@ Future<int> _runGenerate(
   final parser = ArgParser()
     ..addOption('analysis', help: 'Path to analysis.json')
     ..addOption('output',
-        abbr: 'o', help: 'Output directory for the generated app');
+        abbr: 'o', help: 'Output directory for the generated app')
+    ..addOption(
+      'identifier-style',
+      help: 'Identifier style: snake_ascii or original',
+      defaultsTo: 'snake_ascii',
+    );
 
   final ArgResults args;
   try {
@@ -354,9 +364,21 @@ Future<int> _runGenerate(
 
   final outputDir = args['output'] as String? ?? 'generated';
 
+  final MigrationIdentifierStyle identifierStyle;
+  try {
+    identifierStyle = MigrationIdentifierStyle.parse(
+      args['identifier-style'] as String? ?? 'snake_ascii',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
+
   try {
     final project = await AnalysisProject.load(analysisPath);
-    final generated = await ProjectGenerator().generate(
+    final generated = await ProjectGenerator(
+      identifierStyle: identifierStyle,
+    ).generate(
       project: project,
       outputDirectory: outputDir,
     );
@@ -432,7 +454,15 @@ Future<int> _runMigrate(
 ) async {
   final parser = ArgParser()
     ..addOption('analysis', help: 'Path to analysis.json')
+    ..addOption('accdb', help: 'Path to the .accdb file for direct migration')
+    ..addOption('password',
+        help: 'Optional password for encrypted .accdb files')
     ..addOption('pg', help: 'Optional PostgreSQL connection string')
+    ..addOption(
+      'identifier-style',
+      help: 'Identifier style: snake_ascii or original',
+      defaultsTo: 'snake_ascii',
+    )
     ..addOption('output',
         abbr: 'o', help: 'Output directory for migration assets');
 
@@ -445,38 +475,141 @@ Future<int> _runMigrate(
   }
 
   final analysisPath = args['analysis'] as String?;
-  if (analysisPath == null || analysisPath.isEmpty) {
-    err.writeln('Missing required option: --analysis <path-to-analysis.json>');
+  final accdbPath = args['accdb'] as String?;
+  if ((analysisPath == null || analysisPath.isEmpty) &&
+      (accdbPath == null || accdbPath.isEmpty)) {
+    err.writeln(
+      'Missing required source: provide --analysis <path-to-analysis.json> or --accdb <path-to.accdb>',
+    );
     return 64;
   }
 
   final outputDir = args['output'] as String? ?? 'build/migration';
   final pg = args['pg'] as String?;
+  final password = args['password'] as String?;
+
+  final MigrationIdentifierStyle identifierStyle;
+  try {
+    identifierStyle = MigrationIdentifierStyle.parse(
+      args['identifier-style'] as String? ?? 'snake_ascii',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
 
   try {
-    final project = await AnalysisProject.load(analysisPath);
+    final project = analysisPath != null && analysisPath.isNotEmpty
+        ? await AnalysisProject.load(analysisPath)
+        : await _loadAnalysisProjectFromAccdb(
+            accdbPath!,
+            password: password,
+          );
+
+    final migrationRows = await _loadMigrationRows(
+      explicitAccdbPath: accdbPath,
+      inferredAccdbPath: project.source,
+      password: password,
+      out: out,
+      err: err,
+    );
+
     final artifacts = await MigrationWriter().write(
       project: project,
       outputDirectory: outputDir,
       connectionString: pg,
+      identifierStyle: identifierStyle,
+      tableRowsByName: migrationRows?.rowsByTable,
     );
     out.writeln('Migration assets written to: $outputDir');
     out.writeln('  Schema : ${artifacts.schemaFile.path}');
     out.writeln('  Seed   : ${artifacts.seedFile.path}');
     out.writeln('  Manifest: ${artifacts.manifestFile.path}');
     if (pg != null && pg.isNotEmpty) {
-      out.writeln(
-        '  PostgreSQL execution is pending; generated SQL is ready for application.',
+      final connectionOptions = PostgresConnectionOptions.parse(pg);
+      final execution = await PostgresMigrationExecutor(
+        connectionOptions: connectionOptions,
+      ).execute(
+        project: project,
+        statementBuilder: MigrationStatementBuilder(
+          identifierPolicy: MigrationIdentifierPolicy(style: identifierStyle),
+        ),
+        tableRowsByName: migrationRows?.rowsByTable,
       );
+      out.writeln('  PostgreSQL apply: OK');
+      out.writeln('  Tables created : ${execution.tablesCreated}');
+      out.writeln('  Rows inserted  : ${execution.rowsInserted}');
     }
     return 0;
   } on FileSystemException catch (e) {
-    err.writeln('Cannot open analysis.json: ${e.path ?? analysisPath}');
+    err.writeln(
+      'Cannot open migration source: ${e.path ?? analysisPath ?? accdbPath}',
+    );
     return 66;
+  } on UnsupportedAccdbEncryptionException catch (e) {
+    err.writeln('$e');
+    err.writeln('Retry with --password <senha> for encrypted ACCDB files.');
+    return 65;
   } catch (e, st) {
     err.writeln('Failed to write migration assets: $e');
     err.writeln(st);
     return 1;
+  }
+}
+
+Future<AnalysisProject> _loadAnalysisProjectFromAccdb(
+  String accdbPath, {
+  String? password,
+}) async {
+  final database = await AccessDatabase.openPath(accdbPath, password: password);
+  try {
+    final catalog = AccessCatalog(
+      format: database.format,
+      pageChannel: database.pageChannel,
+    );
+    final model = await catalog.read(accdbPath);
+    final analysis = await AccdbAnalyzer(model: model, db: database).analyze();
+    return AnalysisProject.fromJson(analysis);
+  } finally {
+    await database.close();
+  }
+}
+
+Future<AccessTableRowsSnapshot?> _loadMigrationRows({
+  required String? explicitAccdbPath,
+  required String inferredAccdbPath,
+  required String? password,
+  required StringSink out,
+  required StringSink err,
+}) async {
+  final resolvedPath =
+      explicitAccdbPath != null && explicitAccdbPath.isNotEmpty
+          ? explicitAccdbPath
+          : inferredAccdbPath;
+
+  if (resolvedPath.isEmpty) {
+    return null;
+  }
+
+  final sourceFile = File(resolvedPath);
+  if (!await sourceFile.exists()) {
+    return null;
+  }
+
+  try {
+    final snapshot = await AccessTableRowsReader().readAll(
+      accdbPath: resolvedPath,
+      password: password,
+    );
+    out.writeln(
+      'Loaded ${snapshot.rowCount} Access rows from ${snapshot.tableCount} tables for migration.',
+    );
+    return snapshot;
+  } catch (e) {
+    err.writeln(
+      'Warning: failed to load full Access rows from $resolvedPath, falling back to sampleRows. Error: $e',
+    );
+    return null;
   }
 }
 
@@ -506,9 +639,9 @@ void _writeUsage(StringSink sink) {
     '  doctor        --analysis <analysis.json>            Validate generated analysis',
   );
   sink.writeln(
-    '  migrate       --analysis <analysis.json> [-o dir] [--pg <conn>]  Emit PostgreSQL migration assets',
+    '  migrate       [--analysis <analysis.json> | --accdb <file.accdb>] [-o dir] [--pg <conn>] [--identifier-style snake_ascii|original]  Emit/apply PostgreSQL migration assets',
   );
   sink.writeln(
-    '  generate      --analysis <analysis.json> [-o dir]  Generate core/backend/frontend scaffold',
+    '  generate      --analysis <analysis.json> [-o dir] [--identifier-style snake_ascii|original]  Generate core/backend/frontend scaffold',
   );
 }
