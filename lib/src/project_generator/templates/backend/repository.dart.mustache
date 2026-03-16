@@ -1,0 +1,29 @@
+import 'package:eloquent/eloquent.dart';
+import 'package:{{corePackageName}}_core/core.dart';
+
+class {{className}}Repository {
+  final Connection db;
+
+  {{className}}Repository(this.db);
+
+  Future<List<Map<String, dynamic>>> all() async {
+    final query = db.table('{{tableRuntimeName}}');
+    return await query.get();
+  }
+
+  Future<Map<String, dynamic>?> findById(int id) async {
+    return await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).first();
+  }
+
+  Future<int> insert({{className}} item) async {
+    return await db.table('{{tableRuntimeName}}').insertGetId(item.toMap()) as int;
+  }
+
+  Future<void> update(int id, {{className}} item) async {
+    await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).update(item.toMap());
+  }
+
+  Future<void> delete(int id) async {
+    await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).delete();
+  }
+}

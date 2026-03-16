@@ -1,0 +1,16 @@
+{{=<% %>=}}
+<div class="app-shell">
+  <aside class="sidebar">
+    <h1><%projectName%></h1>
+    <nav class="nav-links">
+<%#modules%>
+      <button type="button" class="nav-link" [class.is-active]="activeModule == '<%routeSegment%>'" (click)="setActiveModule('<%routeSegment%>')"><%namePascal%></button>
+<%/modules%>
+    </nav>
+  </aside>
+  <main class="content-area">
+<%#modules%>
+    <<%routeSegment%>-page *ngIf="activeModule == '<%routeSegment%>'"></<%routeSegment%>-page>
+<%/modules%>
+  </main>
+</div>

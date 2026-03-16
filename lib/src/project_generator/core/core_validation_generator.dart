@@ -1,154 +1,10 @@
-part of 'project_generator.dart';
+part of '../project_generator.dart';
 
-extension _ProjectGeneratorCore on ProjectGenerator {
-  Future<void> _writeCore(AnalysisProject project, Directory root) async {
-    final coreDir = Directory('${root.path}${Platform.pathSeparator}core');
-    final modelsDir = Directory(
-      '${coreDir.path}${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}models',
-    );
-    final validationDir = Directory(
-      '${coreDir.path}${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}validation',
-    );
-    await modelsDir.create(recursive: true);
-    await validationDir.create(recursive: true);
-
-    await File('${coreDir.path}${Platform.pathSeparator}pubspec.yaml')
-        .writeAsString(_corePubspec(project));
-    await File(
-      '${coreDir.path}${Platform.pathSeparator}lib${Platform.pathSeparator}core.dart',
-    ).writeAsString(_coreLibrary(project));
-    await File(
-      '${coreDir.path}${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}schema.dart',
-    ).writeAsString(_coreSchema(project));
-    await File(
-      '${validationDir.path}${Platform.pathSeparator}validation_contract.dart',
-    ).writeAsString(_coreValidationContract());
-
-    for (final table in project.tables) {
-      await File('${modelsDir.path}${Platform.pathSeparator}${table.fileName}')
-          .writeAsString(_buildModel(table));
-      await File(
-        '${validationDir.path}${Platform.pathSeparator}${table.normalizedName}_validation.dart',
-      ).writeAsString(_buildValidationModel(project, table));
-    }
-  }
-
-  String _corePubspec(AnalysisProject project) =>
-      '''name: ${project.dartPackageName}_core
-description: Generated core models for ${project.source}
-publish_to: none
-
-environment:
-  sdk: ^3.6.2
-''';
-
-  String _coreLibrary(AnalysisProject project) {
-    final exports = <String>[
-      "export 'src/schema.dart';",
-      "export 'src/validation/validation_contract.dart';",
-      for (final table in project.tables) "export 'src/models/${table.fileName}';",
-      for (final table in project.tables)
-        "export 'src/validation/${table.normalizedName}_validation.dart';",
-    ];
-    return '${exports.join('\n')}\n';
-  }
-
-  String _coreSchema(AnalysisProject project) {
-    final tableEntries = project.tables
-        .map(
-          (table) =>
-              "  '${tableRuntimeName(table)}': {'rows': ${table.rowCount}, 'columns': ${table.columns.length}},",
-        )
-        .join('\n');
-    return 'const generatedSchema = <String, Map<String, Object>>{\n$tableEntries\n};\n';
-  }
-
-  String _buildModel(AnalysisTable table) {
-    final constants = table.columns
-        .map(
-          (column) =>
-              "  static const ${column.columnConstantName} = '${columnRuntimeName(column)}';",
-        )
-        .join('\n');
-    final fields = table.columns
-        .map((column) => '  final ${column.dartType} ${column.fieldName};')
-        .join('\n');
-    final constructorArgs = table.columns
-        .map((column) => '    this.${column.fieldName},')
-        .join('\n');
-    final fromMapAssignments = table.columns
-        .map((column) => '      ${column.fieldName}: ${_fromMapValue(column)},')
-        .join('\n');
-    final toMapEntries = table.columns
-        .where((column) => !column.isAutoNumber)
-        .map(
-          (column) => '      ${column.columnConstantName}: ${column.fieldName},',
-        )
-        .join('\n');
-    return '''class ${table.className} {
-$constants
-
-$fields
-
-  const ${table.className}({
-$constructorArgs
-  });
-
-  factory ${table.className}.fromMap(Map<String, dynamic> map) {
-    return ${table.className}(
-$fromMapAssignments
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
-$toMapEntries
-    };
-${_idWriteBackBlock(table)}    return map;
-  }
-}
-''';
-  }
-
-  String _coreValidationContract() => '''class ValidationIssue {
-  final String field;
-  final String message;
-
-  const ValidationIssue({
-    required this.field,
-    required this.message,
-  });
-
-  Map<String, dynamic> toMap() => {
-        'field': field,
-        'message': message,
-      };
-}
-
-class ValidationContract {
-  final List<ValidationIssue> issues;
-
-  const ValidationContract(this.issues);
-
-  const ValidationContract.empty() : issues = const <ValidationIssue>[];
-
-  bool get isValid => issues.isEmpty;
-
-  Map<String, String> asFieldMap() {
-    final errors = <String, String>{};
-    for (final issue in issues) {
-      errors.putIfAbsent(issue.field, () => issue.message);
-    }
-    return errors;
-  }
-
-  List<Map<String, dynamic>> toJsonList() {
-    return issues.map((issue) => issue.toMap()).toList();
-  }
-}
-''';
+extension _ProjectGeneratorCoreValidation on ProjectGenerator {
+  String _coreValidationContract() => _buildCoreValidationContractSource();
 
   String _buildValidationModel(AnalysisProject project, AnalysisTable table) {
+    final model = _buildCoreModelIr(table);
     final validations = _buildValidationsForTable(project, table);
     final uniqueHints = <String>[];
     final seenHints = <String>{};
@@ -166,9 +22,7 @@ class ValidationContract {
           uniqueHints.add(message);
         }
       }
-      validatorInvocations.add(
-        '_validate${validation.methodSuffix}(draft, issues);',
-      );
+      validatorInvocations.add('_validate${validation.methodSuffix}(draft, issues);');
       validatorMethods.add(_buildValidationContractMethod(validation));
       needsStringHelper = true;
       if (validation.kinds.contains(AccessFormFieldRuleKind.cpf)) {
@@ -277,27 +131,16 @@ class ValidationContract {
 ''');
     }
 
-    return '''import '../models/${table.fileName}';
-import 'validation_contract.dart';
-
-class ${table.className}ValidationContract {
-  static final List<String> validationHints = $hintsSource;
-
-  static ValidationContract validate(${table.className} entity) {
-    return validateDraft(entity.toMap());
-  }
-
-  static ValidationContract validateDraft(Map<String, dynamic> draft) {
-    final issues = <ValidationIssue>[];
-    ${validatorInvocations.join('\n    ')}
-    return ValidationContract(issues);
-  }
-
-${validatorMethods.join('\n\n')}
-
-${helperMethods.join('\n')}
-}
-''';
+    return _buildCoreValidationModelSource(
+      descriptor: GeneratedCoreValidationDescriptor(
+        className: model.className,
+        fileName: model.fileName,
+        hintsSource: hintsSource,
+        validatorInvocations: validatorInvocations,
+        validatorMethods: validatorMethods,
+        helperMethods: helperMethods,
+      ),
+    );
   }
 
   List<_GeneratedFieldValidation> _buildValidationsForTable(
@@ -308,7 +151,7 @@ ${helperMethods.join('\n')}
     final ruleSet = form == null || (form.rawVbaCode ?? '').trim().isEmpty
         ? const AccessFormRuleSet()
         : AccessFormRuleExtractor.extract(form.rawVbaCode!);
-    return _matchFormRulesToColumns(table, ruleSet);
+    return _matchFormRulesToColumns(this, table, ruleSet);
   }
 
   String _buildValidationContractMethod(_GeneratedFieldValidation validation) {

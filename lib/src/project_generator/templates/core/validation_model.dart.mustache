@@ -1,0 +1,26 @@
+import '../models/{{fileName}}';
+import 'validation_contract.dart';
+
+class {{className}}ValidationContract {
+  static final List<String> validationHints = {{{hintsSource}}};
+
+  static ValidationContract validate({{className}} entity) {
+    return validateDraft(entity.toMap());
+  }
+
+  static ValidationContract validateDraft(Map<String, dynamic> draft) {
+    final issues = <ValidationIssue>[];
+{{#validatorInvocations}}
+    {{{.}}}
+{{/validatorInvocations}}
+    return ValidationContract(issues);
+  }
+
+{{#validatorMethods}}
+{{{.}}}
+
+{{/validatorMethods}}
+{{#helperMethods}}
+{{{.}}}
+{{/helperMethods}}
+}

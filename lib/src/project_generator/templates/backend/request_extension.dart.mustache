@@ -1,0 +1,17 @@
+import 'dart:convert';
+import 'package:shelf/shelf.dart';
+import '../../di/dependency_injector.dart';
+
+extension ShelfRequestDI on Request {
+  T make<T extends Object>() {
+    return ioc.get<T>();
+  }
+}
+
+extension ShelfRequestExtension on Request {
+  Future<Map<String, dynamic>> bodyAsMap() async {
+    final requestBody = await readAsString();
+    if (requestBody.isEmpty) return {};
+    return json.decode(requestBody) as Map<String, dynamic>;
+  }
+}

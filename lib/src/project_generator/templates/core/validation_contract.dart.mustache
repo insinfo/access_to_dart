@@ -1,0 +1,36 @@
+class ValidationIssue {
+  final String field;
+  final String message;
+
+  const ValidationIssue({
+    required this.field,
+    required this.message,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'field': field,
+        'message': message,
+      };
+}
+
+class ValidationContract {
+  final List<ValidationIssue> issues;
+
+  const ValidationContract(this.issues);
+
+  const ValidationContract.empty() : issues = const <ValidationIssue>[];
+
+  bool get isValid => issues.isEmpty;
+
+  Map<String, String> asFieldMap() {
+    final errors = <String, String>{};
+    for (final issue in issues) {
+      errors.putIfAbsent(issue.field, () => issue.message);
+    }
+    return errors;
+  }
+
+  List<Map<String, dynamic>> toJsonList() {
+    return issues.map((issue) => issue.toMap()).toList();
+  }
+}

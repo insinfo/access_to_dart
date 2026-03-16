@@ -1,0 +1,44 @@
+{{=<% %>=}}
+<div *ngIf="insideModal == false" class="page-header page-header-light shadow">
+  <div class="page-header-content d-lg-flex">
+    <h4 class="page-title mb-0">Módulo - <span class="fw-normal">Incluir <%namePascal%></span></h4>
+  </div>
+</div>
+
+<div class="content">
+  <div class="alert alert-info border-start border-info border-4 mb-3" *ngIf="validationHints.isNotEmpty">
+    <strong>Regras migradas do formulario Access:</strong>
+    <ul class="mb-0 mt-2">
+      <li *ngFor="let hint of validationHints">{{ hint }}</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <form (ngSubmit)="salvar()" #formEntity="ngForm" novalidate>
+        <div class="row">
+<%#fields%>
+          <div class="col-md-4 form-group mb-3">
+            <label class="form-label"><%label%>:</label>
+            <input
+              [ngModel]="readField('<%readKey%>')"
+              (ngModelChange)="updateField('<%updateKey%>', $event)"
+              ngControl="<%ngControl%>"
+              type="<%inputType%>"
+              [class.is-invalid]="readFieldError('<%updateKey%>') != null"
+              class="form-control">
+            <div class="invalid-feedback d-block" *ngIf="readFieldError('<%updateKey%>') != null">
+              {{ readFieldError('<%updateKey%>') }}
+            </div>
+          </div>
+<%/fields%>
+        </div>
+        <div class="text-end mt-3">
+          <button class="btn btn-primary btn-labeled btn-labeled-start" type="submit">
+            <span class="btn-labeled-icon bg-black bg-opacity-20"><i class="ph ph-floppy-disk"></i></span>
+            Salvar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

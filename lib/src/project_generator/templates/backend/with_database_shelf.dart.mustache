@@ -1,0 +1,29 @@
+import 'package:eloquent/eloquent.dart';
+import 'package:shelf/shelf.dart';
+
+import '../di/dependency_injector.dart';
+import 'database_service.dart';
+
+Middleware withDbShelfMiddleware() {
+  return (Handler innerHandler) {
+    return (Request request) async {
+      final dbService = ioc.get<DatabaseService>();
+      Connection? connection;
+
+      try {
+        ioc.pushNewScope();
+        connection = await dbService.connect();
+        ioc.registerSingleton<Connection>(connection);
+
+        final newRequest = request.change(context: {
+          ...request.context,
+          'db.connection': connection,
+        });
+
+        return await innerHandler(newRequest);
+      } finally {
+        await ioc.popScope();
+      }
+    };
+  };
+}

@@ -1,0 +1,83 @@
+import 'package:shelf/shelf.dart';
+import 'package:{{corePackageName}}_core/core.dart';
+
+import '../../../shared/extensions/request_extension.dart';
+import '../../../shared/utils/api_utils.dart';
+import '../services/{{normalizedName}}_service.dart';
+
+class {{className}}Controller {
+  static Future<Response> list(Request req) async {
+    try {
+      final service = req.make<{{className}}Service>();
+      final data = await service.all();
+      return responseJson(data);
+    } catch (e, s) {
+      print('Erro no list: $e $s');
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> show(Request req, String idRaw) async {
+    try {
+      final id = int.parse(idRaw);
+      final service = req.make<{{className}}Service>();
+      final item = await service.findById(id);
+      if (item == null) return responseError('Not found', statusCode: 404);
+      return responseJson(item);
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> create(Request req) async {
+    try {
+      final body = await req.bodyAsMap();
+      final validation = {{className}}ValidationContract.validateDraft(body);
+      if (!validation.isValid) {
+        return responseValidationError(validation);
+      }
+      final item = {{className}}.fromMap(body);
+      final service = req.make<{{className}}Service>();
+      final savedItem = await service.create(item);
+      if (savedItem == null) {
+        return responseError('Failed to reload created entity', statusCode: 500);
+      }
+      return responseJson(savedItem);
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> update(Request req, String idRaw) async {
+    try {
+      final id = int.parse(idRaw);
+      final body = await req.bodyAsMap();
+      final validation = {{className}}ValidationContract.validateDraft(body);
+      if (!validation.isValid) {
+        return responseValidationError(validation);
+      }
+      final item = {{className}}.fromMap(body);
+
+      final service = req.make<{{className}}Service>();
+      final savedItem = await service.update(id, item);
+      if (savedItem == null) {
+        return responseError('Not found', statusCode: 404);
+      }
+      return responseJson(savedItem);
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> delete(Request req, String idRaw) async {
+    try {
+      final id = int.parse(idRaw);
+      final service = req.make<{{className}}Service>();
+      await service.delete(id);
+
+      return responseJson({'success': true});
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+}

@@ -72,13 +72,27 @@ void main() {
 
     final sharedServiceFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}shared${Platform.pathSeparator}services${Platform.pathSeparator}api_http_service.dart');
     expect(await sharedServiceFile.exists(), isTrue);
-    expect(await sharedServiceFile.readAsString(), contains("package:http/http.dart' as http"));
+    final sharedServiceContent = await sharedServiceFile.readAsString();
+    expect(sharedServiceContent, contains("package:http/http.dart' as http"));
+    expect(sharedServiceContent, contains('Future<Object?> postJson'));
+    expect(sharedServiceContent, contains('Future<Object?> putJson'));
+    expect(sharedServiceContent, contains('Future<Object?> deleteJson'));
+
+    final restServiceFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}shared${Platform.pathSeparator}services${Platform.pathSeparator}rest_service.dart');
+    expect(await restServiceFile.exists(), isTrue);
+    final restServiceContent = await restServiceFile.readAsString();
+    expect(restServiceContent, contains('ApiHttpService'));
+    expect(restServiceContent, contains('await _api.getJson'));
+    expect(restServiceContent, contains('await _api.postJson'));
+    expect(restServiceContent, contains('await _api.putJson'));
+    expect(restServiceContent, contains('await _api.deleteJson'));
 
     final appScssFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}app_component.scss');
     expect(await appScssFile.exists(), isTrue);
 
     final moduleServiceFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}services${Platform.pathSeparator}contatos_service.dart');
     expect(await moduleServiceFile.exists(), isTrue);
+    final moduleServiceContent = await moduleServiceFile.readAsString();
 
     final modulePageFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}pages${Platform.pathSeparator}contatos_page_component.dart');
     expect(await modulePageFile.exists(), isTrue);
@@ -100,7 +114,10 @@ void main() {
 
     final backendControllerFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}controllers${Platform.pathSeparator}contatos_controller.dart');
     expect(await backendControllerFile.exists(), isTrue);
-    expect(await backendControllerFile.readAsString(), contains('class ContatosController'));
+    final backendControllerContent = await backendControllerFile.readAsString();
+    expect(backendControllerContent, contains('class ContatosController'));
+    expect(backendControllerContent, contains('final savedItem = await service.create(item);'));
+    expect(backendControllerContent, contains('return responseJson(savedItem);'));
 
     final backendRoutesFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}routes${Platform.pathSeparator}contatos_routes.dart');
     expect(await backendRoutesFile.exists(), isTrue);
@@ -134,7 +151,8 @@ void main() {
     expect(await databaseServiceFile.exists(), isTrue);
     expect(await databaseServiceFile.readAsString(), contains('class DatabaseService'));
 
-    expect(await moduleServiceFile.readAsString(), contains("'/contatos'"));
+    expect(moduleServiceContent, contains("'/contatos'"));
+    expect(moduleServiceContent, contains("'/contatos/\${entity.id}'"));
     expect(
       await File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}pages${Platform.pathSeparator}consultar_contatos${Platform.pathSeparator}consultar_contatos_page.dart').readAsString(),
       contains("RestConfig('/api/v1')"),

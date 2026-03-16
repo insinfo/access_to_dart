@@ -1,0 +1,32 @@
+class {{className}} {
+{{#constants}}
+  static const {{constantName}} = '{{runtimeName}}';
+{{/constants}}
+
+{{#fields}}
+  final {{dartType}} {{fieldName}};
+{{/fields}}
+
+  const {{className}}({
+{{#constructorArgs}}
+    this.{{fieldName}},
+{{/constructorArgs}}
+  });
+
+  factory {{className}}.fromMap(Map<String, dynamic> map) {
+    return {{className}}(
+{{#fromMapAssignments}}
+      {{fieldName}}: {{{expression}}},
+{{/fromMapAssignments}}
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    final map = <String, dynamic>{
+{{#toMapEntries}}
+      {{constantName}}: {{fieldName}},
+{{/toMapEntries}}
+    };
+{{{idWriteBackBlock}}}    return map;
+  }
+}

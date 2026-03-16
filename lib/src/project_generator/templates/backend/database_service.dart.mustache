@@ -1,0 +1,23 @@
+import 'package:eloquent/eloquent.dart';
+
+import '../shared/app_config.dart';
+
+class DatabaseService {
+  late final Manager _manager = Manager()..addConnection(_baseConfig, 'default');
+
+  Map<String, dynamic> get _baseConfig => {
+        'driver': 'pgsql',
+        'host': AppConfig.databaseHost,
+        'port': AppConfig.databasePort,
+        'database': AppConfig.databaseName,
+        'username': AppConfig.databaseUser,
+        'password': AppConfig.databasePassword,
+        'charset': 'utf8',
+        'pool': true,
+        'poolsize': 10,
+      };
+
+  Future<Connection> connect([String name = 'default']) async {
+    return _manager.getConnection(name);
+  }
+}

@@ -1,0 +1,58 @@
+{{=<% %>=}}
+<div class="page-header page-header-light shadow">
+  <div class="page-header-content d-lg-flex">
+    <div class="d-flex">
+      <h4 class="page-title mb-0">
+        Módulo - <span class="fw-normal">Consultar <%namePascal%></span>
+      </h4>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="mb-0">Itens carregados: {{ items.length }}</p>
+        <button type="button" class="btn btn-primary" (click)="openCreateForm()">Novo</button>
+      </div>
+
+      <div *ngIf="loading">Carregando...</div>
+      <div *ngIf="errorMessage != null" class="alert alert-danger">{{ errorMessage }}</div>
+
+      <table class="table table-striped" *ngIf="loading == false && items.isNotEmpty">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Registro</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of items; let idx = index">
+            <td>{{ idx + 1 }}</td>
+            <td>{{ item.toMap() }}</td>
+            <td>
+              <button type="button" class="btn btn-sm btn-outline-primary" (click)="openEditForm(item)">Editar</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p *ngIf="loading == false && items.isEmpty && errorMessage == null" class="mb-0">Nenhum registro carregado.</p>
+    </div>
+  </div>
+</div>
+
+<div class="content" *ngIf="showForm">
+  <div class="card">
+    <div class="card-body">
+      <incluir-<%moduleNameKebab%>-page
+        [insideModal]="false"
+        [entity]="selectedItem"
+        [modoAlterar]="selectedItem != null"
+        (onUpdateEntity)="onUpdateEntity($event)">
+      </incluir-<%moduleNameKebab%>-page>
+    </div>
+  </div>
+</div>

@@ -1,17 +1,38 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:code_builder/code_builder.dart';
+import 'package:dart_style/dart_style.dart';
+import 'package:mustache_template/mustache_template.dart';
 import 'package:path/path.dart' as p;
+import 'package:recase/recase.dart';
 
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
 import '../migration_identifier_style.dart';
 import '../vba_parser/form_rule_extractor.dart';
 
-part 'project_generator_backend.dart';
-part 'project_generator_core.dart';
-part 'project_generator_frontend.dart';
+part 'project_generator_form_rules.dart';
+part 'project_generator_ir.dart';
 part 'project_generator_shared.dart';
+part 'codegen/backend_template_emitters.dart';
+part 'codegen/codegen_shared.dart';
+part 'codegen/core_template_emitters.dart';
+part 'codegen/backend_dart_emitters.dart';
+part 'codegen/core_dart_emitters.dart';
+part 'codegen/frontend_dart_emitters.dart';
+part 'codegen/frontend_template_emitters.dart';
+part 'backend/backend_base_generator.dart';
+part 'backend/backend_module_generator.dart';
+part 'backend/backend_writer.dart';
+part 'core/core_model_generator.dart';
+part 'core/core_validation_generator.dart';
+part 'core/core_writer.dart';
+part 'frontend/frontend_module_generator.dart';
+part 'frontend/frontend_scaffold_generator.dart';
+part 'frontend/frontend_shell_generator.dart';
+part 'frontend/frontend_shared_generator.dart';
+part 'frontend/frontend_writer.dart';
 
 class GeneratedProject {
   final Directory rootDirectory;
@@ -47,7 +68,7 @@ class ProjectGenerator {
   String tableRouteName(AnalysisTable table) => table.normalizedName;
 
   String tableRouteSegment(AnalysisTable table) =>
-      tableRouteName(table).replaceAll('_', '-');
+      ReCase(tableRouteName(table)).paramCase;
 
   String columnRuntimeName(AnalysisColumn column) =>
       identifierPolicy.columnName(column.name);

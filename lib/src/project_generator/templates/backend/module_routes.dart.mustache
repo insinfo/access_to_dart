@@ -1,0 +1,13 @@
+import 'package:shelf_router/shelf_router.dart';
+import '../controllers/{{normalizedName}}_controller.dart';
+
+void setup{{className}}Routes(Router app, String basePath) {
+  final group = Router()
+    ..get('/', {{className}}Controller.list)
+    ..get('/<id>', {{className}}Controller.show)
+    ..post('/', {{className}}Controller.create)
+    ..put('/<id>', {{className}}Controller.update)
+    ..delete('/<id>', {{className}}Controller.delete);
+
+  app.mount('$basePath/{{routeName}}', group.call);
+}

@@ -1,0 +1,33 @@
+import 'package:{{corePackageName}}_core/core.dart';
+
+import '../repositories/{{normalizedName}}_repository.dart';
+
+class {{className}}Service {
+  static const resourcePath = '/api/v1/{{routeName}}';
+
+  final {{className}}Repository repository;
+
+  {{className}}Service(this.repository);
+
+  Future<List<Map<String, dynamic>>> all() {
+    return repository.all();
+  }
+
+  Future<Map<String, dynamic>?> findById(int id) {
+    return repository.findById(id);
+  }
+
+  Future<Map<String, dynamic>?> create({{className}} item) async {
+    final insertedId = await repository.insert(item);
+    return repository.findById(insertedId);
+  }
+
+  Future<Map<String, dynamic>?> update(int id, {{className}} item) async {
+    await repository.update(id, item);
+    return repository.findById(id);
+  }
+
+  Future<void> delete(int id) {
+    return repository.delete(id);
+  }
+}
