@@ -127,4 +127,62 @@ void main() {
       isTrue,
     );
   });
+
+  test('parses caption maxLength required and defaultValue from synthetic src',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp('access_src_synth_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    final tbldefsDir = Directory('${tempDir.path}${Platform.pathSeparator}tbldefs');
+    await tbldefsDir.create(recursive: true);
+    await File('${tbldefsDir.path}${Platform.pathSeparator}Demo.sql').writeAsString(
+      'CREATE TABLE [Demo] ([Descricao] VARCHAR (50) DEFAULT "Padrao" NOT NULL, [Ativo] BIT DEFAULT 0)',
+    );
+    await File('${tbldefsDir.path}${Platform.pathSeparator}Demo.xml').writeAsString(
+      '''
+<xsd:schema xmlns:xsd="xsd" xmlns:od="od">
+  <xsd:element name="dataroot" />
+  <xsd:element name="Demo">
+    <xsd:complexType>
+      <xsd:sequence>
+        <xsd:element name="Descricao" od:jetType="text" od:sqlSType="nvarchar" od:nonNullable="yes">
+          <xsd:simpleType>
+            <xsd:restriction>
+              <xsd:maxLength value="50" />
+            </xsd:restriction>
+          </xsd:simpleType>
+          <xsd:annotation>
+            <xsd:appinfo>
+              <od:fieldProperty name="Caption" value="Descricao amigavel" />
+              <od:fieldProperty name="Required" value="1" />
+              <od:fieldProperty name="DefaultValue" value="&quot;Padrao&quot;" />
+              <od:fieldProperty name="ValidationRule" value=">0" />
+              <od:fieldProperty name="ValidationText" value="Informe um valor positivo." />
+              <od:fieldProperty name="Format" value="@;0;_" />
+              <od:fieldProperty name="InputMask" value="LLL-000" />
+              <od:fieldProperty name="AllowZeroLength" value="0" />
+            </xsd:appinfo>
+          </xsd:annotation>
+        </xsd:element>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+</xsd:schema>
+''',
+    );
+
+    final project = await AccessSrcReader().readDirectory(tempDir.path);
+    final demo = project.tables.singleWhere((table) => table.name == 'Demo');
+    final descricao = demo.columns.singleWhere((column) => column.name == 'Descricao');
+
+    expect(descricao.caption, 'Descricao amigavel');
+    expect(descricao.required, isTrue);
+    expect(descricao.maxLength, 50);
+    expect(descricao.defaultValue, '"Padrao"');
+    expect(descricao.validationRule, '>0');
+    expect(descricao.validationText, 'Informe um valor positivo.');
+    expect(descricao.format, '@;0;_');
+    expect(descricao.inputMask, 'LLL-000');
+    expect(descricao.allowZeroLength, isFalse);
+  });
 }

@@ -9,7 +9,11 @@ import 'package:recase/recase.dart';
 
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
+import '../identifier_utils.dart';
 import '../migration_identifier_style.dart';
+import '../query_reconciliation/sql_clause_parser.dart';
+import '../query_reconciliation/sql_token.dart';
+import '../query_reconciliation/sql_tokenizer.dart';
 import '../vba_parser/form_rule_extractor.dart';
 
 part 'project_generator_form_rules.dart';

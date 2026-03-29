@@ -11,6 +11,33 @@ class {{className}}Repository {
     return await query.get();
   }
 
+  Future<List<Map<String, dynamic>>> lookupOptions({
+    required String valueColumn,
+    required String labelColumn,
+    String? orderByColumn,
+    int limit = 100,
+  }) async {
+    final rows = List<Map<String, dynamic>>.from(await db.table('{{tableRuntimeName}}').get());
+    if (orderByColumn != null && orderByColumn.isNotEmpty) {
+      rows.sort((left, right) {
+        final leftValue = (left[orderByColumn] ?? left[labelColumn] ?? '').toString();
+        final rightValue = (right[orderByColumn] ?? right[labelColumn] ?? '').toString();
+        return leftValue.toLowerCase().compareTo(rightValue.toLowerCase());
+      });
+    }
+
+    return rows
+        .where((row) => row[valueColumn] != null)
+        .take(limit)
+        .map(
+          (row) => <String, dynamic>{
+            'value': row[valueColumn],
+            'label': row[labelColumn] ?? row[valueColumn],
+          },
+        )
+        .toList(growable: false);
+  }
+
   Future<Map<String, dynamic>?> findById(int id) async {
     return await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).first();
   }

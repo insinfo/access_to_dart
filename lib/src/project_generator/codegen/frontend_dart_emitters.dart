@@ -405,6 +405,33 @@ return _expectMap(payload, endpoint);
               )
               ..body = const Code('await _api.deleteJson(endpoint);')),
             Method((method) => method
+              ..name = 'getLookupOptions'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<List<LookupOption>>')
+              ..requiredParameters.add(
+                Parameter((param) => param..name = 'endpoint'..type = refer('String')),
+              )
+              ..optionalParameters.add(
+                Parameter((param) => param
+                  ..name = 'limit'
+                  ..named = true
+                  ..type = refer('int')
+                  ..defaultTo = const Code('100')),
+              )
+              ..body = Code('''
+final payload = await _api.getJson(
+  endpoint,
+  queryParameters: <String, String>{
+    'limit': '\$limit',
+  },
+);
+final rows = _expectList(payload, endpoint);
+return rows
+    .map(LookupOption.fromMap)
+    .where((option) => option.value.isNotEmpty)
+    .toList(growable: false);
+''')),
+            Method((method) => method
               ..name = '_filtersToQueryParameters'
               ..returns = refer('Map<String, String>?')
               ..requiredParameters.add(
@@ -458,6 +485,43 @@ if (payload is Map<String, dynamic>) {
 throw StateError('Resposta inesperada para \$endpoint');
 ''')),
           ]),
+      ),
+      Class(
+        (builder) => builder
+          ..name = 'LookupOption'
+          ..fields.addAll(<Field>[
+            Field((field) => field
+              ..modifier = FieldModifier.final$
+              ..name = 'value'
+              ..type = refer('String')),
+            Field((field) => field
+              ..modifier = FieldModifier.final$
+              ..name = 'label'
+              ..type = refer('String')),
+          ])
+          ..constructors.add(
+            Constructor(
+              (ctor) => ctor
+                ..constant = true
+                ..requiredParameters.addAll(<Parameter>[
+                  Parameter((param) => param..name = 'value'..toThis = true),
+                  Parameter((param) => param..name = 'label'..toThis = true),
+                ]),
+            ),
+          )
+          ..methods.add(
+            Method((method) => method
+              ..name = 'fromMap'
+              ..static = true
+              ..returns = refer('LookupOption')
+              ..requiredParameters.add(
+                Parameter((param) => param..name = 'map'..type = refer('Map<String, dynamic>')),
+              )
+              ..lambda = true
+              ..body = const Code(
+                "LookupOption(map['value']?.toString() ?? '', map['label']?.toString() ?? map['value']?.toString() ?? '')",
+              )),
+          ),
       ),
     ],
   );
@@ -599,6 +663,26 @@ return ${module.className}.fromMap(map);
                 Parameter((param) => param..name = 'id'..type = refer('int')),
               )
               ..body = Code("await deleteEntity('/${module.moduleNameKebab}/\$id');")),
+            Method((method) => method
+              ..name = 'lookupOptions'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<List<LookupOption>>')
+              ..requiredParameters.add(
+                Parameter((param) => param..name = 'fieldKey'..type = refer('String')),
+              )
+              ..optionalParameters.add(
+                Parameter((param) => param
+                  ..name = 'limit'
+                  ..named = true
+                  ..type = refer('int')
+                  ..defaultTo = const Code('100')),
+              )
+              ..body = Code('''
+return getLookupOptions(
+  '/${module.moduleNameKebab}/lookups/\$fieldKey',
+  limit: limit,
+);
+''')),
           ]),
       ),
     ],

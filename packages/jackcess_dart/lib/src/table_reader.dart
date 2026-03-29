@@ -38,6 +38,8 @@ class TableReader {
       name: tableName,
       tdefPageNumber: tdefPage,
       rowCount: rowCount,
+      validationRule: null,
+      validationText: null,
       sampleRows: const [],
       indexes: indexes
           .map((index) => AccessIndexSchema(
@@ -82,6 +84,24 @@ class TableReader {
                 extFlags: c.extFlags,
                 precision: c.precision,
                 scale: c.scale,
+                isRequired: false,
+                caption: null,
+                defaultValue: null,
+                maxLength: null,
+                calculatedExpression: null,
+                validationRule: null,
+                validationText: null,
+                description: null,
+                decimalPlaces: null,
+                displayControl: null,
+                textFormat: null,
+                imeMode: null,
+                imeSentenceMode: null,
+                resultType: null,
+                propertyGuid: null,
+                formatString: null,
+                inputMask: null,
+                allowZeroLength: null,
               ))
           .toList(),
     );

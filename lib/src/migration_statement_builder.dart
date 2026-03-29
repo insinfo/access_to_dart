@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:jackcess_dart/jackcess_dart.dart';
+
 import 'analysis_model.dart';
 import 'identifier_utils.dart';
 import 'migration_identifier_style.dart';
@@ -59,10 +61,22 @@ class MigrationStatementBuilder {
 
     for (final column in table.columns) {
       final isPrimaryKey = primaryKeyColumns.contains(column.name);
-      final notNull = isPrimaryKey ? ' NOT NULL' : '';
+      final generatedExpression =
+          column.isCalculated ? _postgresCalculatedExpression(column) : null;
+      if (generatedExpression != null) {
+        lines.add(
+          '  ${identifierPolicy.quotedColumnName(column.name)} ${_postgresType(column)} GENERATED ALWAYS AS ($generatedExpression) STORED',
+        );
+        continue;
+      }
+      final notNull = (isPrimaryKey || column.isRequired) ? ' NOT NULL' : '';
       final autoInc = column.isAutoNumber ? ' GENERATED ALWAYS AS IDENTITY' : '';
+      final defaultExpression =
+          column.isAutoNumber ? null : _postgresDefaultExpression(column);
+      final defaultClause =
+          defaultExpression == null ? '' : ' DEFAULT $defaultExpression';
       lines.add(
-        '  ${identifierPolicy.quotedColumnName(column.name)} ${_postgresType(column)}$notNull$autoInc',
+        '  ${identifierPolicy.quotedColumnName(column.name)} ${_postgresType(column)}$notNull$defaultClause$autoInc',
       );
     }
 
@@ -80,11 +94,18 @@ class MigrationStatementBuilder {
     AnalysisTable table,
     Iterable<Map<String, dynamic>> rows,
   ) sync* {
+    final writableColumns = {
+      for (final column in table.columns)
+        if (!column.isCalculated) column.name,
+    };
     for (final row in rows) {
       final columnNames = <String>[];
       final values = <String>[];
 
       row.forEach((key, value) {
+        if (!writableColumns.contains(key)) {
+          return;
+        }
         columnNames.add(identifierPolicy.quotedColumnName(key));
         values.add(sqlLiteral(value));
       });
@@ -174,6 +195,184 @@ class MigrationStatementBuilder {
       return 'NUMERIC($precision)';
     }
     return 'NUMERIC';
+  }
+
+  String? _postgresDefaultExpression(AnalysisColumn column) {
+    final rawValue = column.defaultValue?.trim();
+    if (rawValue == null || rawValue.isEmpty) {
+      return null;
+    }
+
+    var normalized = rawValue;
+    if (normalized.startsWith('=')) {
+      normalized = normalized.substring(1).trimLeft();
+    }
+
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final upper = normalized.toUpperCase();
+    if (upper == 'NULL') {
+      return 'NULL';
+    }
+    if (upper == 'NOW()') {
+      return 'CURRENT_TIMESTAMP';
+    }
+    if (upper == 'DATE()') {
+      return 'CURRENT_DATE';
+    }
+    if (upper == 'TIME()') {
+      return 'CURRENT_TIME';
+    }
+
+    if (_isQuotedLiteral(normalized)) {
+      return _singleQuotedLiteral(normalized.substring(1, normalized.length - 1));
+    }
+
+    if (_isBooleanType(column)) {
+      if (upper == 'TRUE' || upper == 'YES' || normalized == '-1') {
+        return 'TRUE';
+      }
+      if (upper == 'FALSE' || upper == 'NO' || normalized == '0') {
+        return 'FALSE';
+      }
+    }
+
+    if (num.tryParse(normalized) != null) {
+      return normalized;
+    }
+
+    return null;
+  }
+
+  String? _postgresCalculatedExpression(AnalysisColumn column) {
+    final expression = column.calculatedExpression?.trim();
+    if (expression == null || expression.isEmpty) {
+      return null;
+    }
+    final parsed = AccessExpressionParser.tryParse(expression);
+    if (parsed == null) {
+      return null;
+    }
+    return _translateAccessNode(parsed);
+  }
+
+  String? _translateAccessNode(AccessExpressionNode node) {
+    if (node is AccessIdentifierNode) {
+      if (node.parts.isEmpty || node.parts.last == '*') {
+        return null;
+      }
+      return identifierPolicy.quotedColumnName(node.parts.last);
+    }
+    if (node is AccessStringNode) {
+      return _singleQuotedLiteral(node.value);
+    }
+    if (node is AccessNumberNode) {
+      return node.value;
+    }
+    if (node is AccessUnaryNode) {
+      final operand = _translateAccessNode(node.operand);
+      if (operand == null) {
+        return null;
+      }
+      final op = node.operatorName.toUpperCase() == 'NOT'
+          ? 'NOT '
+          : node.operatorName;
+      return '($op$operand)';
+    }
+    if (node is AccessBinaryNode) {
+      final left = _translateAccessNode(node.left);
+      final right = _translateAccessNode(node.right);
+      if (left == null || right == null) {
+        return null;
+      }
+      final op = switch (node.operatorName.toUpperCase()) {
+        '&' => '||',
+        '=' => '=',
+        '<>' => '!=',
+        'AND' => 'AND',
+        'OR' => 'OR',
+        '+' => '+',
+        '-' => '-',
+        '*' => '*',
+        '/' => '/',
+        '>' => '>',
+        '<' => '<',
+        '>=' => '>=',
+        '<=' => '<=',
+        _ => '',
+      };
+      if (op.isEmpty) {
+        return null;
+      }
+      return '($left $op $right)';
+    }
+    if (node is AccessFunctionCallNode) {
+      final name = foldToAscii(node.name).toUpperCase();
+      final args = node.arguments.map(_translateAccessNode).toList(growable: false);
+      if (args.any((arg) => arg == null)) {
+        return null;
+      }
+      final translatedArgs = args.cast<String>();
+      switch (name) {
+        case 'NZ':
+          if (translatedArgs.length == 1) {
+            return 'COALESCE(${translatedArgs[0]}, \'\')';
+          }
+          if (translatedArgs.length == 2) {
+            return 'COALESCE(${translatedArgs[0]}, ${translatedArgs[1]})';
+          }
+          return null;
+        case 'IIF':
+          if (translatedArgs.length != 3) {
+            return null;
+          }
+          return '(CASE WHEN ${translatedArgs[0]} THEN ${translatedArgs[1]} ELSE ${translatedArgs[2]} END)';
+        case 'LEN':
+          if (translatedArgs.length != 1) {
+            return null;
+          }
+          return 'CHAR_LENGTH(${translatedArgs[0]})';
+        case 'ABS':
+        case 'ROUND':
+        case 'UCASE':
+        case 'LCASE':
+          final targetName = switch (name) {
+            'UCASE' => 'UPPER',
+            'LCASE' => 'LOWER',
+            _ => name,
+          };
+          return '$targetName(${translatedArgs.join(', ')})';
+        case 'ISNULL':
+          if (translatedArgs.length != 1) {
+            return null;
+          }
+          return '(${translatedArgs[0]} IS NULL)';
+        default:
+          return null;
+      }
+    }
+    return null;
+  }
+
+  bool _isBooleanType(AnalysisColumn column) {
+    final normalized = foldToAscii(column.typeName).toLowerCase();
+    return normalized == 'yesno' || normalized == 'boolean' || normalized == 'bit';
+  }
+
+  bool _isQuotedLiteral(String value) {
+    if (value.length < 2) {
+      return false;
+    }
+    final first = value[0];
+    final last = value[value.length - 1];
+    return (first == '"' && last == '"') || (first == '\'' && last == '\'');
+  }
+
+  String _singleQuotedLiteral(String value) {
+    final escaped = value.replaceAll("'", "''");
+    return "'$escaped'";
   }
 
   String _bytesToHex(Uint8List bytes) {

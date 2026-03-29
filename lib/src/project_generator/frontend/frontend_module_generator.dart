@@ -142,9 +142,38 @@ class Consultar${namePascal}Page implements OnInit {
             'updateKey': field.runtimeName,
             'ngControl': field.fieldName,
             'inputType': field.inputType,
+            'inputMode': field.inputMode,
+            'isReadOnly': field.isReadOnly,
+            'isRequired': field.isRequired,
+            'maxLength': field.maxLength,
+            'title': _buildFieldHint(field),
+            'isMultiValueSelect': field.isMultiValueSuggested,
+            'isSingleSelect': field.isDropdownSuggested && !field.isMultiValueSuggested,
+            'isSelect': field.isDropdownSuggested,
+            'isNotSelect': !field.isDropdownSuggested,
+            'isDynamicSelect': field.hasDynamicLookup,
+            'format': field.formatString,
+            'inputMask': field.inputMask,
+            'validationRule': field.validationRule,
+            'rowSourceType': field.rowSourceType,
+            'rowSource': field.rowSource,
+            'displayControl': field.displayControl,
+            'textFormat': field.textFormat,
+            'dynamicFieldKey': field.lookup?.fieldRuntimeName,
+            'options': field.dropdownOptions
+                .map(
+                  (option) => <String, Object?>{
+                    'value': option,
+                    'label': option,
+                  },
+                )
+                .toList(growable: false),
           },
         )
         .toList(growable: false);
+
+    final fieldPresentationSource = _buildFieldPresentationSource(module.fields);
+    final dynamicLookupSource = _buildDynamicLookupSource(module.fields);
 
     final htmlContent = _buildIncluirPageHtml(
       namePascal: namePascal,
@@ -182,6 +211,12 @@ class Incluir${namePascal}Page implements OnInit {
 
   final Map<String, dynamic> _draft = <String, dynamic>{};
   final Map<String, String> validationErrors = <String, String>{};
+  final Map<String, List<LookupOption>> _lookupOptionsByField =
+      <String, List<LookupOption>>{};
+  static const Map<String, Map<String, Object?>> _fieldPresentation =
+$fieldPresentationSource;
+  static const Map<String, String> _dynamicLookupFields =
+$dynamicLookupSource;
 
   @Input('entity')
   set entityInput($namePascal? val) {
@@ -196,20 +231,262 @@ class Incluir${namePascal}Page implements OnInit {
   Stream<$namePascal> get onUpdateEntity => _updateEntityController.stream;
 
   @override
-  void ngOnInit() {}
+  void ngOnInit() {
+    _loadLookupOptions();
+  }
 
   List<String> get validationHints => $formLogicClassName.validationHints;
 
   String readField(String key) {
     final value = _draft[key];
-    return value?.toString() ?? '';
+    return _presentFieldValue(key, value);
   }
 
   String? readFieldError(String key) => validationErrors[key];
 
-  void updateField(String key, Object? value) {
-    _draft[key] = value;
+  List<LookupOption> lookupOptions(String key) {
+    return _lookupOptionsByField[key] ?? const <LookupOption>[];
+  }
+
+  List<String> selectedFieldValues(String key) {
+    final raw = _draft[key];
+    if (raw == null) {
+      return const <String>[];
+    }
+    if (raw is List) {
+      return raw
+          .map((value) => value?.toString() ?? '')
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    }
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return const <String>[];
+    }
+    return text
+        .split(';')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool isFieldOptionSelected(String key, String value) {
+    return selectedFieldValues(key).contains(value);
+  }
+
+  void toggleFieldSelection(String key, String value, bool selected) {
+    final values = selectedFieldValues(key).toSet();
+    if (selected) {
+      values.add(value);
+    } else {
+      values.remove(value);
+    }
+    _draft[key] = values.join(';');
     validationErrors.remove(key);
+  }
+
+  void updateField(String key, Object? value) {
+    _draft[key] = _normalizeFieldValue(key, value);
+    validationErrors.remove(key);
+  }
+
+  Future<void> _loadLookupOptions() async {
+    if (_dynamicLookupFields.isEmpty) {
+      return;
+    }
+
+    for (final entry in _dynamicLookupFields.entries) {
+      try {
+        _lookupOptionsByField[entry.key] = await _service.lookupOptions(entry.value);
+      } catch (e) {
+        validationErrors.putIfAbsent(
+          entry.key,
+          () => 'Falha ao carregar opcoes do campo \${entry.key}: \$e',
+        );
+      }
+    }
+  }
+
+  String _presentFieldValue(String key, Object? value) {
+    if (value == null) {
+      return '';
+    }
+    if (value is! String) {
+      return value.toString();
+    }
+
+    final metadata = _fieldPresentation[key] ?? const <String, Object?>{};
+    var text = value;
+    final inputMask = metadata['inputMask'] as String?;
+    if (inputMask != null && inputMask.trim().isNotEmpty) {
+      text = _applyAccessInputMask(text, inputMask);
+    }
+    return _applyAccessFormat(text, metadata['format'] as String?);
+  }
+
+  Object? _normalizeFieldValue(String key, Object? value) {
+    if (value == null) {
+      return value;
+    }
+    if (value is List) {
+      return value
+          .map((entry) => entry?.toString().trim() ?? '')
+          .where((entry) => entry.isNotEmpty)
+          .join(';');
+    }
+    if (value is! String) {
+      return value;
+    }
+
+    final metadata = _fieldPresentation[key] ?? const <String, Object?>{};
+    var text = _applyAccessFormat(value, metadata['format'] as String?);
+    final inputMask = metadata['inputMask'] as String?;
+    if (inputMask != null && inputMask.trim().isNotEmpty) {
+      text = _applyAccessInputMask(text, inputMask);
+    }
+
+    final maxLength = metadata['maxLength'] as int?;
+    if (maxLength != null && text.length > maxLength) {
+      text = text.substring(0, maxLength);
+    }
+
+    final dartType = metadata['dartType'] as String?;
+    switch (dartType) {
+      case 'int?':
+        return int.tryParse(text);
+      case 'double?':
+        return double.tryParse(text.replaceAll(',', '.'));
+      case 'DateTime?':
+        return DateTime.tryParse(text);
+      default:
+        return text;
+    }
+  }
+
+  static String _applyAccessFormat(String value, String? format) {
+    if (format == null || format.trim().isEmpty || value.isEmpty) {
+      return value;
+    }
+    final normalized = format.trim();
+    if (normalized.contains('>')) {
+      return value.toUpperCase();
+    }
+    if (normalized.contains('<')) {
+      return value.toLowerCase();
+    }
+    return value;
+  }
+
+  static String _applyAccessInputMask(String value, String mask) {
+    final pattern = mask.split(';').first;
+    if (pattern.trim().isEmpty || value.isEmpty) {
+      return value;
+    }
+
+    final buffer = StringBuffer();
+    var rawIndex = 0;
+    var uppercase = false;
+    var lowercase = false;
+    var inQuotes = false;
+
+    for (var index = 0; index < pattern.length; index++) {
+      final token = pattern[index];
+      if (token == '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (!inQuotes && token == '\\' && index + 1 < pattern.length) {
+        if (rawIndex > 0 || rawIndex < value.length) {
+          buffer.write(pattern[index + 1]);
+        }
+        index++;
+        continue;
+      }
+      if (!inQuotes && token == '>') {
+        uppercase = true;
+        lowercase = false;
+        continue;
+      }
+      if (!inQuotes && token == '<') {
+        lowercase = true;
+        uppercase = false;
+        continue;
+      }
+      if (!inQuotes && token == '!') {
+        continue;
+      }
+
+      final matcher = _maskMatcher(token, inQuotes);
+      if (matcher == null) {
+        if (buffer.isNotEmpty || rawIndex < value.length) {
+          buffer.write(token);
+        }
+        continue;
+      }
+
+      final consumed = _consumeMatchingChar(value, rawIndex, matcher);
+      if (consumed == null) {
+        break;
+      }
+      rawIndex = consumed.nextIndex;
+
+      var char = consumed.character;
+      if (uppercase) {
+        char = char.toUpperCase();
+      } else if (lowercase) {
+        char = char.toLowerCase();
+      }
+      buffer.write(char);
+    }
+
+    return buffer.toString();
+  }
+
+  static bool Function(String)? _maskMatcher(String token, bool inQuotes) {
+    if (inQuotes) {
+      return null;
+    }
+    switch (token) {
+      case '0':
+      case '9':
+        return (char) => _isDigit(char);
+      case 'L':
+      case '?':
+        return (char) => _isLetter(char);
+      case 'A':
+      case 'a':
+        return (char) => _isLetter(char) || _isDigit(char);
+      case 'C':
+      case '&':
+        return (char) => char.trim().isNotEmpty;
+      default:
+        return null;
+    }
+  }
+
+  static _ConsumedChar? _consumeMatchingChar(
+    String value,
+    int start,
+    bool Function(String) matcher,
+  ) {
+    for (var index = start; index < value.length; index++) {
+      final char = value[index];
+      if (!matcher(char)) {
+        continue;
+      }
+      return _ConsumedChar(character: char, nextIndex: index + 1);
+    }
+    return null;
+  }
+
+  static bool _isDigit(String char) {
+    final codeUnit = char.codeUnitAt(0);
+    return codeUnit >= 48 && codeUnit <= 57;
+  }
+
+  static bool _isLetter(String char) {
+    final codeUnit = char.toUpperCase().codeUnitAt(0);
+    return codeUnit >= 65 && codeUnit <= 90;
   }
 
   Future<void> salvar() async {
@@ -238,6 +515,13 @@ class Incluir${namePascal}Page implements OnInit {
       loading.hide();
     }
   }
+}
+
+class _ConsumedChar {
+  final String character;
+  final int nextIndex;
+
+  const _ConsumedChar({required this.character, required this.nextIndex});
 }
 ''';
 
@@ -325,4 +609,108 @@ class ${module.formLogicClassName} {
     await File(p.join(pagesDir.path, '${nameSnake}_page_component.scss'))
         .writeAsString('');
   }
+}
+
+String? _buildFieldHint(GeneratedFieldDescriptor field) {
+  final parts = <String>[];
+  if (field.validationText != null && field.validationText!.trim().isNotEmpty) {
+    parts.add(field.validationText!.trim());
+  }
+  if (field.description != null && field.description!.trim().isNotEmpty) {
+    parts.add(field.description!.trim());
+  }
+  if (field.formatString != null && field.formatString!.trim().isNotEmpty) {
+    parts.add('Formato Access: ${field.formatString!.trim()}');
+  }
+  if (field.inputMask != null && field.inputMask!.trim().isNotEmpty) {
+    parts.add('Mascara Access: ${field.inputMask!.trim()}');
+  }
+  if (field.validationRule != null && field.validationRule!.trim().isNotEmpty) {
+    parts.add('Regra Access: ${field.validationRule!.trim()}');
+  }
+  if (field.allowZeroLength == false) {
+    parts.add('Nao aceita string vazia.');
+  }
+  if (field.isCalculated) {
+    parts.add('Campo calculado do Access; leitura somente.');
+  }
+  if (field.displayControl != null) {
+    parts.add('DisplayControl Access: ${field.displayControl}');
+  }
+  if (field.textFormat != null) {
+    parts.add('TextFormat Access: ${field.textFormat}');
+  }
+  if (field.imeMode != null) {
+    parts.add('IMEMode Access: ${field.imeMode}');
+  }
+  if (field.imeSentenceMode != null) {
+    parts.add('IMESentenceMode Access: ${field.imeSentenceMode}');
+  }
+  if (field.allowMultipleValues == true) {
+    parts.add('Campo multivalorado do Access.');
+  }
+  if (field.rowSourceType != null && field.rowSourceType!.trim().isNotEmpty) {
+    parts.add('RowSourceType Access: ${field.rowSourceType!.trim()}');
+  }
+  if (field.rowSource != null && field.rowSource!.trim().isNotEmpty) {
+    parts.add('RowSource Access: ${field.rowSource!.trim()}');
+  }
+  if (field.wssFieldId != null && field.wssFieldId!.trim().isNotEmpty) {
+    parts.add('WSSFieldID Access: ${field.wssFieldId!.trim()}');
+  }
+  return parts.isEmpty ? null : parts.join(' | ');
+}
+
+String _buildFieldPresentationSource(List<GeneratedFieldDescriptor> fields) {
+  if (fields.isEmpty) {
+    return 'const <String, Map<String, Object?>>{}';
+  }
+
+  final entries = fields
+      .where((field) => !field.isAutoNumber)
+      .map((field) {
+        final values = <String>[];
+        values.add("'dartType': ${jsonEncode(field.dartType)}");
+        if (field.formatString != null && field.formatString!.trim().isNotEmpty) {
+          values.add("'format': ${jsonEncode(field.formatString!.trim())}");
+        }
+        if (field.inputMask != null && field.inputMask!.trim().isNotEmpty) {
+          values.add("'inputMask': ${jsonEncode(field.inputMask!.trim())}");
+        }
+        if (field.maxLength != null) {
+          values.add("'maxLength': ${field.maxLength}");
+        }
+        if (field.allowMultipleValues != null) {
+          values.add("'allowMultipleValues': ${field.allowMultipleValues}");
+        }
+        if (field.rowSourceType != null && field.rowSourceType!.trim().isNotEmpty) {
+          values.add("'rowSourceType': ${jsonEncode(field.rowSourceType!.trim())}");
+        }
+        if (field.rowSource != null && field.rowSource!.trim().isNotEmpty) {
+          values.add("'rowSource': ${jsonEncode(field.rowSource!.trim())}");
+        }
+        if (field.wssFieldId != null && field.wssFieldId!.trim().isNotEmpty) {
+          values.add("'wssFieldId': ${jsonEncode(field.wssFieldId!.trim())}");
+        }
+        return "    ${jsonEncode(field.runtimeName)}: <String, Object?>{${values.join(', ')}},";
+      })
+      .join('\n');
+
+  return '<String, Map<String, Object?>>{\n$entries\n  }';
+}
+
+String _buildDynamicLookupSource(List<GeneratedFieldDescriptor> fields) {
+  final entries = fields
+      .where((field) => field.lookup != null)
+      .map(
+        (field) =>
+            '    ${jsonEncode(field.runtimeName)}: ${jsonEncode(field.lookup!.fieldRuntimeName)},',
+      )
+      .join('\n');
+
+  if (entries.isEmpty) {
+    return 'const <String, String>{}';
+  }
+
+  return 'const <String, String>{\n$entries\n  }';
 }

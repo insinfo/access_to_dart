@@ -61,6 +61,12 @@ class AccessSrcColumn {
   final String? accessType;
   final String? sqlType;
   final String? caption;
+  final String? defaultValue;
+  final String? validationRule;
+  final String? validationText;
+  final String? format;
+  final String? inputMask;
+  final bool? allowZeroLength;
   final bool required;
   final int? maxLength;
   final bool isAttachment;
@@ -73,6 +79,12 @@ class AccessSrcColumn {
     required this.accessType,
     required this.sqlType,
     required this.caption,
+    required this.defaultValue,
+    this.validationRule,
+    this.validationText,
+    this.format,
+    this.inputMask,
+    this.allowZeroLength,
     required this.required,
     required this.maxLength,
     required this.isAttachment,
@@ -87,6 +99,12 @@ class AccessSrcColumn {
       'accessType': accessType,
       'sqlType': sqlType,
       'caption': caption,
+      'defaultValue': defaultValue,
+      'validationRule': validationRule,
+      'validationText': validationText,
+      'format': format,
+      'inputMask': inputMask,
+      'allowZeroLength': allowZeroLength,
       'required': required,
       'maxLength': maxLength,
       'isAttachment': isAttachment,

@@ -2,11 +2,19 @@ import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'identifier_utils.dart';
 import 'access_analysis/access_analysis.dart';
+import 'analysis_model.dart';
+import 'migration_identifier_style.dart';
+import 'migration_statement_builder.dart';
 
 /// Produces a rich analysis JSON from an [AccessDatabaseModel] and [AccessDatabase].
 class AccdbAnalyzer {
   final AccessDatabaseModel model;
   final AccessDatabase? db;
+  final MigrationStatementBuilder _ddlBuilder = const MigrationStatementBuilder(
+    identifierPolicy: MigrationIdentifierPolicy(
+      style: MigrationIdentifierStyle.snakeAscii,
+    ),
+  );
 
   AccdbAnalyzer({required this.model, this.db});
 
@@ -51,39 +59,66 @@ class AccdbAnalyzer {
   }
 
   String _buildPostgresDdl(AccessTableSchema t) {
-    final sb = StringBuffer();
-    sb.writeln('CREATE TABLE "${_toSnakeCase(t.name)}" (');
-    final lines = <String>[];
-    for (final c in t.columns) {
-      final pgType = AccessColumnSchema.typeCodeToPostgres(
-        c.typeCode,
-        c.length,
-        precision: c.precision,
-        scale: c.scale,
-      );
-      final notNull = c.columnNumber == 0 ? ' NOT NULL' : '';
-      final autoInc = c.isAutoNumber ? ' GENERATED ALWAYS AS IDENTITY' : '';
-      lines.add('  "${_toSnakeCase(c.name)}" $pgType$notNull$autoInc');
-    }
-    final primaryKey = t.indexes.where((index) => index.isPrimaryKey).isEmpty
-        ? null
-        : t.indexes.firstWhere((index) => index.isPrimaryKey);
-    if (primaryKey != null && primaryKey.columns.isNotEmpty) {
-      final keyColumns = primaryKey.columns
-          .map((column) => '"${_toSnakeCase(column.name)}"')
-          .join(', ');
-      lines.add('  PRIMARY KEY ($keyColumns)');
-    }
-    sb.write(lines.join(',\n'));
-    sb.writeln('\n);');
-    return sb.toString();
+    return _ddlBuilder.buildCreateTableStatement(_toAnalysisTable(t));
+  }
+
+  AnalysisTable _toAnalysisTable(AccessTableSchema table) {
+    return AnalysisTable(
+      name: table.name,
+      rowCount: table.rowCount,
+      postgresDdl: null,
+      dartClassName: _toDartClassName(table.name),
+      columns: table.columns
+          .map(
+            (column) => AnalysisColumn(
+              name: column.name,
+              typeName: column.typeName,
+              typeCode: column.typeCode,
+              isAutoNumber: column.isAutoNumber,
+              isCalculated: column.isCalculated,
+              isRequired: column.isRequired,
+              caption: column.caption,
+              defaultValue: column.defaultValue,
+              maxLength: column.maxLength,
+              calculatedExpression: column.calculatedExpression,
+              validationRule: column.validationRule,
+              validationText: column.validationText,
+              description: column.description,
+              decimalPlaces: column.decimalPlaces,
+              displayControl: column.displayControl,
+              textFormat: column.textFormat,
+              imeMode: column.imeMode,
+              imeSentenceMode: column.imeSentenceMode,
+              resultType: column.resultType,
+              propertyGuid: column.propertyGuid,
+              allowMultipleValues: column.allowMultipleValues,
+              rowSourceType: column.rowSourceType,
+              rowSource: column.rowSource,
+              wssFieldId: column.wssFieldId,
+              formatString: column.formatString,
+              inputMask: column.inputMask,
+              allowZeroLength: column.allowZeroLength,
+              precision: column.precision,
+              scale: column.scale,
+            ),
+          )
+          .toList(),
+      indexes: table.indexes
+          .map(
+            (index) => AnalysisIndex(
+              name: index.name,
+              isPrimaryKey: index.isPrimaryKey,
+              columns: index.columns
+                  .map((column) => AnalysisIndexColumn(name: column.name))
+                  .toList(),
+            ),
+          )
+          .toList(),
+      sampleRows: table.sampleRows,
+    );
   }
 
   String _toDartClassName(String name) {
     return toPascalCaseIdentifier(name);
-  }
-
-  String _toSnakeCase(String name) {
-    return toSnakeCaseIdentifier(name);
   }
 }

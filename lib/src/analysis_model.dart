@@ -79,6 +79,41 @@ class AnalysisProject {
 
   String get dartPackageName => '${projectName}_app_generated';
 
+  Iterable<AnalysisSourceLinkedTable> get sourceOverlayLinkedTables {
+    final sourceTables = (((raw['source_overlay'] as Map?)?['tables'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((table) => table.cast<String, dynamic>());
+    return sourceTables
+        .where((table) => table['isLinked'] == true)
+        .map(AnalysisSourceLinkedTable.fromJson);
+  }
+
+  Set<String> get effectiveRecordSources {
+    final sources = <String>{};
+    for (final form in forms) {
+      final recordSource = form.recordSource;
+      if (recordSource != null && recordSource.trim().isNotEmpty) {
+        sources.add(recordSource.trim());
+      }
+    }
+    for (final form in canonicalAnalysis?.forms ?? const <AnalysisCanonicalForm>[]) {
+      final recordSource = form.components['recordSource'] as String?;
+      if (recordSource != null && recordSource.trim().isNotEmpty) {
+        sources.add(recordSource.trim());
+      }
+    }
+    final sourceOverlayForms = (((raw['source_overlay'] as Map?)?['forms'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((form) => form.cast<String, dynamic>());
+    for (final form in sourceOverlayForms) {
+      final recordSource = form['recordSource'] as String?;
+      if (recordSource != null && recordSource.trim().isNotEmpty) {
+        sources.add(recordSource.trim());
+      }
+    }
+    return sources;
+  }
+
   AnalysisCanonicalForm? canonicalFormForTable(AnalysisTable table) {
     final candidates = canonicalAnalysis?.forms
             .where((form) => (form.rawVbaCode ?? '').trim().isNotEmpty)
@@ -89,6 +124,14 @@ class AnalysisProject {
     }
     if (tables.length == 1 && candidates.length == 1) {
       return candidates.first;
+    }
+
+    final tableKey = _lookupKey(table.name);
+    for (final form in candidates) {
+      final recordSource = form.components['recordSource'] as String?;
+      if (recordSource != null && _lookupKey(recordSource) == tableKey) {
+        return form;
+      }
     }
 
     final tableKeys = <String>{
@@ -116,6 +159,8 @@ class AnalysisProject {
     return null;
   }
 
+  static String lookupKey(String value) => _lookupKey(value);
+
   static String _lookupKey(String value) {
     final normalized = StringBuffer();
     for (final codeUnit in foldToAscii(value).toLowerCase().codeUnits) {
@@ -133,6 +178,26 @@ class AnalysisProject {
       return value.substring(0, value.length - 1);
     }
     return value;
+  }
+}
+
+class AnalysisSourceLinkedTable {
+  final String name;
+  final String? sourceTableName;
+  final String? connect;
+
+  const AnalysisSourceLinkedTable({
+    required this.name,
+    required this.sourceTableName,
+    required this.connect,
+  });
+
+  factory AnalysisSourceLinkedTable.fromJson(Map<String, dynamic> json) {
+    return AnalysisSourceLinkedTable(
+      name: json['name'] as String? ?? 'linked_table',
+      sourceTableName: json['sourceTableName'] as String?,
+      connect: json['connect'] as String?,
+    );
   }
 }
 
@@ -269,6 +334,28 @@ class AnalysisColumn {
   final int typeCode;
   final bool isAutoNumber;
   final bool isCalculated;
+  final bool isRequired;
+  final String? caption;
+  final String? defaultValue;
+  final int? maxLength;
+  final String? calculatedExpression;
+  final String? validationRule;
+  final String? validationText;
+  final String? description;
+  final int? decimalPlaces;
+  final int? displayControl;
+  final int? textFormat;
+  final int? imeMode;
+  final int? imeSentenceMode;
+  final int? resultType;
+  final String? propertyGuid;
+  final bool? allowMultipleValues;
+  final String? rowSourceType;
+  final String? rowSource;
+  final String? wssFieldId;
+  final String? formatString;
+  final String? inputMask;
+  final bool? allowZeroLength;
   final int? precision;
   final int? scale;
 
@@ -278,6 +365,28 @@ class AnalysisColumn {
     required this.typeCode,
     required this.isAutoNumber,
     required this.isCalculated,
+    required this.isRequired,
+    required this.caption,
+    required this.defaultValue,
+    required this.maxLength,
+    required this.calculatedExpression,
+    required this.validationRule,
+    required this.validationText,
+    required this.description,
+    required this.decimalPlaces,
+    required this.displayControl,
+    required this.textFormat,
+    required this.imeMode,
+    required this.imeSentenceMode,
+    required this.resultType,
+    required this.propertyGuid,
+    required this.allowMultipleValues,
+    required this.rowSourceType,
+    required this.rowSource,
+    required this.wssFieldId,
+    required this.formatString,
+    required this.inputMask,
+    required this.allowZeroLength,
     required this.precision,
     required this.scale,
   });
@@ -289,6 +398,28 @@ class AnalysisColumn {
       typeCode: json['typeCode'] as int? ?? -1,
       isAutoNumber: json['isAutoNumber'] as bool? ?? false,
       isCalculated: json['isCalculated'] as bool? ?? false,
+      isRequired: json['isRequired'] as bool? ?? false,
+      caption: json['caption'] as String?,
+      defaultValue: json['defaultValue'] as String?,
+      maxLength: json['maxLength'] as int?,
+      calculatedExpression: json['calculatedExpression'] as String?,
+      validationRule: json['validationRule'] as String?,
+      validationText: json['validationText'] as String?,
+      description: json['description'] as String?,
+      decimalPlaces: json['decimalPlaces'] as int?,
+      displayControl: json['displayControl'] as int?,
+      textFormat: json['textFormat'] as int?,
+      imeMode: json['imeMode'] as int?,
+      imeSentenceMode: json['imeSentenceMode'] as int?,
+      resultType: json['resultType'] as int?,
+      propertyGuid: json['propertyGuid'] as String?,
+      allowMultipleValues: json['allowMultipleValues'] as bool?,
+      rowSourceType: json['rowSourceType'] as String?,
+      rowSource: json['rowSource'] as String?,
+      wssFieldId: json['wssFieldId'] as String?,
+      formatString: json['format'] as String?,
+      inputMask: json['inputMask'] as String?,
+      allowZeroLength: json['allowZeroLength'] as bool?,
       precision: json['precision'] as int?,
       scale: json['scale'] as int?,
     );
@@ -297,6 +428,8 @@ class AnalysisColumn {
   String get fieldName => toCamelCaseIdentifier(name);
 
   String get jsonKey => name;
+
+  String get label => caption ?? name;
 
   String get normalizedName => toSnakeCaseIdentifier(name);
 

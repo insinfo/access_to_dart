@@ -27,7 +27,9 @@ void main() {
     final schemaFile = File('$outputDir${Platform.pathSeparator}schema.sql');
     final schema = await schemaFile.readAsString();
     expect(schema, contains('"valor_moeda" NUMERIC(19,4)'));
+    expect(schema, contains('"valor_moeda" NUMERIC(19,4) NOT NULL DEFAULT 0'));
     expect(schema, contains('"taxa" NUMERIC(18,6)'));
+    expect(schema, contains('"taxa" NUMERIC(18,6) DEFAULT 1.5'));
     expect(schema, isNot(contains('DOUBLE PRECISION')));
   });
 }

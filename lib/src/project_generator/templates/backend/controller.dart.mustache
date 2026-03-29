@@ -17,6 +17,18 @@ class {{className}}Controller {
     }
   }
 
+  static Future<Response> lookup(Request req, String fieldKey) async {
+    try {
+      final limit = int.tryParse(req.requestedUri.queryParameters['limit'] ?? '') ?? 100;
+      final service = req.make<{{className}}Service>();
+      final data = await service.lookupOptions(fieldKey, limit: limit);
+      return responseJson(data);
+    } catch (e, s) {
+      print('Erro no lookup: $e $s');
+      return responseError(e.toString());
+    }
+  }
+
   static Future<Response> show(Request req, String idRaw) async {
     try {
       final id = int.parse(idRaw);

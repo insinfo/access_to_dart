@@ -254,6 +254,7 @@ class AccessSrcReader {
 
       String? type;
       int? maxLength;
+      String? defaultValue;
 
       int firstSpace = _indexOfFirstBoundary(definition);
       if (firstSpace > 0) {
@@ -269,11 +270,19 @@ class AccessSrcReader {
         type = definition.isEmpty ? null : definition;
       }
 
+      defaultValue = _extractDefaultValue(definition);
+
       columns.add(AccessSrcColumn(
         name: name,
         accessType: type,
         sqlType: null,
         caption: null,
+        defaultValue: defaultValue,
+        validationRule: null,
+        validationText: null,
+        format: null,
+        inputMask: null,
+        allowZeroLength: null,
         required: definition.toUpperCase().contains('NOT NULL'),
         maxLength: maxLength,
         isAttachment: name == 'Anexos',
@@ -379,7 +388,13 @@ class AccessSrcReader {
     }
 
     String? caption;
+    String? defaultValue;
     String? expression;
+    String? validationRule;
+    String? validationText;
+    String? format;
+    String? inputMask;
+    bool? allowZeroLength;
     bool required = nonNullable;
 
     final annotation = el.findElements('xsd:annotation').firstOrNull;
@@ -391,8 +406,16 @@ class AccessSrcReader {
           final propName = prop.getAttribute('name');
           final propValue = prop.getAttribute('value');
           if (propName == 'Caption') caption = propValue;
+          if (propName == 'DefaultValue') defaultValue = propValue;
           if (propName == 'Required' && propValue == '1') required = true;
           if (propName == 'Expression') expression = propValue;
+          if (propName == 'ValidationRule') validationRule = propValue;
+          if (propName == 'ValidationText') validationText = propValue;
+          if (propName == 'Format') format = propValue;
+          if (propName == 'InputMask') inputMask = propValue;
+          if (propName == 'AllowZeroLength') {
+            allowZeroLength = _parseBooleanFieldProperty(propValue);
+          }
         }
       }
     }
@@ -409,6 +432,12 @@ class AccessSrcReader {
       accessType: accessType,
       sqlType: sqlType,
       caption: caption,
+      defaultValue: defaultValue,
+      validationRule: validationRule,
+      validationText: validationText,
+      format: format,
+      inputMask: inputMask,
+      allowZeroLength: allowZeroLength,
       required: required,
       maxLength: maxLength,
       isAttachment: isComplex,
@@ -416,6 +445,100 @@ class AccessSrcReader {
       expression: expression,
       children: children,
     );
+  }
+
+  bool? _parseBooleanFieldProperty(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    if (normalized == '1' || normalized == 'true' || normalized == 'yes') {
+      return true;
+    }
+    if (normalized == '0' || normalized == 'false' || normalized == 'no') {
+      return false;
+    }
+    return null;
+  }
+
+  String? _extractDefaultValue(String definition) {
+    final upper = definition.toUpperCase();
+    final defaultIndex = upper.indexOf('DEFAULT');
+    if (defaultIndex < 0) {
+      return null;
+    }
+
+    final start = defaultIndex + 'DEFAULT'.length;
+    final raw = definition.substring(start).trimLeft();
+    if (raw.isEmpty) {
+      return null;
+    }
+
+    final buffer = StringBuffer();
+    var depth = 0;
+    String? quote;
+    for (var index = 0; index < raw.length; index++) {
+      final char = raw[index];
+      final nextKeyword = _startsConstraintKeyword(raw, index);
+      if (quote == null && depth == 0 && nextKeyword) {
+        break;
+      }
+      buffer.write(char);
+      if (quote != null) {
+        if (char == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (char == '"' || char == '\'') {
+        quote = char;
+        continue;
+      }
+      if (char == '(') {
+        depth++;
+      } else if (char == ')' && depth > 0) {
+        depth--;
+      }
+    }
+
+    final value = buffer.toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
+  bool _startsConstraintKeyword(String source, int index) {
+    const keywords = <String>[
+      'NOT NULL',
+      'NULL',
+      'CONSTRAINT',
+      'PRIMARY KEY',
+      'UNIQUE',
+      'REFERENCES',
+      'CHECK',
+    ];
+    for (final keyword in keywords) {
+      if (_startsWithKeyword(source, index, keyword)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _startsWithKeyword(String source, int index, String keyword) {
+    if (index + keyword.length > source.length) {
+      return false;
+    }
+    final slice = source.substring(index, index + keyword.length).toUpperCase();
+    if (slice != keyword) {
+      return false;
+    }
+    if (index > 0) {
+      final previous = source.codeUnitAt(index - 1);
+      final previousIsLetter = previous >= 65 && previous <= 90 || previous >= 97 && previous <= 122;
+      if (previousIsLetter) {
+        return false;
+      }
+    }
+    return true;
   }
 
   AccessSrcForm _parseForm(String name, String text) {

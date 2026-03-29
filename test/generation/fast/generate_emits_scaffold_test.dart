@@ -47,6 +47,17 @@ void main() {
     expect(modelContent, contains('map[idCol] as int?'));
     expect(modelContent, isNot(contains('?.toString()')));
 
+    final validationFile = File('$outputDir${Platform.pathSeparator}core${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}validation${Platform.pathSeparator}contatos_validation.dart');
+    final validationContent = await validationFile.readAsString();
+    expect(validationContent, contains('Informe Sobrenome.'));
+    expect(validationContent, contains('draft["sobrenome"]'));
+
+    final incluirHtmlFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_contatos${Platform.pathSeparator}incluir_contatos_page.html');
+    final incluirHtmlContent = await incluirHtmlFile.readAsString();
+    expect(incluirHtmlContent, contains('Endereço de Email:'));
+    expect(incluirHtmlContent, contains('maxlength="255"'));
+    expect(incluirHtmlContent, contains('required'));
+
     final dataFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}generated_data.dart');
     final dataContent = await dataFile.readAsString();
     expect(dataContent, contains('"id": 1'));

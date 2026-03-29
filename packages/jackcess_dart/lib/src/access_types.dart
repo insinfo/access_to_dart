@@ -107,6 +107,7 @@ class AccessCatalogEntry {
   final AccessObjectType objectType;
   final int flags;
   final int rawType;
+  final Uint8List? propertyBytes;
 
   const AccessCatalogEntry({
     required this.id,
@@ -115,6 +116,7 @@ class AccessCatalogEntry {
     required this.objectType,
     required this.flags,
     required this.rawType,
+    this.propertyBytes,
   });
 
   /// Returns true if this is a system/internal object.
@@ -146,6 +148,10 @@ class AccessTableSchema {
   final String name;
   final int tdefPageNumber;
   final int rowCount;
+  final String? validationRule;
+  final String? validationText;
+  final Map<String, Object?> propertyMapDefaultProperties;
+  final Map<String, Map<String, Object?>> propertyMapNamedProperties;
   final List<AccessColumnSchema> columns;
   final List<AccessIndexSchema> indexes;
   final List<Map<String, dynamic>> sampleRows;
@@ -154,6 +160,10 @@ class AccessTableSchema {
     required this.name,
     required this.tdefPageNumber,
     required this.rowCount,
+    this.validationRule,
+    this.validationText,
+    this.propertyMapDefaultProperties = const <String, Object?>{},
+    this.propertyMapNamedProperties = const <String, Map<String, Object?>>{},
     required this.columns,
     required this.indexes,
     required this.sampleRows,
@@ -163,6 +173,13 @@ class AccessTableSchema {
         'name': name,
         'tdefPage': tdefPageNumber,
         'rowCount': rowCount,
+        if (validationRule != null) 'validationRule': validationRule,
+        if (validationText != null) 'validationText': validationText,
+        if (propertyMapDefaultProperties.isNotEmpty || propertyMapNamedProperties.isNotEmpty)
+          'propertyMaps': {
+            'default': _jsonSafeValue(propertyMapDefaultProperties),
+            'named': _jsonSafeValue(propertyMapNamedProperties),
+          },
         'columns': columns.map((c) => c.toJson()).toList(),
         'indexes': indexes.map((i) => i.toJson()).toList(),
         'sampleRows': sampleRows
@@ -207,6 +224,28 @@ class AccessColumnSchema {
   final int extFlags;
   final int? precision;
   final int? scale;
+  final bool isRequired;
+  final String? caption;
+  final String? defaultValue;
+  final int? maxLength;
+  final String? calculatedExpression;
+  final String? validationRule;
+  final String? validationText;
+  final String? description;
+  final int? decimalPlaces;
+  final int? displayControl;
+  final int? textFormat;
+  final int? imeMode;
+  final int? imeSentenceMode;
+  final int? resultType;
+  final String? propertyGuid;
+  final bool? allowMultipleValues;
+  final String? rowSourceType;
+  final String? rowSource;
+  final String? wssFieldId;
+  final String? formatString;
+  final String? inputMask;
+  final bool? allowZeroLength;
 
   const AccessColumnSchema({
     required this.name,
@@ -223,7 +262,119 @@ class AccessColumnSchema {
     required this.extFlags,
     required this.precision,
     required this.scale,
+    this.isRequired = false,
+    this.caption,
+    this.defaultValue,
+    this.maxLength,
+    this.calculatedExpression,
+    this.validationRule,
+    this.validationText,
+    this.description,
+    this.decimalPlaces,
+    this.displayControl,
+    this.textFormat,
+    this.imeMode,
+    this.imeSentenceMode,
+    this.resultType,
+    this.propertyGuid,
+    this.allowMultipleValues,
+    this.rowSourceType,
+    this.rowSource,
+    this.wssFieldId,
+    this.formatString,
+    this.inputMask,
+    this.allowZeroLength,
   });
+
+  AccessColumnSchema copyWith({
+    bool? isRequired,
+    String? caption,
+    Object? defaultValue = _sentinel,
+    int? maxLength,
+    Object? calculatedExpression = _sentinel,
+    Object? validationRule = _sentinel,
+    Object? validationText = _sentinel,
+    Object? description = _sentinel,
+    int? decimalPlaces,
+    int? displayControl,
+    int? textFormat,
+    int? imeMode,
+    int? imeSentenceMode,
+    int? resultType,
+    Object? propertyGuid = _sentinel,
+    Object? allowMultipleValues = _sentinel,
+    Object? rowSourceType = _sentinel,
+    Object? rowSource = _sentinel,
+    Object? wssFieldId = _sentinel,
+    Object? formatString = _sentinel,
+    Object? inputMask = _sentinel,
+    Object? allowZeroLength = _sentinel,
+  }) {
+    return AccessColumnSchema(
+      name: name,
+      typeCode: typeCode,
+      typeName: typeName,
+      length: length,
+      columnNumber: columnNumber,
+      variableColumnNumber: variableColumnNumber,
+      fixedOffset: fixedOffset,
+      isVariableLength: isVariableLength,
+      isAutoNumber: isAutoNumber,
+      isCalculated: isCalculated,
+      flags: flags,
+      extFlags: extFlags,
+      precision: precision,
+      scale: scale,
+      isRequired: isRequired ?? this.isRequired,
+      caption: caption ?? this.caption,
+      defaultValue: identical(defaultValue, _sentinel)
+          ? this.defaultValue
+          : defaultValue as String?,
+      maxLength: maxLength ?? this.maxLength,
+      calculatedExpression: identical(calculatedExpression, _sentinel)
+          ? this.calculatedExpression
+          : calculatedExpression as String?,
+      validationRule: identical(validationRule, _sentinel)
+          ? this.validationRule
+          : validationRule as String?,
+      validationText: identical(validationText, _sentinel)
+          ? this.validationText
+          : validationText as String?,
+      description: identical(description, _sentinel)
+          ? this.description
+          : description as String?,
+      decimalPlaces: decimalPlaces ?? this.decimalPlaces,
+      displayControl: displayControl ?? this.displayControl,
+      textFormat: textFormat ?? this.textFormat,
+      imeMode: imeMode ?? this.imeMode,
+      imeSentenceMode: imeSentenceMode ?? this.imeSentenceMode,
+      resultType: resultType ?? this.resultType,
+      propertyGuid: identical(propertyGuid, _sentinel)
+          ? this.propertyGuid
+          : propertyGuid as String?,
+        allowMultipleValues: identical(allowMultipleValues, _sentinel)
+          ? this.allowMultipleValues
+          : allowMultipleValues as bool?,
+        rowSourceType: identical(rowSourceType, _sentinel)
+          ? this.rowSourceType
+          : rowSourceType as String?,
+        rowSource: identical(rowSource, _sentinel)
+          ? this.rowSource
+          : rowSource as String?,
+        wssFieldId: identical(wssFieldId, _sentinel)
+          ? this.wssFieldId
+          : wssFieldId as String?,
+      formatString: identical(formatString, _sentinel)
+          ? this.formatString
+          : formatString as String?,
+      inputMask: identical(inputMask, _sentinel)
+          ? this.inputMask
+          : inputMask as String?,
+      allowZeroLength: identical(allowZeroLength, _sentinel)
+          ? this.allowZeroLength
+          : allowZeroLength as bool?,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'name': name,
@@ -240,6 +391,30 @@ class AccessColumnSchema {
         'extFlags': extFlags,
         'precision': precision,
         'scale': scale,
+        'isRequired': isRequired,
+        if (caption != null) 'caption': caption,
+        if (defaultValue != null) 'defaultValue': defaultValue,
+        if (maxLength != null) 'maxLength': maxLength,
+        if (calculatedExpression != null)
+          'calculatedExpression': calculatedExpression,
+        if (validationRule != null) 'validationRule': validationRule,
+        if (validationText != null) 'validationText': validationText,
+        if (description != null) 'description': description,
+        if (decimalPlaces != null) 'decimalPlaces': decimalPlaces,
+        if (displayControl != null) 'displayControl': displayControl,
+        if (textFormat != null) 'textFormat': textFormat,
+        if (imeMode != null) 'imeMode': imeMode,
+        if (imeSentenceMode != null) 'imeSentenceMode': imeSentenceMode,
+        if (resultType != null) 'resultType': resultType,
+        if (propertyGuid != null) 'propertyGuid': propertyGuid,
+        if (allowMultipleValues != null)
+          'allowMultipleValues': allowMultipleValues,
+        if (rowSourceType != null) 'rowSourceType': rowSourceType,
+        if (rowSource != null) 'rowSource': rowSource,
+        if (wssFieldId != null) 'wssFieldId': wssFieldId,
+        if (formatString != null) 'format': formatString,
+        if (inputMask != null) 'inputMask': inputMask,
+        if (allowZeroLength != null) 'allowZeroLength': allowZeroLength,
       };
 
   /// Maps an Access type code to a human-readable name.
@@ -364,6 +539,8 @@ class AccessColumnSchema {
     }
   }
 }
+
+const Object _sentinel = Object();
 
 class AccessIndexColumnSchema {
   final String name;

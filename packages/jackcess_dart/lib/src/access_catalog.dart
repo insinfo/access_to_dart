@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'access_expression.dart';
 import 'access_types.dart';
 import 'data_page_reader.dart';
 import 'jet_format.dart';
 import 'page_channel.dart';
+import 'property_map_reader.dart';
 import 'row_reader.dart';
 import 'table_def_reader.dart';
 import 'table_reader.dart';
@@ -87,9 +90,17 @@ class AccessCatalog {
     //    The entry.id IS the TDEF page number for tables.
     final tblReader = TableReader(format: format, pageChannel: pageChannel);
     final tables = <AccessTableSchema>[];
+    final propertyReader = PropertyMapReader();
     for (final entry in tableEntries) {
       try {
-        final schema = await tblReader.readSchema(entry.name, entry.id);
+        var schema = await tblReader.readSchema(entry.name, entry.id);
+        final propertyBytes = entry.propertyBytes;
+        if (propertyBytes != null && propertyBytes.isNotEmpty) {
+          schema = _applyPropertyMetadataToSchema(
+            schema,
+            propertyReader.read(propertyBytes),
+          );
+        }
         List<Map<String, dynamic>> rows;
         try {
           rows = await tblReader.readAllRows(entry.id);
@@ -102,6 +113,10 @@ class AccessCatalog {
           name: schema.name,
           tdefPageNumber: schema.tdefPageNumber,
           rowCount: schema.rowCount,
+          validationRule: schema.validationRule,
+          validationText: schema.validationText,
+          propertyMapDefaultProperties: schema.propertyMapDefaultProperties,
+          propertyMapNamedProperties: schema.propertyMapNamedProperties,
           columns: schema.columns,
           indexes: schema.indexes,
           sampleRows: rows.take(10).toList(),
@@ -257,7 +272,124 @@ class AccessCatalog {
       objectType: AccessObjectType.fromTypeValue(rawType),
       flags: flags is int ? flags : (flags as num?)?.toInt() ?? 0,
       rawType: rawType,
+      propertyBytes: row['LvProp'] as Uint8List?,
     );
+  }
+
+  AccessTableSchema _applyPropertyMetadataToSchema(
+    AccessTableSchema schema,
+    AccessPropertyMapGroup propertyMaps,
+  ) {
+    final defaultProperties = propertyMaps.defaultProperties;
+    final columns = schema.columns.map((column) {
+      final properties = propertyMaps.forName(column.name);
+      return column.copyWith(
+        isRequired: _boolProperty(properties, 'Required') ?? column.isRequired,
+        caption: _stringProperty(properties, 'Caption') ?? column.caption,
+        defaultValue:
+            _stringProperty(properties, 'DefaultValue') ?? column.defaultValue,
+        maxLength: _intProperty(properties, 'MaxLength') ?? column.maxLength,
+        calculatedExpression:
+            _stringProperty(properties, 'Expression') ?? column.calculatedExpression,
+        validationRule:
+            _stringProperty(properties, 'ValidationRule') ?? column.validationRule,
+        validationText:
+            _stringProperty(properties, 'ValidationText') ?? column.validationText,
+        description: _stringProperty(properties, 'Description') ?? column.description,
+        decimalPlaces:
+          _intProperty(properties, 'DecimalPlaces') ?? column.decimalPlaces,
+        displayControl:
+          _intProperty(properties, 'DisplayControl') ?? column.displayControl,
+        textFormat: _intProperty(properties, 'TextFormat') ?? column.textFormat,
+        imeMode: _intProperty(properties, 'IMEMode') ?? column.imeMode,
+        imeSentenceMode: _intProperty(properties, 'IMESentenceMode') ??
+          column.imeSentenceMode,
+        resultType: _intProperty(properties, 'ResultType') ?? column.resultType,
+        propertyGuid: _guidProperty(properties, 'GUID') ?? column.propertyGuid,
+        allowMultipleValues:
+          _boolProperty(properties, 'AllowMultipleValues') ??
+          column.allowMultipleValues,
+        rowSourceType:
+          _stringProperty(properties, 'RowSourceType') ?? column.rowSourceType,
+        rowSource: _stringProperty(properties, 'RowSource') ?? column.rowSource,
+        wssFieldId:
+          _stringProperty(properties, 'WSSFieldID') ?? column.wssFieldId,
+        formatString: _stringProperty(properties, 'Format') ?? column.formatString,
+        inputMask: _stringProperty(properties, 'InputMask') ?? column.inputMask,
+        allowZeroLength: _boolProperty(properties, 'AllowZeroLength') ??
+            column.allowZeroLength,
+      );
+    }).toList(growable: false);
+
+    return AccessTableSchema(
+      name: schema.name,
+      tdefPageNumber: schema.tdefPageNumber,
+      rowCount: schema.rowCount,
+      validationRule:
+          _stringProperty(defaultProperties, 'ValidationRule') ?? schema.validationRule,
+      validationText:
+          _stringProperty(defaultProperties, 'ValidationText') ?? schema.validationText,
+      propertyMapDefaultProperties: propertyMaps.defaultProperties,
+      propertyMapNamedProperties: propertyMaps.namedProperties,
+      columns: columns,
+      indexes: schema.indexes,
+      sampleRows: schema.sampleRows,
+    );
+  }
+
+  String? _stringProperty(Map<String, Object?> properties, String name) {
+    final value = properties[name];
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    return null;
+  }
+
+  String? _guidProperty(Map<String, Object?> properties, String name) {
+    final value = properties[name];
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    if (value is Uint8List && value.isNotEmpty) {
+      return value
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+          .join();
+    }
+    return null;
+  }
+
+  bool? _boolProperty(Map<String, Object?> properties, String name) {
+    final value = properties[name];
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == '1' || normalized == 'true' || normalized == 'yes') {
+        return true;
+      }
+      if (normalized == '0' || normalized == 'false' || normalized == 'no') {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  int? _intProperty(Map<String, Object?> properties, String name) {
+    final value = properties[name];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   /// Read MSysQueries to build query definitions.

@@ -38,6 +38,15 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
       }
     }
 
+    for (final column in table.columns) {
+      final metadataHints = _metadataHintsForColumn(column);
+      for (final hint in metadataHints) {
+        if (seenHints.add(hint)) {
+          uniqueHints.add(hint);
+        }
+      }
+    }
+
     final hintsSource = uniqueHints.isEmpty
         ? 'const <String>[]'
         : '<String>[\n${uniqueHints.map((hint) => '    ${jsonEncode(hint)},').join('\n')}\n  ]';
@@ -151,7 +160,10 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
     final ruleSet = form == null || (form.rawVbaCode ?? '').trim().isEmpty
         ? const AccessFormRuleSet()
         : AccessFormRuleExtractor.extract(form.rawVbaCode!);
-    return _matchFormRulesToColumns(this, table, ruleSet);
+    return _mergeRequiredColumnValidations(
+      table,
+      _matchFormRulesToColumns(this, table, ruleSet),
+    );
   }
 
   String _buildValidationContractMethod(_GeneratedFieldValidation validation) {
@@ -219,4 +231,71 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
     lines.add('  }');
     return lines.join('\n');
   }
+}
+
+List<_GeneratedFieldValidation> _mergeRequiredColumnValidations(
+  AnalysisTable table,
+  List<_GeneratedFieldValidation> validations,
+) {
+  final byRuntimeKey = <String, _GeneratedFieldValidation>{
+    for (final validation in validations) validation.runtimeKey: validation,
+  };
+
+  for (final column in table.columns) {
+    final requiresNonBlank = column.isRequired ||
+        (_isTextColumn(column) && column.allowZeroLength == false);
+    if (!requiresNonBlank || column.isAutoNumber) {
+      continue;
+    }
+    final runtimeKey = column.normalizedName;
+    final message = (column.validationText != null &&
+            column.validationText!.trim().isNotEmpty)
+        ? column.validationText!.trim()
+        : (column.allowZeroLength == false && !column.isRequired)
+            ? 'Nao deixe ${column.label} vazio.'
+            : 'Informe ${column.label}.';
+    final existing = byRuntimeKey[runtimeKey];
+    if (existing == null) {
+      byRuntimeKey[runtimeKey] = _GeneratedFieldValidation(
+        column: column,
+        runtimeKey: runtimeKey,
+        methodSuffix: _pascalizeKey(runtimeKey),
+        kinds: <AccessFormFieldRuleKind>{AccessFormFieldRuleKind.required},
+        messages: <String>[message],
+      );
+      continue;
+    }
+
+    if (existing.kinds.add(AccessFormFieldRuleKind.required) &&
+        existing.messages.isEmpty) {
+      existing.messages.add(message);
+    }
+  }
+
+  return byRuntimeKey.values.toList(growable: false);
+}
+
+List<String> _metadataHintsForColumn(AnalysisColumn column) {
+  final hints = <String>[];
+  if (column.validationRule != null && column.validationRule!.trim().isNotEmpty) {
+    final suffix = (column.validationText != null && column.validationText!.trim().isNotEmpty)
+        ? ' -> ${column.validationText!.trim()}'
+        : '';
+    hints.add('Regra Access em ${column.label}: ${column.validationRule!.trim()}$suffix');
+  }
+  if (column.formatString != null && column.formatString!.trim().isNotEmpty) {
+    hints.add('Formato Access em ${column.label}: ${column.formatString!.trim()}');
+  }
+  if (column.inputMask != null && column.inputMask!.trim().isNotEmpty) {
+    hints.add('Mascara Access em ${column.label}: ${column.inputMask!.trim()}');
+  }
+  if (_isTextColumn(column) && column.allowZeroLength == false) {
+    hints.add('${column.label} nao aceita string vazia no Access.');
+  }
+  return hints;
+}
+
+bool _isTextColumn(AnalysisColumn column) {
+  final normalized = foldToAscii(column.typeName).toLowerCase();
+  return normalized.contains('text') || normalized.contains('memo');
 }

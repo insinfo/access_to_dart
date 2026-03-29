@@ -20,7 +20,9 @@ class AccessAnalysis {
             (c) => CanonicalColumn(
               name: c.name,
               type: c.typeCode.toString(),
-              isRequired: c.columnNumber == 0,
+              isRequired: c.isRequired,
+              defaultValue: c.defaultValue,
+              calculatedExpression: c.calculatedExpression,
             ),
           )
           .toList();

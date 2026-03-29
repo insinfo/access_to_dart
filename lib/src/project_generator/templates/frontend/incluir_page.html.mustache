@@ -19,13 +19,106 @@
 <%#fields%>
           <div class="col-md-4 form-group mb-3">
             <label class="form-label"><%label%>:</label>
+<%#isSingleSelect%>
+            <select
+              [ngModel]="readField('<%readKey%>')"
+              (ngModelChange)="updateField('<%updateKey%>', $event)"
+              ngControl="<%ngControl%>"
+<%#isReadOnly%>
+              disabled
+<%/isReadOnly%>
+<%#isRequired%>
+              required
+<%/isRequired%>
+<%#title%>
+              title="<%title%>"
+<%/title%>
+<%#rowSourceType%>
+              data-access-row-source-type="<%rowSourceType%>"
+<%/rowSourceType%>
+<%#rowSource%>
+              data-access-row-source="<%rowSource%>"
+<%/rowSource%>
+              [class.is-invalid]="readFieldError('<%updateKey%>') != null"
+              class="form-select">
+              <option value="">Selecione <%label%></option>
+<%#isDynamicSelect%>
+              <option *ngFor="let option of lookupOptions('<%dynamicFieldKey%>')" [value]="option.value">{{ option.label }}</option>
+<%/isDynamicSelect%>
+<%#options%>
+              <option value="<%value%>"><%label%></option>
+<%/options%>
+            </select>
+<%/isSingleSelect%>
+<%#isMultiValueSelect%>
+            <div
+              class="border rounded p-2"
+<%#title%>
+              title="<%title%>"
+<%/title%>
+<%#rowSourceType%>
+              data-access-row-source-type="<%rowSourceType%>"
+<%/rowSourceType%>
+<%#rowSource%>
+              data-access-row-source="<%rowSource%>"
+<%/rowSource%>
+              data-access-allow-multiple-values="true">
+<%#isDynamicSelect%>
+              <label class="form-check mb-1" *ngFor="let option of lookupOptions('<%dynamicFieldKey%>')">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [checked]="isFieldOptionSelected('<%updateKey%>', option.value)"
+                  (change)="toggleFieldSelection('<%updateKey%>', option.value, $event.target.checked)">
+                <span class="form-check-label">{{ option.label }}</span>
+              </label>
+<%/isDynamicSelect%>
+<%#options%>
+              <label class="form-check mb-1">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  [checked]="isFieldOptionSelected('<%updateKey%>', '<%value%>')"
+                  (change)="toggleFieldSelection('<%updateKey%>', '<%value%>', $event.target.checked)">
+                <span class="form-check-label"><%label%></span>
+              </label>
+<%/options%>
+            </div>
+<%/isMultiValueSelect%>
+<%#isNotSelect%>
             <input
               [ngModel]="readField('<%readKey%>')"
               (ngModelChange)="updateField('<%updateKey%>', $event)"
               ngControl="<%ngControl%>"
               type="<%inputType%>"
+<%#isReadOnly%>
+              readonly
+<%/isReadOnly%>
+<%#inputMode%>
+              inputmode="<%inputMode%>"
+<%/inputMode%>
+<%#isRequired%>
+              required
+<%/isRequired%>
+<%#maxLength%>
+              maxlength="<%maxLength%>"
+<%/maxLength%>
+<%#title%>
+              title="<%title%>"
+<%/title%>
+<%#format%>
+              data-access-format="<%format%>"
+<%/format%>
+<%#inputMask%>
+              data-access-input-mask="<%inputMask%>"
+<%/inputMask%>
+<%#validationRule%>
+              data-access-validation-rule="<%validationRule%>"
+<%/validationRule%>
+              placeholder="<%label%>"
               [class.is-invalid]="readFieldError('<%updateKey%>') != null"
               class="form-control">
+<%/isNotSelect%>
             <div class="invalid-feedback d-block" *ngIf="readFieldError('<%updateKey%>') != null">
               {{ readFieldError('<%updateKey%>') }}
             </div>

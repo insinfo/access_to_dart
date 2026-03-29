@@ -242,6 +242,64 @@ void main() {
     expect(sourceCoverage['hasGroupBy'], greaterThan(0));
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  test('analyze merges source overlay column metadata into tables', () async {
+    final fixture = File.fromUri(
+      Directory.current.uri.resolve('fixtures/teste1/teste1.accdb'),
+    );
+    final fixtureDir = Directory.fromUri(
+      Directory.current.uri.resolve('fixtures/teste1/teste1.accdb.src/'),
+    );
+    expect(await fixture.exists(), isTrue);
+    expect(await fixtureDir.exists(), isTrue);
+
+    final tempDir = await Directory.systemTemp.createTemp('teste1_analysis_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    final out = StringBuffer();
+    final err = StringBuffer();
+
+    final exitCode = await run(
+      <String>[
+        'analyze',
+        '--accdb',
+        fixture.path,
+        '--src',
+        fixtureDir.path,
+        '--output',
+        tempDir.path,
+      ],
+      out: out,
+      err: err,
+    );
+
+    expect(exitCode, 0);
+    expect(err.toString(), isEmpty);
+
+    final analysisFile =
+        File('${tempDir.path}${Platform.pathSeparator}analysis.json');
+    final parsed =
+        jsonDecode(await analysisFile.readAsString()) as Map<String, dynamic>;
+    final contatos = (parsed['tables'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .singleWhere((table) => table['name'] == 'Contatos');
+    final sobrenome = (contatos['columns'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .singleWhere((column) => column['name'] == 'Sobrenome');
+    final nomeDoContato = (contatos['columns'] as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .singleWhere((column) => column['name'] == 'NomeDoContato');
+
+    expect(sobrenome['isRequired'], isTrue);
+    expect(
+      nomeDoContato['calculatedExpression'],
+      contains('IIf(IsNull([Sobrenome])'),
+    );
+    expect(
+      contatos['postgres_ddl'],
+      contains('"sobrenome" TEXT NOT NULL'),
+    );
+  });
+
   test('reports encrypted backend metadata when password is missing', () async {
     final fixture = File.fromUri(
       Directory.current.uri

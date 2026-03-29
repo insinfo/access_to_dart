@@ -6,7 +6,9 @@ import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'src/accdb_analyzer.dart';
 import 'src/access_table_rows_reader.dart';
+import 'src/analysis_backend_linker.dart';
 import 'src/access_src_reader.dart';
+import 'src/analysis_overlay_merger.dart';
 import 'src/analysis_doctor.dart';
 import 'src/analysis_model.dart';
 import 'src/migration_identifier_style.dart';
@@ -212,6 +214,10 @@ Future<int> _runAnalyze(
     ..addOption('accdb', help: 'Path to the .accdb file')
     ..addOption('password',
         help: 'Optional password for encrypted .accdb files')
+    ..addOption('backend-accdb',
+      help: 'Optional path to the linked backend .accdb file')
+    ..addOption('backend-password',
+      help: 'Optional password for encrypted linked backend .accdb files')
     ..addOption('src', help: 'Optional path to the .accdb.src directory')
     ..addOption('output',
         abbr: 'o', help: 'Output directory for analysis.json');
@@ -232,6 +238,8 @@ Future<int> _runAnalyze(
 
   final outputDir = args['output'] as String? ?? 'build';
   final password = args['password'] as String?;
+  final backendAccdbPath = args['backend-accdb'] as String?;
+  final backendPassword = args['backend-password'] as String?;
   final srcPath = args['src'] as String?;
 
   try {
@@ -246,12 +254,38 @@ Future<int> _runAnalyze(
       final model = await catalog.read(accdbPath);
 
       final analyzer = AccdbAnalyzer(model: model, db: database);
-      final analysis = await analyzer.analyze();
+      var analysis = await analyzer.analyze();
       if (srcPath != null && srcPath.isNotEmpty) {
         final sourceProject = await AccessSrcReader().readDirectory(srcPath);
         analysis['source_overlay'] = sourceProject.toJson();
+        AnalysisOverlayMerger().mergeSourceOverlay(analysis, sourceProject);
         analysis['query_reconciliation'] = QueryReconciliationBuilder()
             .build(model.queries, sourceProject.queries);
+      }
+
+      if (backendAccdbPath != null && backendAccdbPath.isNotEmpty) {
+        final backendDatabase = await AccessDatabase.openPath(
+          backendAccdbPath,
+          password: backendPassword,
+        );
+        try {
+          final backendCatalog = AccessCatalog(
+            format: backendDatabase.format,
+            pageChannel: backendDatabase.pageChannel,
+          );
+          final backendModel = await backendCatalog.read(backendAccdbPath);
+          final backendAnalyzer = AccdbAnalyzer(
+            model: backendModel,
+            db: backendDatabase,
+          );
+          final backendAnalysis = await backendAnalyzer.analyze();
+          analysis = AnalysisBackendLinker().mergeLinkedBackendAnalysis(
+            analysis,
+            backendAnalysis,
+          );
+        } finally {
+          await backendDatabase.close();
+        }
       }
 
       final outDir = Directory(outputDir);
@@ -261,14 +295,16 @@ Future<int> _runAnalyze(
           .writeAsString(const JsonEncoder.withIndent('  ').convert(analysis));
 
       out.writeln('Analysis written to: ${analysisFile.path}');
-      out.writeln('  Tables : ${model.tables.length}');
-      out.writeln('  Linked : ${model.linkedTables.length}');
-      out.writeln('  Rels   : ${model.relationships.length}');
-      out.writeln('  Queries: ${model.queries.length}');
-      out.writeln('  Forms  : ${model.forms.length}');
-      out.writeln('  Reports: ${model.reports.length}');
-      out.writeln('  Macros : ${model.macros.length}');
-      out.writeln('  Modules: ${model.modules.length}');
+        final summary = (analysis['summary'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+        out.writeln('  Tables : ${summary['tables'] ?? model.tables.length}');
+        out.writeln('  Linked : ${summary['linkedTables'] ?? model.linkedTables.length}');
+        out.writeln('  Rels   : ${summary['relationships'] ?? model.relationships.length}');
+        out.writeln('  Queries: ${summary['queries'] ?? model.queries.length}');
+        out.writeln('  Forms  : ${summary['forms'] ?? model.forms.length}');
+        out.writeln('  Reports: ${summary['reports'] ?? model.reports.length}');
+        out.writeln('  Macros : ${summary['macros'] ?? model.macros.length}');
+        out.writeln('  Modules: ${summary['modules'] ?? model.modules.length}');
 
       final reconciliation = analysis['query_reconciliation'];
       if (reconciliation is Map<String, dynamic>) {

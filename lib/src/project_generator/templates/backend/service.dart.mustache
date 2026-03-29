@@ -13,6 +13,17 @@ class {{className}}Service {
     return repository.all();
   }
 
+  Future<List<Map<String, dynamic>>> lookupOptions(
+    String fieldKey, {
+    int limit = 100,
+  }) {
+    switch (fieldKey) {
+{{{lookupCases}}}
+      default:
+        throw StateError('Lookup nao suportado para o campo: $fieldKey');
+    }
+  }
+
   Future<Map<String, dynamic>?> findById(int id) {
     return repository.findById(id);
   }

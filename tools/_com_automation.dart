@@ -415,6 +415,14 @@ void _writeVariantValue(Pointer<VARIANT> variant, Object? value) {
     return;
   }
 
+  if (value is Dispatcher) {
+    value.dispatch.addRef();
+    variant.ref
+      ..vt = VARENUM.VT_DISPATCH
+      ..pdispVal = value.dispatch;
+    return;
+  }
+
   throw ArgumentError('Tipo de argumento COM nao suportado: ${value.runtimeType}');
 }
 

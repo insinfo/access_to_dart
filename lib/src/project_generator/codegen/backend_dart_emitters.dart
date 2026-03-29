@@ -13,6 +13,19 @@ String _buildBackendRepositorySource(GeneratedBackendModule module) {
 }
 
 String _buildBackendServiceSource(GeneratedBackendModule module) {
+  final lookupCases = module.lookups
+      .map(
+        (lookup) => '''
+      case '${lookup.fieldRuntimeName}':
+        return repository.lookupOptions(
+          valueColumn: '${lookup.valueColumnRuntimeName}',
+          labelColumn: '${lookup.labelColumnRuntimeName}',
+          orderByColumn: ${lookup.orderByColumnRuntimeName == null ? 'null' : "'${lookup.orderByColumnRuntimeName}'"},
+          limit: limit,
+        );''',
+      )
+      .join('\n');
+
   return _renderTemplateAsset(
     'backend/service.dart.mustache',
     <String, Object?>{
@@ -20,6 +33,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
       'className': module.className,
       'normalizedName': module.normalizedName,
       'routeName': module.routeName,
+      'lookupCases': lookupCases,
     },
   );
 }

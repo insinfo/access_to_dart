@@ -1,6 +1,10 @@
 # Roteiro Unificado de Conversão: MS Access (`.accdb`) para Dart Web 🚀
 
-## Status Atual em 15/03/2026
+## continue melhorando a extração de informações do arquivo binario para geraçãode SQL e exportação para postgresql e melhorias de geração de codigo para aproximar cada vez mais do objetivo de conseguir tranforma a aplicação C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb em uma aplicação dart fullstack funcional e conseguir C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb  exportar para postgresql a base de dados da forma mais fiel possivel
+
+##  Portar um leitor completo de PropertyMap binário no jackcess_dart para extrair campos de tabelas locais
+
+## Status Atual em 28/03/2026
 - O núcleo `jackcess_dart` já abre `.accdb` nativamente e detecta o formato ACE/Jet (`VERSION_14` validado na fixture `fixtures/teste1/teste1.accdb`).
 - A leitura binária de `MSysObjects` já funciona sem Access instalado, incluindo navegação via `UsageMap` e varredura das páginas de dados do catálogo.
 - A base alvo real `fixtures/SIGAsul.accdb` já é inspecionada com sucesso como frontend Access com tabelas vinculadas:
@@ -35,6 +39,7 @@
   - SQL semântico reconstruído para queries `SELECT` já detectadas em `MSysQueries`, incluindo `ORDER BY` inline já decodificado na fixture
   - reconstrutor estrutural testado para `JOIN`, `WHERE`, `GROUP BY` e `HAVING` a partir de linhas sintéticas compatíveis com `MSysQueries`
   - AST de expressões Access para expressões textuais já decodificadas
+  - merge dos metadados do overlay `.accdb.src` diretamente nas colunas principais do modelo analisado, evitando que `required`, `caption`, `maxLength`, `defaultValue` e `calculatedExpression` fiquem presos apenas em `source_overlay`
   - `query_reconciliation` entre binário e overlay `.src`, com resumo de match/mismatch/ausências e cobertura por cláusula (`JOIN`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`)
   - reconciliação extraída do CLI para módulo dedicado com tokenizer/parser próprio de cláusulas SQL (`SELECT`/`FROM`/`WHERE`/`GROUP BY`/`HAVING`/`ORDER BY`) sem regex como núcleo
   - forms/reports/macros/modules detectados no catálogo
@@ -88,6 +93,41 @@
   - `Currency/Money` do Access -> `NUMERIC(19,4)`
   - `Numeric` -> `NUMERIC(precision, scale)` quando os metadados existem
   - `DOUBLE PRECISION` deixou de ser usado para tipos monetários
+- O port do `PropertyMap` binário avançou de forma material no `jackcess_dart` e já sobe no `analysis.json`, no migrador e no codegen metadados reais como:
+  - `validationRule`, `validationText`, `format`, `inputMask`, `allowZeroLength`
+  - `defaultValue`, `caption`, `description`, `decimalPlaces`
+  - `displayControl`, `textFormat`, `IMEMode`, `IMESentenceMode`, `resultType`, `GUID`
+  - `allowMultipleValues`, `rowSourceType`, `rowSource`, `WSSFieldID`
+  - `propertyMaps` brutos por tabela/coluna para investigação semântica adicional de propriedades ainda não promovidas
+- Foi criado um fixture controlado específico para validar `PropertyMap` real via COM (`tools/create_access_property_map_fixture.dart`) e a esteira ponta a ponta já está coberta por teste longo.
+- Foi criado um fixture COM dedicado para combos/listas (`tools/create_access_combo_fixture.dart`) cobrindo `RowSourceType`, `RowSource`, `DisplayControl` e `AllowMultipleValues` com asserts fim a fim no `analysis.json`.
+- Foi criado um segundo fixture de laboratório (`tools/create_access_numeric_calculated_fixture.dart`) que agora combina:
+  - uma tabela local `FinanceiroMetricas` gerada via COM, cobrindo `DefaultValue`, `Description`, `DecimalPlaces` e `Format` em tipos numéricos
+  - uma tabela calculada importada de fixture Access real do repositório, cobrindo `Expression`, `ResultType`, `DisplayControl`, `IMEMode` e `IMESentenceMode`
+  - variantes nativas estáveis `CalcNativeCurrency` e `CalcNativeDouble`, criadas via COM/ACE local, cobrindo cálculos numéricos adicionais com `caption`, `format` e `decimalPlaces`
+  - variantes físicas `NumericPrecisaoEscala` e `CalcNativeNumeric` para medir como o ACE local realmente persiste `dbNumeric` no binário
+- Um experimento COM dedicado (`tools/experiment_access_numeric_calculated_native.dart`) confirmou no Access local um caminho reproduzível para campo calculado numérico nativo sem importação auxiliar:
+  - definir a propriedade `Expression` antes do `Fields.Append` da coluna
+  - a variante `CalcBeforeAppendNumeric` foi persistida como `isCalculated=true` no binário e já sai no `postgres_ddl` como `GENERATED ALWAYS AS (...) STORED`
+  - as variantes que tentam aplicar `Expression`/`ResultType` depois do append não reproduzem o comportamento correto no ACE local
+  - no ambiente ACE local desta esteira, colunas físicas `Numeric` criadas via COM ficaram persistidas como `typeName = Numeric`, mas com `precision = 38` e `scale = 0`, mesmo quando `Precision/Scale` explícitos foram configurados; isso foi refletido na fixture estável e no `postgres_ddl`
+- O `postgres_ddl` embutido no `analysis.json` foi sincronizado com o `MigrationStatementBuilder`, eliminando divergência entre o JSON de análise e o caminho real de migração PostgreSQL:
+  - `DEFAULT` agora respeita metadados promovidos do Access
+  - colunas calculadas passam a sair como `GENERATED ALWAYS AS (...) STORED` quando a tradução da expressão é suportada
+  - o seed deixa de inserir colunas calculadas
+- O codegen frontend passou a consumir esse enriquecimento de schema com mais fidelidade:
+  - campos `AutoNumber` e calculados ficam `readonly`
+  - hints exibem `description` e propriedades relevantes do Access (`DisplayControl`, `TextFormat`, `IMEMode`, `IMESentenceMode`)
+  - campos booleanos já podem virar `checkbox` no IR gerado
+  - `RowSourceType = Value List` e `RowSourceType = Table/Query` agora passam a sugerir `dropdown` no frontend gerado em vez de cair sempre em `input text`
+  - listas literais vindas de `RowSource` em `Value List` já viram opções estáticas no HTML gerado
+- O pipeline de colunas ficou semanticamente mais fiel ao Access para exportação SQL/PostgreSQL e codegen:
+  - `isRequired` do overlay agora participa do `postgres_ddl` e gera `NOT NULL` real em vez de depender de heurística por posição de coluna
+  - `defaultValue` do overlay já é propagado até o migrador, com emissão segura de `DEFAULT` para casos suportados (`NULL`, números, booleanos, literais quoted e funções simples como `Now()`, `Date()` e `Time()`)
+  - `caption` e `maxLength` agora entram no `analysis.json` principal e passam a alimentar o gerador
+  - o frontend gerado agora usa labels vindos de `caption`, adiciona `required`, `maxlength` e `placeholder` nos inputs do formulário
+  - a validação gerada no `core` já injeta regras obrigatórias derivadas do schema quando o formulário VBA não traz uma regra equivalente, ignorando `AutoNumber`
+- A invalidação dos fixtures rápidos de teste foi reforçada para forçar regeneração quando metadados enriquecidos de coluna ainda não estiverem presentes no `analysis.json` cacheado.
 - A refatoração da reconciliação de queries foi consolidada em módulos dedicados:
   - `lib/src/query_reconciliation/query_reconciliation.dart` centraliza a reconciliação por tiers
   - `lib/src/query_reconciliation/sql_tokenizer.dart` implementa o tokenizer SQL dedicado
@@ -158,15 +198,22 @@
   - trocar fallbacks de preview por acesso real persistente e smoke tests do app gerado
   - enriquecer rotas públicas, tratamento de erro, configuração e bootstrap do frontend
 2. Expandir os metadados ricos de coluna no backend real:
-   - required/nullability real
-   - default value
-   - expression de coluna calculada
-   - enriquecer/validar `precision/scale`
+   - priorizar extração binária nativa desses metadados mesmo quando não existir `.accdb.src`
+  - fechar lacunas restantes de `defaultValue` não literal, `validationRule`, `validationText`, `format`, `inputMask`, `decimalPlaces` e semântica de `AllowZeroLength`
+  - validar em bases reais a promoção de `DisplayControl`, `TextFormat`, `IMEMode`, `IMESentenceMode`, `ResultType`, `GUID`, `WSSFieldID`, `RowSourceType`, `RowSource` e `AllowMultipleValues`
+  - tratar `GUID_PROP` como identificador estável de campo e manter `NameMap` como blob interno/opaco até existir semântica confiável
+   - enriquecer/validar `precision/scale` e o mapeamento de tipos complexos/attachments no backend real
 3. Descomprimir e extrair a lógica e código fonte final em texto plano originários de dentro dos blocos de compressão VBA (`MS-OVBA`), implementando um descompressor dedicado para MS-OVBA no OLE stream.
 4. Integrar o resultado do compilador recém-criado (o pipeline transpilador em `vba_parser`) às saídas do gerador, produzindo controllers e regras de negócio reais a partir de módulos/form events.
 5. Decodificar blobs complexos da UI visual de Formulários e Relatórios, indo além do catálogo atual e permitindo scaffolding visual fiel.
 6. Reduzir o gap de cobertura de queries que ainda aparecem como `missing_in_binary` / `missing_in_source`, agora com foco secundário e não mais bloqueante para a reconciliação semântica principal do `SIGAsul`.
 7. Usar scripts opcionais via COM/`win32` para gerar bases `.accdb` mínimas, reprodutíveis e comparáveis, úteis para validar como o Access grava tabelas, formulários e VBA no binário sem acoplar isso ao runtime principal.
+  - status: já existem fixtures controlados para `PropertyMap` e para cenário numérico/calculado; o caminho COM local para cálculo numérico nativo já foi validado quando `Expression` é configurada antes do append da coluna, e o próximo passo é transformar isso em fixture estável cobrindo mais `resultType` e formatos numéricos
+8. Para atingir o alvo `fixtures/SIGAsul.accdb -> app Dart fullstack funcional + export PostgreSQL fiel`, os bloqueios principais restantes são:
+  - converter linked tables e queries do frontend Access em módulos realmente executáveis contra um backend PostgreSQL materializado
+  - cruzar forms/reports do catálogo com layout/controles/eventos reais para gerar telas e fluxos próximos do comportamento original
+  - transportar regras de negócio hoje embutidas em VBA/macros para backend/frontend gerados
+  - executar smoke tests ponta a ponta em uma aplicação gerada a partir do `SIGAsul` completo, e não apenas em fixtures menores
 
 
 
@@ -240,6 +287,17 @@ Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, a
 2. Capacidade da CLI iterar propriedades cruciais dentro e fora das hierarquias DOM via XML parse limpo da pasta `.accdb.src`, gerando um JSON abstrato do mapa do sistema.
 Status: concluído para `teste1.accdb.src` e adaptado para o layout específico de `SIGAsul.accdb.src` no caso de linked tables e queries. Ainda não há export estruturado de forms/reports nesse layout do add-in.
 3. Geração limpa e assíncrona da pasta `/generated/teste1_app_generated`.
-Status: parcialmente concluído. O comando `generate --analysis ...` já cria scaffold funcional inicial de `core/backend/frontend`, incluindo `conversion-report.md`, shell frontend completo, wrappers de página, service HTTP compartilhado, backend com `repositories/services/controllers/routes`, `generated_data.dart`, `public_backend.dart`, DI e middleware de banco. O scaffold gerado já passa por `dart analyze`, build do frontend com `dart run webdev build` e compilação representativa em testes de geração. Ainda falta elevar esse scaffold para o nível final de aplicação completa com persistência PostgreSQL real, rotas mais ricas e frontend AngularDart pronto para produção.
+Status: parcialmente concluído. O comando `generate --analysis ...` já cria scaffold funcional inicial de `core/backend/frontend`, incluindo `conversion-report.md`, shell frontend completo, wrappers de página, service HTTP compartilhado, backend com `repositories/services/controllers/routes`, `generated_data.dart`, `public_backend.dart`, DI e middleware de banco. O scaffold gerado já passa por `dart analyze`, build do frontend com `dart run webdev build` e compilação representativa em testes de geração. O codegen já passou a consumir `caption`, `isRequired` e `maxLength` do schema enriquecido para melhorar labels e inputs HTML. Ainda falta elevar esse scaffold para o nível final de aplicação completa com persistência PostgreSQL real, rotas mais ricas e frontend AngularDart pronto para produção.
 4. Quando entrarmos na pasta `/backend/` e rodarmos localmente `dart run bin/server.dart` associado à pasta `/frontend/` no Webdev (AngularDart), conseguirmos consultar visualmente de fato uma "Folha de Contatos".
 Status: parcialmente concluído. O backend e o frontend gerados já possuem estrutura modular, serviços HTTP, esqueleto de repositórios PostgreSQL e build validado do frontend AngularDart. Ainda falta fechar a integração ponta a ponta com banco real, fluxo HTTP real do frontend contra o backend gerado e navegação/telas mais completas.
+
+## Atualização Recente do Incremento
+- O merge do overlay `.accdb.src` com o modelo principal de análise foi consolidado para colunas, não apenas para um bloco auxiliar de `source_overlay`.
+- O `postgres_ddl` é recalculado depois desse merge, evitando perder `NOT NULL` e `DEFAULT` descobertos fora do binário puro.
+- A exportação PostgreSQL ficou mais fiel para defaults simples e para nulabilidade obrigatória de campos não `AutoNumber`.
+- O frontend gerado começou a refletir melhor a intenção original do Access em formulários simples, aproveitando `caption` e `maxLength` já presentes no overlay.
+- A cobertura de testes foi ampliada para:
+  - parsing sintético de `caption`, `required`, `maxLength` e `defaultValue` no leitor `.accdb.src`
+  - merge de overlay enriquecido e regeneração do DDL PostgreSQL
+  - emissão de `DEFAULT` no migrador
+  - scaffold HTML com `required` e `maxlength`

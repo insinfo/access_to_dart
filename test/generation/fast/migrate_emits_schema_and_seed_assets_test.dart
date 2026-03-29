@@ -30,6 +30,7 @@ void main() {
     expect(await schemaFile.exists(), isTrue);
     expect(await seedFile.exists(), isTrue);
     expect(await schemaFile.readAsString(), contains('CREATE TABLE "contatos"'));
+    expect(await schemaFile.readAsString(), contains('"sobrenome" TEXT NOT NULL'));
     expect(await seedFile.readAsString(), contains('INSERT INTO "contatos"'));
   });
 }
