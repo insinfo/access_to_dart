@@ -38,6 +38,14 @@ part 'frontend/frontend_shell_generator.dart';
 part 'frontend/frontend_shared_generator.dart';
 part 'frontend/frontend_writer.dart';
 
+String _dartStringLiteral(String value) {
+  return jsonEncode(value).replaceAll(r'$', r'\$');
+}
+
+String _htmlTextLiteral(String value) {
+  return const HtmlEscape(HtmlEscapeMode.attribute).convert(value);
+}
+
 class GeneratedProject {
   final Directory rootDirectory;
 
@@ -87,4 +95,5 @@ class ProjectGenerator {
     }
     return 'id';
   }
+  
 }

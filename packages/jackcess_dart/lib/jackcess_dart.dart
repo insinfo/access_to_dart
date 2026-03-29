@@ -6,6 +6,7 @@ export 'src/data_page_reader.dart';
 export 'src/jet_format.dart';
 export 'src/office_encryption.dart';
 export 'src/page_channel.dart';
+export 'src/property_map_reader.dart';
 export 'src/row_reader.dart';
 export 'src/table_def_reader.dart';
 export 'src/table_reader.dart';

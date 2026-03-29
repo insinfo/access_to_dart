@@ -97,6 +97,52 @@ void main() {
 
     expect(report.readinessLevel, 'ready');
     expect(report.issues.any((issue) => issue.severity == 'warning'), isFalse);
-    expect(report.issues.any((issue) => issue.code == 'query.reconciliation_clean'), isTrue);
+    expect(
+        report.issues
+            .any((issue) => issue.code == 'query.reconciliation_clean'),
+        isTrue);
+  });
+
+  test(
+      'doctor nao marca forms catalog only quando canonical analysis ja tem estrutura binaria',
+      () {
+    final project = AnalysisProject.fromJson({
+      'schema_version': '1.0',
+      'source': 'fixtures/SIGAsul.accdb',
+      'format': 'VERSION_14',
+      'summary': const {},
+      'tables': const [],
+      'linkedTables': const [],
+      'forms': [
+        {'name': 'FrmAtendimento'},
+      ],
+      'canonical_analysis': {
+        'forms': [
+          {
+            'name': 'FrmAtendimento',
+            'components': {
+              'sections': [
+                {
+                  'kind': 'detail',
+                  'name': 'Detalhe',
+                  'controls': [
+                    {'name': 'txtNome', 'type': 'TextBox'},
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+        'reports': const [],
+        'modules': const [],
+      },
+    });
+
+    final report = AnalysisDoctor().inspect(project);
+
+    expect(
+      report.issues.any((issue) => issue.code == 'forms.catalog_only'),
+      isFalse,
+    );
   });
 }

@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 import '../support/generation_test_utils.dart';
 
 void main() {
-  test('generate emits metadata hints and access attributes', () async {
+  test('generate emits metadata hints in frontend titles', () async {
     final tempDir = await Directory.systemTemp.createTemp('access_metadata_');
     addTearDown(() => tempDir.delete(recursive: true));
 
@@ -37,9 +37,6 @@ void main() {
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}lancamentos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_lancamentos${Platform.pathSeparator}incluir_lancamentos_page.html',
     );
     final incluirHtmlContent = await incluirHtmlFile.readAsString();
-    expect(incluirHtmlContent, contains('title="Nao deixe Valor monetario vazio. | Formato Access: Currency | Mascara Access: 99999.99 | Regra Access: >=0 | Nao aceita string vazia."'));
-    expect(incluirHtmlContent, contains('data-access-format="Currency"'));
-    expect(incluirHtmlContent, contains('data-access-input-mask="99999.99"'));
-    expect(incluirHtmlContent, contains('data-access-validation-rule=">=0"'));
+    expect(incluirHtmlContent, contains('title="Nao deixe Valor monetario vazio. | Formato Access: Currency | Mascara Access: 99999.99 | Regra Access: &gt;=0 | Nao aceita string vazia."'));
   });
 }

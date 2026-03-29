@@ -5,6 +5,7 @@ class GeneratedFieldDescriptor {
   final String columnConstantName;
   final String fieldName;
   final String dartType;
+  final String accessTypeName;
   final String label;
   final bool isRequired;
   final bool? allowZeroLength;
@@ -23,6 +24,7 @@ class GeneratedFieldDescriptor {
   final bool? allowMultipleValues;
   final String? rowSourceType;
   final String? rowSource;
+  final String? accessControlType;
   final String? wssFieldId;
   final String? fromMapExpression;
   final GeneratedLookupDescriptor? lookup;
@@ -32,6 +34,7 @@ class GeneratedFieldDescriptor {
     required this.columnConstantName,
     required this.fieldName,
     required this.dartType,
+    required this.accessTypeName,
     required this.label,
     required this.isRequired,
     required this.allowZeroLength,
@@ -50,6 +53,7 @@ class GeneratedFieldDescriptor {
     required this.allowMultipleValues,
     required this.rowSourceType,
     required this.rowSource,
+    required this.accessControlType,
     required this.wssFieldId,
     this.fromMapExpression,
     this.lookup,
@@ -58,6 +62,9 @@ class GeneratedFieldDescriptor {
   bool get isReadOnly => isAutoNumber || isCalculated;
 
   bool get isDropdownSuggested {
+    if (isComboBoxControl || isListBoxControl) {
+      return true;
+    }
     final normalized = foldToAscii(rowSourceType ?? '').toLowerCase().trim();
     return normalized == 'value list' || normalized == 'table/query';
   }
@@ -75,8 +82,33 @@ class GeneratedFieldDescriptor {
   bool get isMultiValueSuggested =>
       allowMultipleValues == true && isDropdownSuggested;
 
+  String get normalizedAccessControlType =>
+      foldToAscii(accessControlType ?? '').toLowerCase().trim();
+
+  String get normalizedAccessTypeName =>
+      foldToAscii(accessTypeName).toLowerCase().replaceAll(' ', '');
+
+  bool get isCheckboxControl =>
+      normalizedAccessControlType == 'checkbox' ||
+      foldToAscii(dartType).toLowerCase() == 'bool?';
+
+  bool get isComboBoxControl => normalizedAccessControlType == 'combobox';
+
+  bool get isListBoxControl => normalizedAccessControlType == 'listbox';
+
+  bool get isTextAreaControl {
+    if (normalizedAccessControlType != 'textbox') {
+      return false;
+    }
+    return normalizedAccessTypeName == 'longtext' ||
+        normalizedAccessTypeName == 'memo' ||
+        normalizedAccessTypeName == 'longchar';
+  }
+
+  int? get selectSize => isListBoxControl && !isMultiValueSuggested ? 6 : null;
+
   String get inputType {
-    if (foldToAscii(dartType).toLowerCase() == 'bool?') return 'checkbox';
+    if (isCheckboxControl) return 'checkbox';
     if (isDropdownSuggested) return 'select';
     if (inputMask != null && inputMask!.trim().isNotEmpty) return 'text';
     if (dartType == 'DateTime?') return 'date';
@@ -260,6 +292,9 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisProject project,
     AnalysisTable table,
   ) {
+    final matchedForm = _resolveFrontendForm(project, table);
+    final orderedColumns = _orderFrontendColumns(table, matchedForm);
+
     return GeneratedFrontendModule(
       packageName: project.dartPackageName,
       className: table.className,
@@ -267,14 +302,17 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       moduleNameKebab: tableRouteSegment(table),
       formLogicClassName: '${table.className}FormLogic',
       primaryKeyField: _getPrimaryKey(table).fieldName,
-      fields: table.columns
+      fields: orderedColumns
           .map(
-            (column) => GeneratedFieldDescriptor(
+            (column) {
+              final matchedControl = _resolveBoundControl(matchedForm, column);
+              return GeneratedFieldDescriptor(
               runtimeName: columnRuntimeName(column),
               columnConstantName: column.columnConstantName,
               fieldName: column.fieldName,
               dartType: column.dartType,
-              label: column.label,
+              accessTypeName: column.typeName,
+              label: _frontendFieldLabel(column, matchedControl),
               isRequired: column.isRequired,
               allowZeroLength: column.allowZeroLength,
               maxLength: column.maxLength,
@@ -292,13 +330,142 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               allowMultipleValues: column.allowMultipleValues,
               rowSourceType: column.rowSourceType,
               rowSource: column.rowSource,
+              accessControlType: matchedControl?.type,
               wssFieldId: column.wssFieldId,
               fromMapExpression: _fromMapValue(column),
               lookup: _resolveLookupDescriptor(project, column),
-            ),
+              );
+            },
           )
           .toList(growable: false),
     );
+  }
+
+  AnalysisForm? _resolveFrontendForm(
+    AnalysisProject project,
+    AnalysisTable table,
+  ) {
+    final candidates = project.forms.where((form) {
+      final recordSource = form.recordSource;
+      return recordSource != null &&
+          AnalysisProject.lookupKey(recordSource) ==
+              AnalysisProject.lookupKey(table.name);
+    }).toList(growable: false);
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+    if (candidates.length == 1) {
+      return candidates.first;
+    }
+
+    AnalysisForm? bestForm;
+    var bestScore = -1;
+    for (final form in candidates) {
+      final score = form.controls
+          .where((control) => _resolveColumnForControl(table, control) != null)
+          .length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestForm = form;
+      }
+    }
+    return bestForm ?? candidates.first;
+  }
+
+  List<AnalysisColumn> _orderFrontendColumns(
+    AnalysisTable table,
+    AnalysisForm? form,
+  ) {
+    if (form == null || form.controls.isEmpty) {
+      return table.columns.toList(growable: false);
+    }
+
+    final ordered = <AnalysisColumn>[];
+    final seen = <String>{};
+
+    for (final control in form.controls) {
+      final column = _resolveColumnForControl(table, control);
+      if (column == null) {
+        continue;
+      }
+      if (seen.add(column.fieldName)) {
+        ordered.add(column);
+      }
+    }
+
+    for (final column in table.columns) {
+      if (seen.add(column.fieldName)) {
+        ordered.add(column);
+      }
+    }
+
+    return ordered;
+  }
+
+  AnalysisColumn? _resolveColumnForControl(
+    AnalysisTable table,
+    AnalysisFormControl control,
+  ) {
+    final candidates = <String>{
+      if (control.controlSource != null && control.controlSource!.trim().isNotEmpty)
+        AnalysisProject.lookupKey(control.controlSource!),
+      AnalysisProject.lookupKey(control.name),
+    }..removeWhere((value) => value.isEmpty);
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    for (final column in table.columns) {
+      final columnKeys = <String>{
+        AnalysisProject.lookupKey(column.name),
+        AnalysisProject.lookupKey(column.fieldName),
+        AnalysisProject.lookupKey(column.normalizedName),
+      };
+      if (candidates.any(columnKeys.contains)) {
+        return column;
+      }
+    }
+    return null;
+  }
+
+  AnalysisFormControl? _resolveBoundControl(
+    AnalysisForm? form,
+    AnalysisColumn column,
+  ) {
+    if (form == null) {
+      return null;
+    }
+
+    final columnKeys = <String>{
+      AnalysisProject.lookupKey(column.name),
+      AnalysisProject.lookupKey(column.fieldName),
+      AnalysisProject.lookupKey(column.normalizedName),
+    };
+
+    for (final control in form.controls) {
+      final controlSource = control.controlSource;
+      if (controlSource == null || controlSource.trim().isEmpty) {
+        continue;
+      }
+      final controlKey = AnalysisProject.lookupKey(controlSource);
+      if (columnKeys.contains(controlKey)) {
+        return control;
+      }
+    }
+    return null;
+  }
+
+  String _frontendFieldLabel(
+    AnalysisColumn column,
+    AnalysisFormControl? matchedControl,
+  ) {
+    final controlCaption = matchedControl?.caption?.trim();
+    if (controlCaption != null && controlCaption.isNotEmpty) {
+      return controlCaption;
+    }
+    return column.label;
   }
 
   GeneratedCoreModelDescriptor _buildCoreModelIr(AnalysisTable table) {
@@ -313,6 +480,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               columnConstantName: column.columnConstantName,
               fieldName: column.fieldName,
               dartType: column.dartType,
+              accessTypeName: column.typeName,
               label: column.label,
               isRequired: column.isRequired,
               allowZeroLength: column.allowZeroLength,
@@ -331,6 +499,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               allowMultipleValues: column.allowMultipleValues,
               rowSourceType: column.rowSourceType,
               rowSource: column.rowSource,
+              accessControlType: null,
               wssFieldId: column.wssFieldId,
               fromMapExpression: _fromMapValue(column),
               lookup: null,

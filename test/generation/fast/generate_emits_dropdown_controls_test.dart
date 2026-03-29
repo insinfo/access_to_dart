@@ -30,9 +30,8 @@ void main() {
     final incluirHtmlContent = await incluirHtmlFile.readAsString();
 
     expect(incluirHtmlContent, contains('<select'));
-    expect(incluirHtmlContent, contains('data-access-row-source-type="Value List"'));
-    expect(incluirHtmlContent, contains('data-access-row-source-type="Table/Query"'));
-    expect(incluirHtmlContent, contains('data-access-allow-multiple-values="true"'));
+    expect(incluirHtmlContent, contains('title="DisplayControl Access: 111 | RowSourceType Access: Value List | RowSource Access: &quot;Ativo&quot;;&quot;Inativo&quot;;&quot;Pendente&quot;"'));
+    expect(incluirHtmlContent, contains('title="DisplayControl Access: 111 | Campo multivalorado do Access. | RowSourceType Access: Value List | RowSource Access: &quot;Urgente&quot;;&quot;Revisao&quot;;&quot;Concluido&quot;"'));
     expect(incluirHtmlContent, contains('<option value="Ativo">Ativo</option>'));
     expect(incluirHtmlContent, contains('<option value="Inativo">Inativo</option>'));
     expect(incluirHtmlContent, contains("toggleFieldSelection('tags', 'Urgente', \$event.target.checked)"));

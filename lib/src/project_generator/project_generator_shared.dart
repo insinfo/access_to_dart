@@ -25,6 +25,7 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     buffer.writeln('- Tables: `${project.tables.length}`');
     buffer.writeln('- Linked tables: `${project.linkedTables.length}`');
     buffer.writeln('- Forms: `${project.forms.length}`');
+    buffer.writeln('- Reports: `${project.reportCatalogNames.length}`');
     buffer.writeln('- Doctor errors: `${summary['error']}`');
     buffer.writeln('- Doctor warnings: `${summary['warning']}`');
     buffer.writeln('- Doctor info: `${summary['info']}`');
@@ -37,6 +38,25 @@ extension _ProjectGeneratorShared on ProjectGenerator {
       );
       buffer.writeln(
         '- Query missingInSource: `${reconciliationSummary['missingInSource'] ?? 0}`',
+      );
+    }
+    buffer.writeln();
+    buffer.writeln('## Report Inventory');
+    buffer.writeln();
+    if (project.reportCatalogNames.isEmpty) {
+      buffer.writeln('- Nenhum report catalogado no analysis atual.');
+    } else {
+      for (final reportName in project.reportCatalogNames.take(25)) {
+        buffer.writeln('- `$reportName`');
+      }
+      if (project.reportCatalogNames.length > 25) {
+        buffer.writeln(
+          '- ... e mais `${project.reportCatalogNames.length - 25}` reports no catalogo.',
+        );
+      }
+      buffer.writeln();
+      buffer.writeln(
+        '> Observacao: a trilha de reports foi aberta com inventario de catalogo. A extração estruturada de controles e secoes ainda precisa ser promovida para o modelo tipado.',
       );
     }
     buffer.writeln();

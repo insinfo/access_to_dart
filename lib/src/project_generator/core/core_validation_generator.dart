@@ -49,7 +49,7 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
 
     final hintsSource = uniqueHints.isEmpty
         ? 'const <String>[]'
-        : '<String>[\n${uniqueHints.map((hint) => '    ${jsonEncode(hint)},').join('\n')}\n  ]';
+        : '<String>[\n${uniqueHints.map((hint) => '    ${_dartStringLiteral(hint)},').join('\n')}\n  ]';
 
     final helperMethods = <String>[];
     if (needsStringHelper) {
@@ -189,13 +189,13 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
       '    Map<String, dynamic> draft,',
       '    List<ValidationIssue> issues,',
       '  ) {',
-      '    final rawValue = _stringValue(draft[${jsonEncode(validation.runtimeKey)}]);',
+      '    final rawValue = _stringValue(draft[${_dartStringLiteral(validation.runtimeKey)}]);',
     ];
 
     if (validation.kinds.contains(AccessFormFieldRuleKind.required)) {
       lines.addAll(<String>[
         '    if (rawValue.trim().isEmpty) {',
-        '      issues.add(const ValidationIssue(field: ${jsonEncode(validation.runtimeKey)}, message: ${jsonEncode(requiredMessage)}));',
+        '      issues.add(const ValidationIssue(field: ${_dartStringLiteral(validation.runtimeKey)}, message: ${_dartStringLiteral(requiredMessage)}));',
         '      return;',
         '    }',
       ]);
@@ -205,7 +205,7 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
       lines.addAll(<String>[
         '    final cpfDigits = _digitsOnly(rawValue);',
         '    if (cpfDigits.isNotEmpty && !_isValidCpf(cpfDigits)) {',
-        '      issues.add(const ValidationIssue(field: ${jsonEncode(validation.runtimeKey)}, message: ${jsonEncode(cpfMessage)}));',
+        '      issues.add(const ValidationIssue(field: ${_dartStringLiteral(validation.runtimeKey)}, message: ${_dartStringLiteral(cpfMessage)}));',
         '      return;',
         '    }',
       ]);
@@ -214,7 +214,7 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
     if (validation.kinds.contains(AccessFormFieldRuleKind.email)) {
       lines.addAll(<String>[
         '    if (rawValue.trim().isNotEmpty && !_isValidEmail(rawValue)) {',
-        '      issues.add(const ValidationIssue(field: ${jsonEncode(validation.runtimeKey)}, message: ${jsonEncode(emailMessage)}));',
+        '      issues.add(const ValidationIssue(field: ${_dartStringLiteral(validation.runtimeKey)}, message: ${_dartStringLiteral(emailMessage)}));',
         '      return;',
         '    }',
       ]);
@@ -223,7 +223,7 @@ extension _ProjectGeneratorCoreValidation on ProjectGenerator {
     if (validation.kinds.contains(AccessFormFieldRuleKind.phone)) {
       lines.addAll(<String>[
         '    if (rawValue.trim().isNotEmpty && !_isValidPhone(rawValue)) {',
-        '      issues.add(const ValidationIssue(field: ${jsonEncode(validation.runtimeKey)}, message: ${jsonEncode(phoneMessage)}));',
+        '      issues.add(const ValidationIssue(field: ${_dartStringLiteral(validation.runtimeKey)}, message: ${_dartStringLiteral(phoneMessage)}));',
         '    }',
       ]);
     }

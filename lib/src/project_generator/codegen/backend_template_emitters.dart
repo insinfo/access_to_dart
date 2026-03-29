@@ -9,8 +9,6 @@ String _buildBackendPubspecSource(AnalysisProject project) {
 
 String _buildBackendServerBinSource() {
   return '''
-import 'dart:io';
-
 import 'package:args/args.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
@@ -47,8 +45,6 @@ void main(List<String> args) async {
 
 String _buildBackendPublicServerBinSource() {
   return '''
-import 'dart:io';
-
 import 'package:args/args.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
@@ -192,7 +188,6 @@ void setupApiRoutes(Router app) {
 String _buildBackendPublicApiRoutesSource(AnalysisProject project) {
   return _renderTemplate(
     '''
-import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../controllers/public_api_controller.dart';

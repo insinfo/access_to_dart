@@ -51,22 +51,23 @@ String toSnakeCaseIdentifier(String input) {
 }
 
 String toPascalCaseIdentifier(String input) {
-  final parts = _identifierParts(input);
-  final buffer = StringBuffer();
-  for (final part in parts) {
-    if (part.isEmpty) continue;
-    buffer.write(part[0].toUpperCase());
-    if (part.length > 1) {
-      buffer.write(part.substring(1));
-    }
-  }
-  return buffer.isEmpty ? 'GeneratedModel' : buffer.toString();
+  final buffer = StringBuffer(_buildPascalCore(input));
+  return _ensureSafeDartIdentifier(
+    buffer.isEmpty ? 'GeneratedModel' : buffer.toString(),
+    fallbackPrefix: 'Generated',
+    emptyFallback: 'GeneratedModel',
+  );
 }
 
 String toCamelCaseIdentifier(String input) {
-  final pascal = toPascalCaseIdentifier(input);
+  final pascal = _buildPascalCore(input);
   if (pascal.isEmpty) return 'generatedValue';
-  return '${pascal[0].toLowerCase()}${pascal.substring(1)}';
+  final camel = '${pascal[0].toLowerCase()}${pascal.substring(1)}';
+  return _ensureSafeDartIdentifier(
+    camel,
+    fallbackPrefix: 'field',
+    emptyFallback: 'generatedValue',
+  );
 }
 
 String toKebabCaseIdentifier(String input) {
@@ -95,6 +96,111 @@ String _trimUnderscores(String input) {
   final trimmed = input.substring(start, end);
   return trimmed.isEmpty ? 'generated_value' : trimmed;
 }
+
+String _ensureSafeDartIdentifier(
+  String identifier, {
+  required String fallbackPrefix,
+  required String emptyFallback,
+}) {
+  if (identifier.isEmpty) {
+    return emptyFallback;
+  }
+
+  var result = identifier;
+  final firstCodeUnit = result.codeUnitAt(0);
+  if (_isAsciiDigit(firstCodeUnit)) {
+    result = '$fallbackPrefix${result[0].toUpperCase()}${result.substring(1)}';
+  }
+
+  if (_dartReservedWords.contains(result)) {
+    result = '$fallbackPrefix${result[0].toUpperCase()}${result.substring(1)}';
+  }
+
+  return result;
+}
+
+String _buildPascalCore(String input) {
+  final parts = _identifierParts(input);
+  final buffer = StringBuffer();
+  for (final part in parts) {
+    if (part.isEmpty) continue;
+    buffer.write(part[0].toUpperCase());
+    if (part.length > 1) {
+      buffer.write(part.substring(1));
+    }
+  }
+  return buffer.toString();
+}
+
+const Set<String> _dartReservedWords = <String>{
+  'abstract',
+  'as',
+  'assert',
+  'async',
+  'await',
+  'base',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'covariant',
+  'default',
+  'deferred',
+  'do',
+  'dynamic',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'extension',
+  'external',
+  'factory',
+  'false',
+  'final',
+  'finally',
+  'for',
+  'function',
+  'get',
+  'hide',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'interface',
+  'is',
+  'late',
+  'library',
+  'mixin',
+  'new',
+  'null',
+  'of',
+  'on',
+  'operator',
+  'part',
+  'required',
+  'rethrow',
+  'return',
+  'sealed',
+  'set',
+  'show',
+  'static',
+  'super',
+  'switch',
+  'sync',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typedef',
+  'var',
+  'void',
+  'when',
+  'while',
+  'with',
+  'yield',
+};
 
 bool _isAsciiLetter(int rune) =>
     (rune >= 65 && rune <= 90) || (rune >= 97 && rune <= 122);

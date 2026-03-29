@@ -137,34 +137,50 @@ class Consultar${namePascal}Page implements OnInit {
         .where((field) => field.isAutoNumber == false)
         .map(
           (field) => <String, Object?>{
-            'label': field.label,
+            'label': _htmlTextLiteral(field.label),
             'readKey': field.runtimeName,
             'updateKey': field.runtimeName,
             'ngControl': field.fieldName,
             'inputType': field.inputType,
             'inputMode': field.inputMode,
+            'selectSize': field.selectSize,
             'isReadOnly': field.isReadOnly,
             'isRequired': field.isRequired,
             'maxLength': field.maxLength,
-            'title': _buildFieldHint(field),
+            'title': _buildFieldHint(field) == null
+                ? null
+                : _htmlTextLiteral(_buildFieldHint(field)!),
+            'isCheckboxControl': field.isCheckboxControl,
+            'isTextAreaControl': field.isTextAreaControl,
             'isMultiValueSelect': field.isMultiValueSuggested,
             'isSingleSelect': field.isDropdownSuggested && !field.isMultiValueSuggested,
             'isSelect': field.isDropdownSuggested,
             'isNotSelect': !field.isDropdownSuggested,
+            'isPlainInput': !field.isDropdownSuggested && !field.isCheckboxControl && !field.isTextAreaControl,
             'isDynamicSelect': field.hasDynamicLookup,
-            'format': field.formatString,
-            'inputMask': field.inputMask,
-            'validationRule': field.validationRule,
-            'rowSourceType': field.rowSourceType,
-            'rowSource': field.rowSource,
+            'format': field.formatString == null
+                ? null
+                : _htmlTextLiteral(field.formatString!),
+            'inputMask': field.inputMask == null
+                ? null
+                : _htmlTextLiteral(field.inputMask!),
+            'validationRule': field.validationRule == null
+                ? null
+                : _htmlTextLiteral(field.validationRule!),
+            'rowSourceType': field.rowSourceType == null
+                ? null
+                : _htmlTextLiteral(field.rowSourceType!),
+            'rowSource': field.rowSource == null
+                ? null
+                : _htmlTextLiteral(field.rowSource!),
             'displayControl': field.displayControl,
             'textFormat': field.textFormat,
             'dynamicFieldKey': field.lookup?.fieldRuntimeName,
             'options': field.dropdownOptions
                 .map(
                   (option) => <String, Object?>{
-                    'value': option,
-                    'label': option,
+                    'value': _htmlTextLiteral(option),
+                    'label': _htmlTextLiteral(option),
                   },
                 )
                 .toList(growable: false),
@@ -240,6 +256,18 @@ $dynamicLookupSource;
   String readField(String key) {
     final value = _draft[key];
     return _presentFieldValue(key, value);
+  }
+
+  bool readFieldBool(String key) {
+    final value = _draft[key];
+    if (value is bool) {
+      return value;
+    }
+    final normalized = (value?.toString() ?? '').trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == '1' ||
+        normalized == '-1' ||
+        normalized == 'yes';
   }
 
   String? readFieldError(String key) => validationErrors[key];
@@ -395,7 +423,7 @@ $dynamicLookupSource;
         inQuotes = !inQuotes;
         continue;
       }
-      if (!inQuotes && token == '\\' && index + 1 < pattern.length) {
+      if (!inQuotes && token == '\\\\' && index + 1 < pattern.length) {
         if (rawIndex > 0 || rawIndex < value.length) {
           buffer.write(pattern[index + 1]);
         }
@@ -554,7 +582,7 @@ class _ConsumedChar {
     }
     final hintsLiteral = hints.isEmpty
         ? 'const <String>[]'
-        : 'const <String>[\n${hints.map((hint) => '    ${jsonEncode(hint)},').join('\n')}\n  ]';
+        : 'const <String>[\n${hints.map((hint) => '    ${_dartStringLiteral(hint)},').join('\n')}\n  ]';
     final logicDir = Directory(p.join(moduleDir.path, 'logic'));
     if (!logicDir.existsSync()) {
       logicDir.createSync(recursive: true);
@@ -670,12 +698,12 @@ String _buildFieldPresentationSource(List<GeneratedFieldDescriptor> fields) {
       .where((field) => !field.isAutoNumber)
       .map((field) {
         final values = <String>[];
-        values.add("'dartType': ${jsonEncode(field.dartType)}");
+        values.add("'dartType': ${_dartStringLiteral(field.dartType)}");
         if (field.formatString != null && field.formatString!.trim().isNotEmpty) {
-          values.add("'format': ${jsonEncode(field.formatString!.trim())}");
+          values.add("'format': ${_dartStringLiteral(field.formatString!.trim())}");
         }
         if (field.inputMask != null && field.inputMask!.trim().isNotEmpty) {
-          values.add("'inputMask': ${jsonEncode(field.inputMask!.trim())}");
+          values.add("'inputMask': ${_dartStringLiteral(field.inputMask!.trim())}");
         }
         if (field.maxLength != null) {
           values.add("'maxLength': ${field.maxLength}");
@@ -684,15 +712,15 @@ String _buildFieldPresentationSource(List<GeneratedFieldDescriptor> fields) {
           values.add("'allowMultipleValues': ${field.allowMultipleValues}");
         }
         if (field.rowSourceType != null && field.rowSourceType!.trim().isNotEmpty) {
-          values.add("'rowSourceType': ${jsonEncode(field.rowSourceType!.trim())}");
+          values.add("'rowSourceType': ${_dartStringLiteral(field.rowSourceType!.trim())}");
         }
         if (field.rowSource != null && field.rowSource!.trim().isNotEmpty) {
-          values.add("'rowSource': ${jsonEncode(field.rowSource!.trim())}");
+          values.add("'rowSource': ${_dartStringLiteral(field.rowSource!.trim())}");
         }
         if (field.wssFieldId != null && field.wssFieldId!.trim().isNotEmpty) {
-          values.add("'wssFieldId': ${jsonEncode(field.wssFieldId!.trim())}");
+          values.add("'wssFieldId': ${_dartStringLiteral(field.wssFieldId!.trim())}");
         }
-        return "    ${jsonEncode(field.runtimeName)}: <String, Object?>{${values.join(', ')}},";
+        return "    ${_dartStringLiteral(field.runtimeName)}: <String, Object?>{${values.join(', ')}},";
       })
       .join('\n');
 
@@ -704,7 +732,7 @@ String _buildDynamicLookupSource(List<GeneratedFieldDescriptor> fields) {
       .where((field) => field.lookup != null)
       .map(
         (field) =>
-            '    ${jsonEncode(field.runtimeName)}: ${jsonEncode(field.lookup!.fieldRuntimeName)},',
+          '    ${_dartStringLiteral(field.runtimeName)}: ${_dartStringLiteral(field.lookup!.fieldRuntimeName)},',
       )
       .join('\n');
 

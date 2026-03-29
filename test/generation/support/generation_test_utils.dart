@@ -511,3 +511,150 @@ Future<File> writeDropdownAnalysisFixture(Directory tempDir) async {
   );
   return analysisFile;
 }
+
+Future<File> writeFormControlsAnalysisFixture(Directory tempDir) async {
+  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_form_controls.json');
+  await analysisFile.writeAsString(
+    const JsonEncoder.withIndent('  ').convert({
+      'schema_version': '1.0',
+      'source': 'fixtures/form_controls.accdb',
+      'format': 'VERSION_16',
+      'summary': {
+        'tables': 1,
+        'linkedTables': 0,
+        'relationships': 0,
+        'queries': 0,
+        'forms': 1,
+        'reports': 0,
+        'macros': 0,
+        'modules': 0,
+      },
+      'tables': [
+        {
+          'name': 'Cadastro',
+          'rowCount': 0,
+          'columns': [
+            {
+              'name': 'ID',
+              'typeName': 'Long',
+              'typeCode': 4,
+              'isAutoNumber': true,
+              'isCalculated': false,
+              'isRequired': true,
+            },
+            {
+              'name': 'Nome',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Nome base',
+            },
+            {
+              'name': 'Email',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Email base',
+            },
+            {
+              'name': 'Unidade',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Unidade base',
+              'rowSourceType': 'Value List',
+              'rowSource': '"Norte";"Sul";"Leste"',
+              'displayControl': 111,
+            },
+            {
+              'name': 'Categoria',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Categoria base',
+              'rowSourceType': 'Value List',
+              'rowSource': '"Basica";"Prioritaria";"Especial"',
+              'displayControl': 111,
+            },
+            {
+              'name': 'Ativo',
+              'typeName': 'YesNo',
+              'typeCode': 1,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Ativo base',
+              'format': 'Yes/No',
+            },
+            {
+              'name': 'Observacoes',
+              'typeName': 'LongText',
+              'typeCode': 12,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Observacoes base',
+            },
+          ],
+          'indexes': [],
+          'sampleRows': [],
+        },
+      ],
+      'linkedTables': [],
+      'forms': [
+        {
+          'name': 'FrmCadastro',
+          'caption': 'Cadastro real',
+          'recordSource': 'Cadastro',
+          'controls': [
+            {
+              'type': 'TextBox',
+              'name': 'txtObservacoes',
+              'controlSource': 'Observacoes',
+              'caption': 'Observações detalhadas',
+            },
+            {
+              'type': 'CheckBox',
+              'name': 'chkAtivo',
+              'controlSource': 'Ativo',
+              'caption': 'Ativo no programa',
+            },
+            {
+              'type': 'ListBox',
+              'name': 'lstCategoria',
+              'controlSource': 'Categoria',
+              'caption': 'Categoria visual',
+            },
+            {
+              'type': 'ComboBox',
+              'name': 'cmbUnidade',
+              'controlSource': 'Unidade',
+              'caption': 'Unidade de referência',
+            },
+            {
+              'type': 'TextBox',
+              'name': 'txtNome',
+              'controlSource': 'Nome',
+              'caption': 'Nome completo',
+            },
+            {
+              'type': 'TextBox',
+              'name': 'txtEmail',
+              'controlSource': 'Email',
+              'caption': 'E-mail principal',
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  return analysisFile;
+}

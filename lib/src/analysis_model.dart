@@ -80,12 +80,21 @@ class AnalysisProject {
   String get dartPackageName => '${projectName}_app_generated';
 
   Iterable<AnalysisSourceLinkedTable> get sourceOverlayLinkedTables {
-    final sourceTables = (((raw['source_overlay'] as Map?)?['tables'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((table) => table.cast<String, dynamic>());
+    final sourceTables =
+        (((raw['source_overlay'] as Map?)?['tables'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((table) => table.cast<String, dynamic>());
     return sourceTables
         .where((table) => table['isLinked'] == true)
         .map(AnalysisSourceLinkedTable.fromJson);
+  }
+
+  List<String> get reportCatalogNames {
+    return ((raw['reports'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((report) => report['name'] as String?)
+        .whereType<String>()
+        .toList(growable: false);
   }
 
   Set<String> get effectiveRecordSources {
@@ -96,15 +105,17 @@ class AnalysisProject {
         sources.add(recordSource.trim());
       }
     }
-    for (final form in canonicalAnalysis?.forms ?? const <AnalysisCanonicalForm>[]) {
+    for (final form
+        in canonicalAnalysis?.forms ?? const <AnalysisCanonicalForm>[]) {
       final recordSource = form.components['recordSource'] as String?;
       if (recordSource != null && recordSource.trim().isNotEmpty) {
         sources.add(recordSource.trim());
       }
     }
-    final sourceOverlayForms = (((raw['source_overlay'] as Map?)?['forms'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((form) => form.cast<String, dynamic>());
+    final sourceOverlayForms =
+        (((raw['source_overlay'] as Map?)?['forms'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((form) => form.cast<String, dynamic>());
     for (final form in sourceOverlayForms) {
       final recordSource = form['recordSource'] as String?;
       if (recordSource != null && recordSource.trim().isNotEmpty) {
@@ -203,10 +214,12 @@ class AnalysisSourceLinkedTable {
 
 class AnalysisCanonicalAnalysis {
   final List<AnalysisCanonicalForm> forms;
+  final List<AnalysisCanonicalReport> reports;
   final List<AnalysisCanonicalModule> modules;
 
   AnalysisCanonicalAnalysis({
     required this.forms,
+    required this.reports,
     required this.modules,
   });
 
@@ -217,6 +230,14 @@ class AnalysisCanonicalAnalysis {
           .map(
             (form) =>
                 AnalysisCanonicalForm.fromJson(form.cast<String, dynamic>()),
+          )
+          .toList(),
+      reports: ((json['reports'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (report) => AnalysisCanonicalReport.fromJson(
+              report.cast<String, dynamic>(),
+            ),
           )
           .toList(),
       modules: ((json['modules'] as List?) ?? const [])
@@ -248,6 +269,24 @@ class AnalysisCanonicalForm {
       components: (json['components'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       rawVbaCode: json['rawVbaCode'] as String?,
+    );
+  }
+}
+
+class AnalysisCanonicalReport {
+  final String name;
+  final Map<String, dynamic> components;
+
+  AnalysisCanonicalReport({
+    required this.name,
+    required this.components,
+  });
+
+  factory AnalysisCanonicalReport.fromJson(Map<String, dynamic> json) {
+    return AnalysisCanonicalReport(
+      name: json['name'] as String? ?? 'Report',
+      components: (json['components'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
     );
   }
 }

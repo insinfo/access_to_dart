@@ -41,27 +41,26 @@ class DoctorReport {
 class AnalysisDoctor {
   DoctorReport inspect(AnalysisProject project) {
     final issues = <DoctorIssue>[];
-  final reconciliation = project.queryReconciliation;
-  final reconciliationSummary =
-    (reconciliation?['summary'] as Map?)?.cast<String, dynamic>() ??
-      const {};
-  final mismatched = reconciliationSummary['mismatched'] as int? ?? 0;
-  final missingInBinary =
-    reconciliationSummary['missingInBinary'] as int? ?? 0;
-  final missingInSource =
-    reconciliationSummary['missingInSource'] as int? ?? 0;
-  final matchedNormalized =
-    reconciliationSummary['matchedNormalized'] as int? ?? 0;
-  final matchedRelaxed =
-    reconciliationSummary['matchedRelaxed'] as int? ?? 0;
-  final matchedStructural =
-    reconciliationSummary['matchedStructural'] as int? ?? 0;
-  final matchedOrderEquivalent =
-    reconciliationSummary['matchedOrderEquivalent'] as int? ?? 0;
-  final matchedJoinGraph =
-    reconciliationSummary['matchedJoinGraph'] as int? ?? 0;
-  final matchedSetOperation =
-    reconciliationSummary['matchedSetOperation'] as int? ?? 0;
+    final reconciliation = project.queryReconciliation;
+    final reconciliationSummary =
+        (reconciliation?['summary'] as Map?)?.cast<String, dynamic>() ??
+            const {};
+    final mismatched = reconciliationSummary['mismatched'] as int? ?? 0;
+    final missingInBinary =
+        reconciliationSummary['missingInBinary'] as int? ?? 0;
+    final missingInSource =
+        reconciliationSummary['missingInSource'] as int? ?? 0;
+    final matchedNormalized =
+        reconciliationSummary['matchedNormalized'] as int? ?? 0;
+    final matchedRelaxed = reconciliationSummary['matchedRelaxed'] as int? ?? 0;
+    final matchedStructural =
+        reconciliationSummary['matchedStructural'] as int? ?? 0;
+    final matchedOrderEquivalent =
+        reconciliationSummary['matchedOrderEquivalent'] as int? ?? 0;
+    final matchedJoinGraph =
+        reconciliationSummary['matchedJoinGraph'] as int? ?? 0;
+    final matchedSetOperation =
+        reconciliationSummary['matchedSetOperation'] as int? ?? 0;
 
     if (project.tables.isEmpty && project.linkedTables.isEmpty) {
       issues.add(
@@ -191,32 +190,34 @@ class AnalysisDoctor {
               'Nenhum form foi decodificado; o frontend sera gerado a partir das tabelas.',
         ),
       );
-      } else if (project.forms.every(
-        (form) =>
-            (form.recordSource == null || form.recordSource!.trim().isEmpty) &&
-            form.controls.isEmpty,
-      )) {
-        issues.add(
-          DoctorIssue(
-            severity: 'warning',
-            code: 'forms.catalog_only',
-            message:
-                'Os forms foram detectados no catalogo, mas ainda sem estrutura util suficiente para gerar telas proximas da UI original.',
-          ),
-        );
+    } else if (project.forms.every(
+          (form) =>
+              (form.recordSource == null ||
+                  form.recordSource!.trim().isEmpty) &&
+              form.controls.isEmpty,
+        ) &&
+        !_hasRichCanonicalUi(project)) {
+      issues.add(
+        DoctorIssue(
+          severity: 'warning',
+          code: 'forms.catalog_only',
+          message:
+              'Os forms foram detectados no catalogo, mas ainda sem estrutura util suficiente para gerar telas proximas da UI original.',
+        ),
+      );
     }
 
-      if (project.tables.isNotEmpty &&
-          project.tables.every((table) => table.sampleRows.isEmpty)) {
-        issues.add(
-          DoctorIssue(
-            severity: 'info',
-            code: 'analysis.no_preview_data',
-            message:
-                'Nenhuma tabela local possui sampleRows; o scaffold sera gerado sem dados de preview para telas e testes de smoke.',
-          ),
-        );
-      }
+    if (project.tables.isNotEmpty &&
+        project.tables.every((table) => table.sampleRows.isEmpty)) {
+      issues.add(
+        DoctorIssue(
+          severity: 'info',
+          code: 'analysis.no_preview_data',
+          message:
+              'Nenhuma tabela local possui sampleRows; o scaffold sera gerado sem dados de preview para telas e testes de smoke.',
+        ),
+      );
+    }
 
     if (issues.isEmpty) {
       issues.add(
@@ -229,5 +230,27 @@ class AnalysisDoctor {
     }
 
     return DoctorReport(issues);
+  }
+
+  bool _hasRichCanonicalUi(AnalysisProject project) {
+    for (final form in project.canonicalAnalysis?.forms ??
+        const <AnalysisCanonicalForm>[]) {
+      final components = form.components;
+      final controls = (components['controls'] as List?) ?? const [];
+      final sections = (components['sections'] as List?) ?? const [];
+      if (controls.isNotEmpty || sections.isNotEmpty) {
+        return true;
+      }
+    }
+    for (final report in project.canonicalAnalysis?.reports ??
+        const <AnalysisCanonicalReport>[]) {
+      final components = report.components;
+      final controls = (components['controls'] as List?) ?? const [];
+      final sections = (components['sections'] as List?) ?? const [];
+      if (controls.isNotEmpty || sections.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
   }
 }

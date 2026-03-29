@@ -33,12 +33,9 @@
 <%#title%>
               title="<%title%>"
 <%/title%>
-<%#rowSourceType%>
-              data-access-row-source-type="<%rowSourceType%>"
-<%/rowSourceType%>
-<%#rowSource%>
-              data-access-row-source="<%rowSource%>"
-<%/rowSource%>
+<%#selectSize%>
+              size="<%selectSize%>"
+<%/selectSize%>
               [class.is-invalid]="readFieldError('<%updateKey%>') != null"
               class="form-select">
               <option value="">Selecione <%label%></option>
@@ -56,13 +53,7 @@
 <%#title%>
               title="<%title%>"
 <%/title%>
-<%#rowSourceType%>
-              data-access-row-source-type="<%rowSourceType%>"
-<%/rowSourceType%>
-<%#rowSource%>
-              data-access-row-source="<%rowSource%>"
-<%/rowSource%>
-              data-access-allow-multiple-values="true">
+              >
 <%#isDynamicSelect%>
               <label class="form-check mb-1" *ngFor="let option of lookupOptions('<%dynamicFieldKey%>')">
                 <input
@@ -85,7 +76,45 @@
 <%/options%>
             </div>
 <%/isMultiValueSelect%>
-<%#isNotSelect%>
+<%#isCheckboxControl%>
+            <div class="form-check pt-2">
+              <input
+                [ngModel]="readFieldBool('<%readKey%>')"
+                (ngModelChange)="updateField('<%updateKey%>', $event)"
+                ngControl="<%ngControl%>"
+                type="checkbox"
+<%#isReadOnly%>
+                disabled
+<%/isReadOnly%>
+<%#title%>
+                title="<%title%>"
+<%/title%>
+                class="form-check-input">
+            </div>
+<%/isCheckboxControl%>
+<%#isTextAreaControl%>
+            <textarea
+              [ngModel]="readField('<%readKey%>')"
+              (ngModelChange)="updateField('<%updateKey%>', $event)"
+              ngControl="<%ngControl%>"
+              rows="4"
+<%#isReadOnly%>
+              readonly
+<%/isReadOnly%>
+<%#isRequired%>
+              required
+<%/isRequired%>
+<%#maxLength%>
+              maxlength="<%maxLength%>"
+<%/maxLength%>
+<%#title%>
+              title="<%title%>"
+<%/title%>
+              placeholder="<%label%>"
+              [class.is-invalid]="readFieldError('<%updateKey%>') != null"
+              class="form-control"></textarea>
+<%/isTextAreaControl%>
+<%#isPlainInput%>
             <input
               [ngModel]="readField('<%readKey%>')"
               (ngModelChange)="updateField('<%updateKey%>', $event)"
@@ -106,19 +135,10 @@
 <%#title%>
               title="<%title%>"
 <%/title%>
-<%#format%>
-              data-access-format="<%format%>"
-<%/format%>
-<%#inputMask%>
-              data-access-input-mask="<%inputMask%>"
-<%/inputMask%>
-<%#validationRule%>
-              data-access-validation-rule="<%validationRule%>"
-<%/validationRule%>
               placeholder="<%label%>"
               [class.is-invalid]="readFieldError('<%updateKey%>') != null"
               class="form-control">
-<%/isNotSelect%>
+<%/isPlainInput%>
             <div class="invalid-feedback d-block" *ngIf="readFieldError('<%updateKey%>') != null">
               {{ readFieldError('<%updateKey%>') }}
             </div>

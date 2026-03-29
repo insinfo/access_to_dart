@@ -5,6 +5,52 @@
 ##  Portar um leitor completo de PropertyMap binário no jackcess_dart para extrair campos de tabelas locais
 
 ## Status Atual em 28/03/2026
+
+Implementei a promoção das famílias geométricas tipadas no analisador, filtrei queries temporárias do Access no pipeline analítico e fechei o experimento complementar para CommandButton e Label.
+
+Arquivos alterados:
+
+access_analysis.dart
+accdb_analyzer.dart
+form_export_probe_filters_temporary_queries_test.dart
+13_experimentos_diff_layout_vba.md
+O que mudou:
+
+O parser do Blob agora escolhe a família geométrica preferida por tipo de controle.
+O mapeamento promovido ficou assim:
+Label: 282..285
+CheckBox: 293..296
+CommandButton: 293..296
+TextBox: 302..305
+ComboBox: 310..313
+Queries temporárias como ~sq_, ~tmp e ~tmpclp passaram a ser ignoradas:
+no canonical_analysis
+no analysis.json top-level
+na contagem de summary.queries
+Adicionei um teste longo que gera a fixture com mutação de layout e valida:
+ausência de queries temporárias
+preservação do VBA do formulário
+layout mutado de txtAssunto
+leitura correta de cmdProbeVba e lblTitulo
+Experimento complementar fechado:
+
+CommandButton independente confirmou a família 293..296.
+Label independente confirmou a família 282..285.
+Esses achados foram consolidados em 13_experimentos_diff_layout_vba.md.
+Validação executada:
+
+dart analyze lib
+layout_probe_fixture_extracts_blob_layout_test.dart
+form_export_probe_filters_temporary_queries_test.dart
+Resultado:
+
+análise estática sem issues
+2 testes longos passaram
+Próximos passos naturais:
+
+Repetir o mesmo fechamento empírico para ListBox, OptionGroup e TabControl, se você quiser continuar ampliando o mapa tipado do Blob.
+Aplicar o mesmo filtro de ruído temporário a outros tipos de objeto efêmero do Access, se aparecerem novas famílias além de ~sq_.
+
 - O núcleo `jackcess_dart` já abre `.accdb` nativamente e detecta o formato ACE/Jet (`VERSION_14` validado na fixture `fixtures/teste1/teste1.accdb`).
 - A leitura binária de `MSysObjects` já funciona sem Access instalado, incluindo navegação via `UsageMap` e varredura das páginas de dados do catálogo.
 - A base alvo real `fixtures/SIGAsul.accdb` já é inspecionada com sucesso como frontend Access com tabelas vinculadas:

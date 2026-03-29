@@ -24,6 +24,10 @@ class AccdbAnalyzer {
       await canonicalAnalysis.extractFromDatabase(db!);
     }
 
+    final stableQueries = model.queries
+        .where((query) => !_isTemporaryAccessObjectName(query.name))
+        .toList(growable: false);
+
     return {
       'schema_version': '1.0',
       'source': model.path,
@@ -32,7 +36,7 @@ class AccdbAnalyzer {
         'tables': model.tables.length,
         'linkedTables': model.linkedTables.length,
         'relationships': model.relationships.length,
-        'queries': model.queries.length,
+        'queries': stableQueries.length,
         'forms': model.forms.length,
         'reports': model.reports.length,
         'macros': model.macros.length,
@@ -41,7 +45,7 @@ class AccdbAnalyzer {
       'tables': model.tables.map((t) => _analyzeTable(t)).toList(),
       'linkedTables': model.linkedTables.map((t) => t.toJson()).toList(),       
       'relationships': model.relationships.map((r) => r.toJson()).toList(),     
-      'queries': model.queries.map((q) => q.toJson()).toList(),
+      'queries': stableQueries.map((q) => q.toJson()).toList(),
       'forms': model.forms.map((f) => f.toJson()).toList(),
       'reports': model.reports.map((r) => r.toJson()).toList(),
       'macros': model.macros.map((m) => m.toJson()).toList(),
@@ -120,5 +124,15 @@ class AccdbAnalyzer {
 
   String _toDartClassName(String name) {
     return toPascalCaseIdentifier(name);
+  }
+
+  bool _isTemporaryAccessObjectName(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return normalized.startsWith('~sq_') ||
+        normalized.startsWith('~tmp') ||
+        normalized.startsWith('~tmpclp');
   }
 }

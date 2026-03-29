@@ -91,7 +91,7 @@ String _singularFormKey(String value) {
 }
 
 String _pascalizeKey(String value) {
-  return ReCase(value).pascalCase;
+  return toPascalCaseIdentifier(value);
 }
 
 class _GeneratedFieldValidation {
