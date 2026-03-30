@@ -622,7 +622,7 @@ return getDataFrame<${module.className}>(
               ..modifier = MethodModifier.async
               ..returns = refer('Future<${module.className}>')
               ..requiredParameters.add(
-                Parameter((param) => param..name = 'id'..type = refer('int')),
+                Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
               )
               ..body = Code('''
 return getEntity<${module.className}>(
@@ -660,7 +660,7 @@ return ${module.className}.fromMap(map);
               ..modifier = MethodModifier.async
               ..returns = refer('Future<void>')
               ..requiredParameters.add(
-                Parameter((param) => param..name = 'id'..type = refer('int')),
+                Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
               )
               ..body = Code("await deleteEntity('/${module.moduleNameKebab}/\$id');")),
             Method((method) => method

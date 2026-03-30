@@ -7,6 +7,7 @@ import 'package:mustache_template/mustache_template.dart';
 import 'package:path/path.dart' as p;
 import 'package:recase/recase.dart';
 
+import '../access_default_semantics.dart';
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
 import '../identifier_utils.dart';
@@ -54,6 +55,8 @@ class GeneratedProject {
 
 class ProjectGenerator {
   final MigrationIdentifierPolicy identifierPolicy;
+  static const AccessDefaultSemanticTranslator defaultSemanticTranslator =
+      AccessDefaultSemanticTranslator();
 
   ProjectGenerator({
     MigrationIdentifierStyle identifierStyle =

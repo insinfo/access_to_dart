@@ -37,6 +37,6 @@ void main() {
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}lancamentos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_lancamentos${Platform.pathSeparator}incluir_lancamentos_page.html',
     );
     final incluirHtmlContent = await incluirHtmlFile.readAsString();
-    expect(incluirHtmlContent, contains('title="Nao deixe Valor monetario vazio. | Formato Access: Currency | Mascara Access: 99999.99 | Regra Access: &gt;=0 | Nao aceita string vazia."'));
+    expect(incluirHtmlContent, contains('title="Nao deixe Valor monetario vazio. | Formato Access: Currency | Mascara Access: 99999.99 | Regra Access: &gt;=0 | Default Access: 0 | Default semantico aplicado no scaffold. | Nao aceita string vazia."'));
   });
 }

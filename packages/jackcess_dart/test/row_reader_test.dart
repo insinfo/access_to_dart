@@ -304,6 +304,64 @@ void main() {
       expect(variableResult['ValorNumerico'], isNull);
       expect(fixedResult['Identificador'], isNull);
     });
+
+    test('follows overflow row pointers before decoding data', () async {
+      final env = await _openTestPageChannel();
+      addTearDown(env.dispose);
+
+      final reader = RowReader(
+        format: env.pageChannel.format,
+        pageChannel: env.pageChannel,
+        columns: const <ColumnDef>[
+          ColumnDef(
+            name: 'Codigo',
+            type: 0x04,
+            columnNumber: 0,
+            variableColumnNumber: 0,
+            fixedOffset: 0,
+            length: 4,
+            flags: ColumnDef.fixedLengthFlagMask,
+            extFlags: 0,
+            precision: null,
+            scale: null,
+          ),
+        ],
+      );
+
+      final pageSize = env.pageChannel.format.pageSize;
+      final intBytes = ByteData(4)..setInt32(0, 1234, Endian.little);
+      final finalRow = BytesBuilder(copy: false)
+        ..add(_int16Le(1))
+        ..add(intBytes.buffer.asUint8List())
+        ..add(_int16Le(0))
+        ..addByte(0x01);
+      final finalRowBytes = finalRow.takeBytes();
+
+      final page = Uint8List(pageSize * 2);
+      final targetPageStart = pageSize;
+      page[targetPageStart] = 0x01;
+      final pageData = ByteData.sublistView(page, targetPageStart, pageSize);
+      pageData.setInt16(12, 1, Endian.little);
+      final finalRowStart = pageSize - finalRowBytes.length;
+      pageData.setInt16(14, finalRowStart, Endian.little);
+      page.setRange(
+        targetPageStart + finalRowStart,
+        targetPageStart + finalRowStart + finalRowBytes.length,
+        finalRowBytes,
+      );
+      await env.file.writeAsBytes(page, flush: true);
+
+      final result = await reader.readRow(
+        DataPageRow(
+          rowNumber: 0,
+          isDeleted: false,
+          isOverflow: true,
+          rowData: Uint8List.fromList([0, 1, 0, 0]),
+        ),
+      );
+
+      expect(result['Codigo'], 1234);
+    });
   });
 }
 
@@ -317,7 +375,11 @@ Future<_TestPageChannelEnv> _openTestPageChannel() async {
   final raf = await file.open();
   final channel = PageChannel(raf);
   await channel.initialize();
-  return _TestPageChannelEnv(pageChannel: channel, directory: directory);
+  return _TestPageChannelEnv(
+    pageChannel: channel,
+    directory: directory,
+    file: file,
+  );
 }
 
 Uint8List _int16Le(int value) {
@@ -387,10 +449,12 @@ final class _TestPageChannelEnv {
   const _TestPageChannelEnv({
     required this.pageChannel,
     required this.directory,
+    required this.file,
   });
 
   final PageChannel pageChannel;
   final Directory directory;
+  final File file;
 
   Future<void> dispose() async {
     await pageChannel.close();

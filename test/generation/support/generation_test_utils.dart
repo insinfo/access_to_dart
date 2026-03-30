@@ -512,6 +512,108 @@ Future<File> writeDropdownAnalysisFixture(Directory tempDir) async {
   return analysisFile;
 }
 
+Future<File> writeSemanticDefaultsAnalysisFixture(Directory tempDir) async {
+  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_semantic_defaults.json');
+  await analysisFile.writeAsString(
+    const JsonEncoder.withIndent('  ').convert({
+      'schema_version': '1.0',
+      'source': 'fixtures/semantic_defaults.accdb',
+      'format': 'VERSION_16',
+      'summary': {
+        'tables': 1,
+        'linkedTables': 0,
+        'relationships': 0,
+        'queries': 0,
+        'forms': 0,
+        'reports': 0,
+        'macros': 0,
+        'modules': 0,
+      },
+      'tables': [
+        {
+          'name': 'Eventos',
+          'rowCount': 0,
+          'columns': [
+            {
+              'name': 'EventoId',
+              'typeName': 'GUID',
+              'typeCode': 15,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': true,
+              'caption': 'Evento',
+              'defaultValue': 'GenGUID()',
+              'precision': null,
+              'scale': null,
+            },
+            {
+              'name': 'Status',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Status',
+              'defaultValue': 'UCase("novo")',
+              'precision': null,
+              'scale': null,
+            },
+            {
+              'name': 'Codigo',
+              'typeName': 'Long',
+              'typeCode': 4,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Codigo',
+              'defaultValue': 'Int(13.9)',
+              'precision': null,
+              'scale': null,
+            },
+            {
+              'name': 'DataBase',
+              'typeName': 'DateTime',
+              'typeCode': 8,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Data base',
+              'defaultValue': 'DateSerial(2024, 2, 30)',
+              'precision': null,
+              'scale': null,
+            },
+            {
+              'name': 'HoraBase',
+              'typeName': 'DateTime',
+              'typeCode': 8,
+              'isAutoNumber': false,
+              'isCalculated': false,
+              'isRequired': false,
+              'caption': 'Hora base',
+              'defaultValue': 'TimeSerial(15, 57, 34)',
+              'precision': null,
+              'scale': null,
+            },
+          ],
+          'indexes': [
+            {
+              'name': 'PrimaryKey',
+              'isPrimaryKey': true,
+              'columns': [
+                {'name': 'EventoId'}
+              ]
+            }
+          ],
+          'sampleRows': [],
+        },
+      ],
+      'linkedTables': [],
+      'forms': [],
+    }),
+  );
+  return analysisFile;
+}
+
 Future<File> writeFormControlsAnalysisFixture(Directory tempDir) async {
   final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_form_controls.json');
   await analysisFile.writeAsString(

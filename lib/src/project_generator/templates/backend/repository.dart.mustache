@@ -38,19 +38,27 @@ class {{className}}Repository {
         .toList(growable: false);
   }
 
-  Future<Map<String, dynamic>?> findById(int id) async {
+  Future<Map<String, dynamic>?> findById({{primaryKeyParamType}} id) async {
     return await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).first();
   }
 
-  Future<int> insert({{className}} item) async {
-    return await db.table('{{tableRuntimeName}}').insertGetId(item.toMap()) as int;
+  Future<{{primaryKeyParamType}}?> insert({{className}} item) async {
+    final payload = item.toMap();
+{{#primaryKeyIsAutoNumber}}
+    final insertedId = await db.table('{{tableRuntimeName}}').insertGetId(payload);
+    return insertedId as {{primaryKeyParamType}};
+{{/primaryKeyIsAutoNumber}}
+{{^primaryKeyIsAutoNumber}}
+    await db.table('{{tableRuntimeName}}').insert(payload);
+    return payload['{{primaryKeyRuntimeName}}'] as {{primaryKeyParamType}}?;
+{{/primaryKeyIsAutoNumber}}
   }
 
-  Future<void> update(int id, {{className}} item) async {
+  Future<void> update({{primaryKeyParamType}} id, {{className}} item) async {
     await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).update(item.toMap());
   }
 
-  Future<void> delete(int id) async {
+  Future<void> delete({{primaryKeyParamType}} id) async {
     await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).delete();
   }
 }

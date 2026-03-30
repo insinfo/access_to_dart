@@ -250,9 +250,9 @@ class AccessAnalysis {
 
     final tableNames = model.tables.map((table) => table.name).toSet();
     final queryNames = model.queries
-      .where((query) => !_isTemporaryAccessObjectName(query.name))
-      .map((query) => query.name)
-      .toSet();
+        .where((query) => !_isTemporaryAccessObjectName(query.name))
+        .map((query) => query.name)
+        .toSet();
     return metadataByForm.entries
         .map(
           (entry) => _buildFormComponents(
@@ -596,11 +596,13 @@ class AccessAnalysis {
           : _extractPrintableStrings(typeInfoBytes).toList(growable: false),
       propertyMap: _readPropertyMap(propDataBytes),
       siblingStreamLengths: <String, int>{
-        for (final entry in siblingStreams.entries) entry.key: entry.value.length,
+        for (final entry in siblingStreams.entries)
+          entry.key: entry.value.length,
       },
       siblingStreamStrings: <String, List<String>>{
         for (final entry in siblingStreams.entries)
-          entry.key: _extractPrintableStrings(entry.value).toList(growable: false),
+          entry.key:
+              _extractPrintableStrings(entry.value).toList(growable: false),
       },
     );
   }
@@ -732,9 +734,24 @@ class AccessAnalysis {
         : BlobLayoutParser(blobBytes);
     for (final value in controlNameCandidates) {
       final prefixType = _inferControlTypeByPrefix(value);
+      final namedProperties =
+          propertyMap?.forName(value) ?? const <String, Object?>{};
       final group = blobParser?.findControlRecordGroup(value);
-      final blobHints =
-          group == null ? const _BlobControlHints() : _extractBlobControlHints(group);
+      final blobHints = group == null
+          ? const _BlobControlHints()
+          : _extractBlobControlHints(group);
+      final blobGeometry = group == null
+          ? null
+          : _findBlobRectangle(
+              group.allRecords,
+              matchOffset: group.matchOffset,
+              controlType: prefixType ??
+                  _inferControlTypeFromProperties(namedProperties, value),
+              layoutHint: _layoutHintFromProperties(namedProperties),
+              controlName: value,
+              properties: namedProperties,
+              blobHints: blobHints,
+            );
       if (!_shouldPromoteBlobControlCandidate(
         value,
         prefixType: prefixType,
@@ -743,7 +760,15 @@ class AccessAnalysis {
       )) {
         continue;
       }
-      final type = prefixType ?? blobHints.inferredType;
+      final type = prefixType ??
+          _inferControlTypeFromProperties(namedProperties, value) ??
+          _inferControlTypeFromBlobGeometry(
+            blobGeometry,
+            controlName: value,
+            properties: namedProperties,
+            blobHints: blobHints,
+          ) ??
+          blobHints.inferredType;
       if (type == null) {
         continue;
       }
@@ -752,33 +777,26 @@ class AccessAnalysis {
         'type': type,
         'role': _inferControlRole(type),
         ...blobHints.metadata,
+        if (blobGeometry != null) 'blobGeometry': blobGeometry,
         if (type == 'Subform')
-          'sourceObject': _findSubformSourceObject(blobStrings, value),
+          'sourceObject':
+              _readStringProperty(namedProperties, 'SourceObject') ??
+                  _findSubformSourceObject(blobStrings, value),
       };
-      final blobLayout = group == null
+      final blobLayout = blobGeometry == null
           ? null
-          : _extractBlobLayoutFromGroup(group, controlType: type);
+          : <String, dynamic>{
+              'left': blobGeometry['left'],
+              'top': blobGeometry['top'],
+              'width': blobGeometry['width'],
+              'height': blobGeometry['height'],
+            };
       if (blobLayout != null && blobLayout.isNotEmpty) {
         control['layout'] = blobLayout;
       }
       controls.add(control);
     }
     return _applyPropertyMapToControls(controls, propertyMap);
-  }
-
-  Map<String, dynamic>? _extractBlobLayoutFromGroup(
-    BlobControlRecordGroup group, {
-    required String controlType,
-      }
-  ) {
-    return _findBlobRectangle(
-          group.nextRecords,
-          controlType: controlType,
-        ) ??
-        _findBlobRectangle(
-          group.previousRecords,
-          controlType: controlType,
-        );
   }
 
   _BlobControlHints _extractBlobControlHints(BlobControlRecordGroup group) {
@@ -806,7 +824,8 @@ class AccessAnalysis {
     }
 
     String? inferredType;
-    if (metadata.containsKey('rowSourceType') || metadata.containsKey('rowSource')) {
+    if (metadata.containsKey('rowSourceType') ||
+        metadata.containsKey('rowSource')) {
       inferredType = 'ComboBox';
     } else if (metadata.containsKey('controlSource')) {
       inferredType = 'TextBox';
@@ -850,10 +869,22 @@ class AccessAnalysis {
 
   Map<String, dynamic>? _findBlobRectangle(
     List<BlobFieldRecord> records, {
-    required String controlType,
+    required int matchOffset,
+    String? controlType,
+    Map<String, dynamic>? layoutHint,
+    required String controlName,
+    required Map<String, Object?> properties,
+    required _BlobControlHints blobHints,
   }) {
     final preferredBases = _preferredBlobRectangleBases(controlType);
-    Map<String, dynamic>? fallbackMatch;
+    Map<String, dynamic>? bestPreferred;
+    var bestPreferredPenalty = 1 << 29;
+    var bestPreferredLayoutDistance = 1 << 29;
+    var bestPreferredMatchDistance = 1 << 30;
+    Map<String, dynamic>? bestFallback;
+    var bestFallbackPenalty = 1 << 29;
+    var bestFallbackLayoutDistance = 1 << 29;
+    var bestFallbackMatchDistance = 1 << 30;
     for (var index = 0; index + 3 < records.length; index++) {
       final first = records[index];
       final second = records[index + 1];
@@ -890,33 +921,258 @@ class AccessAnalysis {
       }
 
       final match = <String, dynamic>{
+        'propertyBase': first.propertyId,
+        'propertyRange': '${first.propertyId}..${fourth.propertyId}',
+        'source': preferredBases.contains(first.propertyId)
+            ? 'preferred'
+            : 'fallback',
         'left': left,
         'top': top,
+        'right': right,
+        'bottom': bottom,
         'width': right - left,
         'height': bottom - top,
       };
+      final penalty = _blobGeometryPenalty(
+        first.propertyId,
+        controlName: controlName,
+        properties: properties,
+        blobHints: blobHints,
+      );
+      final layoutDistance = _layoutDistance(layoutHint, match);
+      final matchDistance =
+          _distanceToMatch(matchOffset, first.start, fourth.end);
       if (preferredBases.contains(first.propertyId)) {
-        return match;
+        if (penalty < bestPreferredPenalty ||
+            (penalty == bestPreferredPenalty &&
+                layoutDistance < bestPreferredLayoutDistance) ||
+            (penalty == bestPreferredPenalty &&
+                layoutDistance == bestPreferredLayoutDistance &&
+                matchDistance < bestPreferredMatchDistance)) {
+          bestPreferredPenalty = penalty;
+          bestPreferredLayoutDistance = layoutDistance;
+          bestPreferredMatchDistance = matchDistance;
+          bestPreferred = match;
+        }
+      } else if (penalty < bestFallbackPenalty ||
+          (penalty == bestFallbackPenalty &&
+              layoutDistance < bestFallbackLayoutDistance) ||
+          (penalty == bestFallbackPenalty &&
+              layoutDistance == bestFallbackLayoutDistance &&
+              matchDistance < bestFallbackMatchDistance)) {
+        bestFallbackPenalty = penalty;
+        bestFallbackLayoutDistance = layoutDistance;
+        bestFallbackMatchDistance = matchDistance;
+        bestFallback = match;
       }
-      fallbackMatch = match;
     }
-    return fallbackMatch;
+    if (controlType == 'OptionGroup') {
+      return bestPreferred;
+    }
+    return bestPreferred ?? bestFallback;
   }
 
-  Set<int> _preferredBlobRectangleBases(String controlType) {
+  Set<int> _preferredBlobRectangleBases(String? controlType) {
     switch (controlType) {
       case 'TextBox':
         return const <int>{302};
       case 'ComboBox':
         return const <int>{310};
+      case 'ListBox':
+        return const <int>{300};
       case 'CheckBox':
       case 'CommandButton':
         return const <int>{293};
       case 'Label':
         return const <int>{282};
+      case 'Subform':
+        return const <int>{279};
+      case 'OptionGroup':
+        return const <int>{};
       default:
         return const <int>{};
     }
+  }
+
+  int _layoutDistance(
+    Map<String, dynamic>? layout,
+    Map<String, dynamic> candidate,
+  ) {
+    if (layout == null || layout.isEmpty) {
+      return 1 << 29;
+    }
+    var score = 0;
+    var matchedAxis = 0;
+    for (final key in const <String>['left', 'top', 'width', 'height']) {
+      final layoutValue = _asLayoutInt(layout[key]);
+      final candidateValue = _asLayoutInt(candidate[key]);
+      if (layoutValue == null || candidateValue == null) {
+        continue;
+      }
+      matchedAxis++;
+      score += (layoutValue - candidateValue).abs();
+    }
+    if (matchedAxis == 0) {
+      return 1 << 29;
+    }
+    return score;
+  }
+
+  int _distanceToMatch(int matchOffset, int start, int end) {
+    if (matchOffset >= start && matchOffset <= end) {
+      return 0;
+    }
+    final distanceToStart = (matchOffset - start).abs();
+    final distanceToEnd = (matchOffset - end).abs();
+    return distanceToStart < distanceToEnd ? distanceToStart : distanceToEnd;
+  }
+
+  int? _asLayoutInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is double) {
+      return value.round();
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _layoutHintFromProperties(
+      Map<String, Object?> properties) {
+    final layout = <String, dynamic>{};
+    _putNumericLayout(layout, 'left', _readNumericProperty(properties, 'Left'));
+    _putNumericLayout(layout, 'top', _readNumericProperty(properties, 'Top'));
+    _putNumericLayout(
+        layout, 'width', _readNumericProperty(properties, 'Width'));
+    _putNumericLayout(
+        layout, 'height', _readNumericProperty(properties, 'Height'));
+    return layout;
+  }
+
+  String? _inferControlTypeFromProperties(
+    Map<String, Object?> properties,
+    String controlName,
+  ) {
+    final sourceObject = _readStringProperty(properties, 'SourceObject');
+    if (sourceObject != null && sourceObject.startsWith('Form.')) {
+      return 'Subform';
+    }
+
+    final displayControl = _readNumericProperty(properties, 'DisplayControl');
+    switch (displayControl) {
+      case 106:
+        return 'CheckBox';
+      case 110:
+        return 'ListBox';
+      case 111:
+        return 'ComboBox';
+    }
+
+    if (_readNumericProperty(properties, 'OptionValue') != null) {
+      return 'OptionButton';
+    }
+    if (controlName.startsWith('grp') || controlName.startsWith('fra')) {
+      return 'OptionGroup';
+    }
+    return null;
+  }
+
+  String? _inferControlTypeFromBlobGeometry(
+    Map<String, dynamic>? blobGeometry, {
+    required String controlName,
+    required Map<String, Object?> properties,
+    required _BlobControlHints blobHints,
+  }) {
+    final propertyBase = blobGeometry?['propertyBase'] as int?;
+    if (propertyBase == null) {
+      return null;
+    }
+    if (_readStringProperty(properties, 'SourceObject')?.startsWith('Form.') ==
+        true) {
+      return 'Subform';
+    }
+    switch (propertyBase) {
+      case 279:
+        return 'Subform';
+      case 282:
+        if (_readStringProperty(properties, 'ControlSource') != null ||
+            blobHints.metadata['controlSource'] != null ||
+            _readStringProperty(properties, 'RowSource') != null ||
+            blobHints.metadata['rowSource'] != null) {
+          return null;
+        }
+        return 'Label';
+      case 293:
+        if (_readNumericProperty(properties, 'OptionValue') != null ||
+            controlName.startsWith('opt')) {
+          return 'OptionButton';
+        }
+        if (_readStringProperty(properties, 'ControlSource') != null ||
+            blobHints.metadata['controlSource'] != null) {
+          return 'CheckBox';
+        }
+        return 'CommandButton';
+      case 300:
+        return 'ListBox';
+      case 302:
+        return 'TextBox';
+      case 310:
+        if (_readNumericProperty(properties, 'DisplayControl') == 110 ||
+            controlName.startsWith('lst')) {
+          return 'ListBox';
+        }
+        return 'ComboBox';
+      default:
+        return null;
+    }
+  }
+
+  int _blobGeometryPenalty(
+    int propertyBase, {
+    required String controlName,
+    required Map<String, Object?> properties,
+    required _BlobControlHints blobHints,
+  }) {
+    final hasControlSource =
+        _readStringProperty(properties, 'ControlSource') != null ||
+            blobHints.metadata['controlSource'] != null;
+    final hasRowSource = _readStringProperty(properties, 'RowSource') != null ||
+        blobHints.metadata['rowSource'] != null;
+    final hasSourceObject =
+        _readStringProperty(properties, 'SourceObject')?.startsWith('Form.') ==
+            true;
+
+    if (hasSourceObject) {
+      return propertyBase == 279 ? 0 : 100000;
+    }
+    if (controlName.startsWith('lbl') && propertyBase != 282) {
+      return 100000;
+    }
+    if ((hasControlSource || hasRowSource) &&
+        propertyBase == 282 &&
+        !controlName.startsWith('lbl')) {
+      return 100000;
+    }
+    if (controlName.startsWith('cmd') && propertyBase != 293) {
+      return 50000;
+    }
+    if (controlName.startsWith('chk') && propertyBase != 293) {
+      return 50000;
+    }
+    if (controlName.startsWith('txt') && propertyBase != 302) {
+      return 50000;
+    }
+    if ((controlName.startsWith('cmb') || controlName.startsWith('cbo')) &&
+        propertyBase != 310) {
+      return 50000;
+    }
+    if (controlName.startsWith('lst') && propertyBase != 300) {
+      return 50000;
+    }
+    if (controlName.startsWith('sub') && propertyBase != 279) {
+      return 50000;
+    }
+    return 0;
   }
 
   int? _readBlobSmallInt(BlobFieldRecord record) {
@@ -1217,6 +1473,12 @@ class AccessAnalysis {
     if (value.startsWith('subfrm')) {
       return 'Subform';
     }
+    if (value.startsWith('grp') || value.startsWith('fra')) {
+      return 'OptionGroup';
+    }
+    if (value.startsWith('opt')) {
+      return 'OptionButton';
+    }
     if (value.startsWith('txt')) {
       return 'TextBox';
     }
@@ -1330,7 +1592,8 @@ class AccessAnalysis {
     return null;
   }
 
-  String _canonicalSectionName(String kind, String objectKind, String fallback) {
+  String _canonicalSectionName(
+      String kind, String objectKind, String fallback) {
     switch (kind) {
       case 'detail':
         return objectKind == 'report' ? 'Detail' : 'Detalhe';

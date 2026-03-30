@@ -13,6 +13,25 @@ class {{className}} {
 {{/constructorArgs}}
   });
 
+  static Map<String, dynamic> defaultValues() {
+    return <String, dynamic>{
+{{#defaultEntries}}
+      {{constantName}}: {{{expression}}},
+{{/defaultEntries}}
+    };
+  }
+
+  factory {{className}}.withDefaults() {
+    return {{className}}.fromMap(defaultValues());
+  }
+
+{{#hasDefaults}}
+{{#defaultHelperMethods}}
+  {{{.}}}
+
+{{/defaultHelperMethods}}
+{{/hasDefaults}}
+
   factory {{className}}.fromMap(Map<String, dynamic> map) {
     return {{className}}(
 {{#fromMapAssignments}}

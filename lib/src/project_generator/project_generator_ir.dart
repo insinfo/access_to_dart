@@ -26,6 +26,9 @@ class GeneratedFieldDescriptor {
   final String? rowSource;
   final String? accessControlType;
   final String? wssFieldId;
+  final String? accessDefaultValue;
+  final String? semanticDefaultExpression;
+  final List<String> semanticDefaultHelpers;
   final String? fromMapExpression;
   final GeneratedLookupDescriptor? lookup;
 
@@ -55,11 +58,24 @@ class GeneratedFieldDescriptor {
     required this.rowSource,
     required this.accessControlType,
     required this.wssFieldId,
+    required this.accessDefaultValue,
+    required this.semanticDefaultExpression,
+    required this.semanticDefaultHelpers,
     this.fromMapExpression,
     this.lookup,
   });
 
   bool get isReadOnly => isAutoNumber || isCalculated;
+
+    bool get hasSemanticDefault => semanticDefaultExpression != null;
+
+    String get nonNullableDartType => dartType.endsWith('?')
+      ? dartType.substring(0, dartType.length - 1)
+      : dartType;
+
+    bool get isUuidSuggested =>
+      normalizedAccessTypeName == 'guid' ||
+      normalizedAccessTypeName == 'uniqueidentifier';
 
   bool get isDropdownSuggested {
     if (isComboBoxControl || isListBoxControl) {
@@ -204,6 +220,10 @@ class GeneratedBackendModule {
   final String routeName;
   final String tableRuntimeName;
   final String primaryKeyRuntimeName;
+  final String primaryKeyFieldName;
+  final String primaryKeyParamType;
+  final String primaryKeyRouteParseExpression;
+  final bool primaryKeyIsAutoNumber;
   final List<GeneratedLookupDescriptor> lookups;
 
   const GeneratedBackendModule({
@@ -213,6 +233,10 @@ class GeneratedBackendModule {
     required this.routeName,
     required this.tableRuntimeName,
     required this.primaryKeyRuntimeName,
+    required this.primaryKeyFieldName,
+    required this.primaryKeyParamType,
+    required this.primaryKeyRouteParseExpression,
+    required this.primaryKeyIsAutoNumber,
     required this.lookups,
   });
 }
@@ -224,6 +248,7 @@ class GeneratedFrontendModule {
   final String moduleNameKebab;
   final String formLogicClassName;
   final String primaryKeyField;
+  final String primaryKeyParamType;
   final List<GeneratedFieldDescriptor> fields;
 
   const GeneratedFrontendModule({
@@ -233,6 +258,7 @@ class GeneratedFrontendModule {
     required this.moduleNameKebab,
     required this.formLogicClassName,
     required this.primaryKeyField,
+    required this.primaryKeyParamType,
     required this.fields,
   });
 }
@@ -242,12 +268,14 @@ class GeneratedCoreModelDescriptor {
   final String fileName;
   final String idWriteBackBlock;
   final List<GeneratedFieldDescriptor> fields;
+  final List<String> defaultHelperMethods;
 
   const GeneratedCoreModelDescriptor({
     required this.className,
     required this.fileName,
     required this.idWriteBackBlock,
     required this.fields,
+    required this.defaultHelperMethods,
   });
 }
 
@@ -274,6 +302,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisProject project,
     AnalysisTable table,
   ) {
+    final primaryKeyColumn = _getPrimaryKey(table);
     return GeneratedBackendModule(
       packageName: project.dartPackageName,
       className: table.className,
@@ -281,6 +310,11 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       routeName: tableRouteName(table),
       tableRuntimeName: tableRuntimeName(table),
       primaryKeyRuntimeName: primaryKeyRuntimeName(table),
+      primaryKeyFieldName: primaryKeyColumn.fieldName,
+      primaryKeyParamType: _routeParameterType(primaryKeyColumn),
+        primaryKeyRouteParseExpression:
+          _routeParameterParseExpression(primaryKeyColumn),
+      primaryKeyIsAutoNumber: primaryKeyColumn.isAutoNumber,
       lookups: table.columns
           .map((column) => _resolveLookupDescriptor(project, column))
           .whereType<GeneratedLookupDescriptor>()
@@ -294,6 +328,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
   ) {
     final matchedForm = _resolveFrontendForm(project, table);
     final orderedColumns = _orderFrontendColumns(table, matchedForm);
+    final primaryKeyColumn = _getPrimaryKey(table);
 
     return GeneratedFrontendModule(
       packageName: project.dartPackageName,
@@ -301,11 +336,14 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       nameSnake: table.normalizedName,
       moduleNameKebab: tableRouteSegment(table),
       formLogicClassName: '${table.className}FormLogic',
-      primaryKeyField: _getPrimaryKey(table).fieldName,
+      primaryKeyField: primaryKeyColumn.fieldName,
+      primaryKeyParamType: _routeParameterType(primaryKeyColumn),
       fields: orderedColumns
           .map(
             (column) {
               final matchedControl = _resolveBoundControl(matchedForm, column);
+              final defaultSemantics =
+                  ProjectGenerator.defaultSemanticTranslator.translate(column);
               return GeneratedFieldDescriptor(
               runtimeName: columnRuntimeName(column),
               columnConstantName: column.columnConstantName,
@@ -332,6 +370,11 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               rowSource: column.rowSource,
               accessControlType: matchedControl?.type,
               wssFieldId: column.wssFieldId,
+              accessDefaultValue: column.defaultValue,
+              semanticDefaultExpression: defaultSemantics?.dartExpression,
+              semanticDefaultHelpers: defaultSemantics == null
+                  ? const <String>[]
+                  : defaultSemantics.dartHelpers.toList(growable: false),
               fromMapExpression: _fromMapValue(column),
               lookup: _resolveLookupDescriptor(project, column),
               );
@@ -469,13 +512,16 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
   }
 
   GeneratedCoreModelDescriptor _buildCoreModelIr(AnalysisTable table) {
-    return GeneratedCoreModelDescriptor(
-      className: table.className,
-      fileName: table.fileName,
-      idWriteBackBlock: _idWriteBackBlock(table),
-      fields: table.columns
-          .map(
-            (column) => GeneratedFieldDescriptor(
+    final helperNames = <String>{};
+    final fields = table.columns
+        .map(
+          (column) {
+            final defaultSemantics =
+                ProjectGenerator.defaultSemanticTranslator.translate(column);
+            if (defaultSemantics != null) {
+              helperNames.addAll(defaultSemantics.dartHelpers);
+            }
+            return GeneratedFieldDescriptor(
               runtimeName: columnRuntimeName(column),
               columnConstantName: column.columnConstantName,
               fieldName: column.fieldName,
@@ -501,12 +547,50 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               rowSource: column.rowSource,
               accessControlType: null,
               wssFieldId: column.wssFieldId,
+              accessDefaultValue: column.defaultValue,
+              semanticDefaultExpression: defaultSemantics?.dartExpression,
+              semanticDefaultHelpers: defaultSemantics == null
+                  ? const <String>[]
+                  : defaultSemantics.dartHelpers.toList(growable: false),
               fromMapExpression: _fromMapValue(column),
               lookup: null,
-            ),
-          )
-          .toList(growable: false),
+            );
+          },
+        )
+        .toList(growable: false);
+
+    return GeneratedCoreModelDescriptor(
+      className: table.className,
+      fileName: table.fileName,
+      idWriteBackBlock: _idWriteBackBlock(table),
+      fields: fields,
+      defaultHelperMethods: _buildDefaultHelperMethods(helperNames),
     );
+  }
+
+  String _routeParameterType(AnalysisColumn column) {
+    final nonNullable = column.dartType.endsWith('?')
+        ? column.dartType.substring(0, column.dartType.length - 1)
+        : column.dartType;
+    if (nonNullable == 'String' || nonNullable == 'DateTime') {
+      return 'String';
+    }
+    if (nonNullable == 'double') {
+      return 'double';
+    }
+    return 'int';
+  }
+
+  String _routeParameterParseExpression(AnalysisColumn column) {
+    final type = _routeParameterType(column);
+    switch (type) {
+      case 'String':
+        return 'idRaw';
+      case 'double':
+        return 'double.parse(idRaw)';
+      default:
+        return 'int.parse(idRaw)';
+    }
   }
 
   GeneratedLookupDescriptor? _resolveLookupDescriptor(
@@ -780,6 +864,104 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         .replaceAll(RegExp(r'\s+'), '')
         .toLowerCase();
   }
+}
+
+List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
+  final methods = <String>[];
+  final sorted = helperNames.toList(growable: false)..sort();
+  for (final helper in sorted) {
+    switch (helper) {
+      case 'uuidV4':
+        methods.add('''
+  static String _accessUuidV4() {
+    final random = DateTime.now().microsecondsSinceEpoch;
+    final bytes = List<int>.generate(
+      16,
+      (index) => ((random >> ((index % 8) * 8)) + (index * 17)) & 0xFF,
+      growable: false,
+    );
+    bytes[6] = (bytes[6] & 0x0F) | 0x40;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+    final hex = bytes
+        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '\${hex.substring(0, 8)}-'
+      '\${hex.substring(8, 12)}-'
+      '\${hex.substring(12, 16)}-'
+      '\${hex.substring(16, 20)}-'
+      '\${hex.substring(20, 32)}';
+  }''');
+      case 'today':
+        methods.add('''
+  static DateTime _accessToday() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }''');
+      case 'timeNow':
+        methods.add('''
+  static DateTime _accessTimeNow() {
+    final now = DateTime.now();
+    return DateTime(1899, 12, 30, now.hour, now.minute, now.second, now.millisecond, now.microsecond);
+  }''');
+      case 'dateLiteral':
+        methods.add('''
+  static DateTime _accessDateLiteral(String value) {
+    final parts = value.split('/');
+    if (parts.length == 3) {
+      final month = int.tryParse(parts[0]) ?? 1;
+      final day = int.tryParse(parts[1]) ?? 1;
+      final year = int.tryParse(parts[2]) ?? 1900;
+      return DateTime(year, month, day);
+    }
+    return DateTime.parse(value);
+  }''');
+      case 'dateSerial':
+        methods.add('''
+  static DateTime _accessDateSerial(num year, num month, num day) {
+    final normalizedYear = _normalizeAccessYear(year.toInt());
+    return DateTime(normalizedYear, month.toInt(), day.toInt());
+  }
+
+  static int _normalizeAccessYear(int year) {
+    if (year >= 0 && year <= 29) {
+      return 2000 + year;
+    }
+    if (year >= 30 && year <= 99) {
+      return 1900 + year;
+    }
+    return year;
+  }''');
+      case 'timeSerial':
+        methods.add('''
+  static DateTime _accessTimeSerial(num hour, num minute, num second) {
+    return DateTime(1899, 12, 30)
+        .add(Duration(hours: hour.toInt(), minutes: minute.toInt(), seconds: second.toInt()));
+  }''');
+      case 'left':
+        methods.add('''
+  static String _accessLeft(String value, num count) {
+    final end = count.toInt().clamp(0, value.length) as int;
+    return value.substring(0, end);
+  }''');
+      case 'right':
+        methods.add('''
+  static String _accessRight(String value, num count) {
+    final size = count.toInt().clamp(0, value.length) as int;
+    return value.substring(value.length - size);
+  }''');
+      case 'mid':
+        methods.add('''
+  static String _accessMid(String value, num start, [num? length]) {
+    final begin = ((start.toInt() - 1).clamp(0, value.length)) as int;
+    if (length == null) {
+      return value.substring(begin);
+    }
+    final end = ((begin + length.toInt()).clamp(begin, value.length)) as int;
+    return value.substring(begin, end);
+  }''');
+    }
+  }
+  return methods;
 }
 
 class _ResolvedLookupSource {

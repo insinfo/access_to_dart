@@ -43,8 +43,8 @@ class AccdbAnalyzer {
         'modules': model.modules.length,
       },
       'tables': model.tables.map((t) => _analyzeTable(t)).toList(),
-      'linkedTables': model.linkedTables.map((t) => t.toJson()).toList(),       
-      'relationships': model.relationships.map((r) => r.toJson()).toList(),     
+      'linkedTables': model.linkedTables.map((t) => t.toJson()).toList(),
+      'relationships': model.relationships.map((r) => r.toJson()).toList(),
       'queries': stableQueries.map((q) => q.toJson()).toList(),
       'forms': model.forms.map((f) => f.toJson()).toList(),
       'reports': model.reports.map((r) => r.toJson()).toList(),
@@ -111,9 +111,23 @@ class AccdbAnalyzer {
           .map(
             (index) => AnalysisIndex(
               name: index.name,
+              indexNumber: index.indexNumber,
+              backingDataNumber: index.backingDataNumber,
               isPrimaryKey: index.isPrimaryKey,
+              isForeignKey: index.isForeignKey,
+              isUnique: index.isUnique,
+              isRequired: index.isRequired,
+              ignoreNulls: index.ignoreNulls,
+              flags: index.flags,
               columns: index.columns
-                  .map((column) => AnalysisIndexColumn(name: column.name))
+                  .map(
+                    (column) => AnalysisIndexColumn(
+                      name: column.name,
+                      columnNumber: column.columnNumber,
+                      ascending: column.ascending,
+                      flags: column.flags,
+                    ),
+                  )
                   .toList(),
             ),
           )

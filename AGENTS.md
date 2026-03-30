@@ -31,3 +31,9 @@
 ## Regra de ouro
 
 - Se o bug aparece no app gerado, a correcao deve nascer no gerador.
+
+## PostgreSQL
+
+- Ao criar bancos PostgreSQL locais para validacao, preferir sempre `TEMPLATE template0`, especialmente quando houver risco de mismatch de `collation version` no `template1`.
+- No driver Dart `postgres` 3.x, transacoes devem usar `connection.runTx(...)` em vez de emitir `BEGIN` / `COMMIT` manualmente.
+- Dentro de `connection.runTx((session) async { ... })`, usar apenas o `TxSession session` recebido no callback para executar statements transacionais. Nao misturar `connection.execute(...)` com `session.execute(...)` dentro da mesma transacao.

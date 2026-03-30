@@ -24,6 +24,17 @@ String _buildCoreModelSource(GeneratedCoreModelDescriptor model) {
       'constructorArgs': model.fields
           .map((field) => <String, Object?>{'fieldName': field.fieldName})
           .toList(growable: false),
+      'defaultEntries': model.fields
+          .where((field) => field.hasSemanticDefault)
+          .map(
+            (field) => <String, Object?>{
+              'constantName': field.columnConstantName,
+              'expression': field.semanticDefaultExpression,
+            },
+          )
+          .toList(growable: false),
+      'hasDefaults': model.fields.any((field) => field.hasSemanticDefault),
+      'defaultHelperMethods': model.defaultHelperMethods,
       'fromMapAssignments': model.fields
           .map(
             (field) => <String, Object?>{

@@ -31,7 +31,7 @@ class {{className}}Controller {
 
   static Future<Response> show(Request req, String idRaw) async {
     try {
-      final id = int.parse(idRaw);
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final service = req.make<{{className}}Service>();
       final item = await service.findById(id);
       if (item == null) return responseError('Not found', statusCode: 404);
@@ -43,7 +43,10 @@ class {{className}}Controller {
 
   static Future<Response> create(Request req) async {
     try {
-      final body = await req.bodyAsMap();
+      final body = <String, dynamic>{
+        ...{{className}}.defaultValues(),
+        ...await req.bodyAsMap(),
+      };
       final validation = {{className}}ValidationContract.validateDraft(body);
       if (!validation.isValid) {
         return responseValidationError(validation);
@@ -62,7 +65,7 @@ class {{className}}Controller {
 
   static Future<Response> update(Request req, String idRaw) async {
     try {
-      final id = int.parse(idRaw);
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final body = await req.bodyAsMap();
       final validation = {{className}}ValidationContract.validateDraft(body);
       if (!validation.isValid) {
@@ -83,7 +86,7 @@ class {{className}}Controller {
 
   static Future<Response> delete(Request req, String idRaw) async {
     try {
-      final id = int.parse(idRaw);
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final service = req.make<{{className}}Service>();
       await service.delete(id);
 

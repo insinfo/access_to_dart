@@ -19,8 +19,50 @@ Uso:
 
 - cria um `.accdb` com o formulario `frmDiffProbe`;
 - permite variar `Left`, `Top`, `Width`, `Height`;
-- permite trocar o tipo principal entre `textbox` e `combo`;
+- permite trocar o tipo principal entre `textbox`, `combo` e `checkbox`;
+- permite injetar propriedades visuais controladas como `BackColor`, `ForeColor`, `BorderStyle`, `BorderWidth`, `SpecialEffect`, `TextAlign`, `FontName`, `FontSize`, `FontWeight`, `Visible`, `Enabled`, `TabIndex` e `TabStop`;
+- permite parametrizar `RowSourceType` e `RowSource` de `ComboBox`;
 - permite alterar a mensagem do VBA embutido no evento do botao.
+
+Exemplos uteis para a rodada ampliada:
+
+- `dart run tools/create_access_layout_diff_fixture.dart --output scratch/reverse_forms/style_textbox.accdb --back-color 16777190 --fore-color 8404992 --border-color 255 --border-style 1 --border-width 2 --special-effect 2 --text-align 2 --font-name Consolas --font-size 11 --font-weight 700 --tab-index 3`
+- `dart run tools/create_access_layout_diff_fixture.dart --output scratch/reverse_forms/style_combo.accdb --control-kind combo --row-source-type "Value List" --row-source "A;B;C;D" --back-color 16777164 --border-style 1 --special-effect 2`
+- `dart run tools/create_access_layout_diff_fixture.dart --output scratch/reverse_forms/style_checkbox.accdb --control-kind checkbox --control-caption "Ativo" --fore-color 255 --tab-stop-state false`
+
+### Fixture estrutural multiponto
+
+Arquivo:
+
+- `tools/create_access_layout_probe_form.dart`
+
+Uso:
+
+- cria um formulario `frmLayoutProbe` com `Label`, `TextBox`, `CheckBox`, `CommandButton`, `ComboBox`, `ListBox`, `OptionGroup` e `SubForm` opcionais na mesma fixture;
+- pode aplicar um conjunto coerente de propriedades visuais para forcar persistencia em `PropData` e no `Blob`;
+- serve como fixture compacta para validar familias geometricas diferentes sem depender de varios arquivos separados.
+
+Exemplo:
+
+- `dart run tools/create_access_layout_probe_form.dart --output scratch/reverse_forms/layout_probe_accent.accdb --include-combo --accent-visuals`
+- `dart run tools/create_access_layout_probe_form.dart --output scratch/reverse_forms/layout_probe_extended.accdb --include-combo --include-listbox --include-option-group --include-subform --accent-visuals`
+
+### Relatorio reverso consolidado
+
+Arquivo:
+
+- `tools/reverse_access_form_layout.dart`
+
+Uso:
+
+- cruza `canonical_analysis`, `PropData` e `Blob` para cada formulario;
+- resume automaticamente a familia geometrica inferida de cada controle, como `282..285`, `293..296`, `302..305` ou `310..313`;
+- compara `layout` canonico com o retangulo inferido do `Blob`;
+- destaca propriedades visuais relevantes como `BackColor`, `ForeColor`, `BorderColor`, `SpecialEffect`, `TextAlign`, `Font*`, `Visible`, `Enabled` e `Tab*`.
+
+Exemplo:
+
+- `dart run tools/reverse_access_form_layout.dart --accdb scratch/reverse_forms/layout_probe_accent.accdb --form frmLayoutProbe --include-raw-strings --output scratch/reverse_forms/layout_probe_accent.md`
 
 ### Comparador de variantes
 
@@ -626,3 +668,142 @@ Para automacao COM tardia com Access, a resolucao de controles deve ter fallback
 2. se falhar, tentar o acesso direto no formulario ativo.
 
 Ou seja, a compatibilidade COM aqui se mostrou sensivel ao caminho de binding, mesmo para controles que existem e podem ser alterados com sucesso na mesma sessao.
+
+## 13. Expansao operacional da proxima rodada
+
+Com a nova instrumentacao, a trilha de reversao deixa de depender apenas de leitura manual de offsets e passa a suportar uma bateria mais objetiva por tipo de controle e por propriedade visual.
+
+### 13.1 Matriz recomendada de experimento
+
+Rodar ao menos estas variantes de `frmDiffProbe`:
+
+- geometria pura de `TextBox`, `ComboBox` e `CheckBox`;
+- estilo puro sem mover geometria, alterando `BackColor`, `ForeColor`, `BorderStyle`, `BorderWidth` e `SpecialEffect`;
+- alinhamento e tabulacao, alterando `TextAlign`, `TabIndex` e `TabStop`;
+- visibilidade e interacao, alterando `Visible` e `Enabled`;
+- `ComboBox` com mudanca isolada de `RowSourceType` e `RowSource`.
+
+### 13.2 Evidencia esperada no relatorio reverso
+
+Para cada controle, o relatorio agora deve registrar automaticamente:
+
+- `blob geometry`: familia `propertyId` e retangulo `left/top/right/bottom` inferido;
+- `layout x blob`: se o layout canonico bate exatamente com o quarteto do `Blob`;
+- `properties`: subconjunto ordenado de propriedades visuais e funcionais relevantes.
+
+### 13.3 Hipotese de trabalho ampliada
+
+Se a nova rodada confirmar persistencia estavel de propriedades visuais ao lado da geometria, a proxima melhoria do parser deve separar pelo menos tres camadas por controle:
+
+- geometria vinda de quartetos `left/top/right/bottom` no `Blob`;
+- propriedades visuais vindas prioritariamente de `PropData`, com reforco do `Blob` quando houver pistas locais;
+- semantica de comportamento vinda de `ControlSource`, `RowSource*`, hooks de evento e modulo VBA em `MSysAccessStorage`.
+
+### 13.4 Implicacao direta para o projeto
+
+Isso aproxima a reconstrucao de formularios de um modelo mais fiel ao Access, no qual o scaffold nao depende apenas do `DisplayControl`, mas tambem de familias geometricas e de um inventario mais rico de propriedades visuais persistidas no binario.
+
+### 13.5 Validacao inicial da instrumentacao ampliada
+
+Depois da ampliacao dos scripts, foi executada uma rodada curta de validacao com duas fixtures reais:
+
+- `scratch/reverse_forms/layout_probe_accent.accdb`
+- `scratch/reverse_forms/style_checkbox.accdb`
+
+No caso de `layout_probe_accent.accdb`, o relatorio `scratch/reverse_forms/layout_probe_accent.md` passou a mapear corretamente `MSysAccessStorage`:
+
+- `formularios mapeados em MSysAccessStorage = 1`
+- `Blob = 7732 bytes`
+- `TypeInfo = 334 bytes`
+- `PropData = 22 bytes`
+
+O relatorio mostrou, com `layout x blob = allMatch=true`, os seguintes quartetos preferenciais:
+
+- `Label`: `282..285`
+- `TextBox`: `302..305`
+- `CheckBox`: `293..296`
+- `CommandButton`: `293..296`
+- `ComboBox`: `310..313`
+
+Ou seja, a fixture multiponto passou a confirmar na pratica as cinco familias geometricas principais mapeadas ate aqui.
+
+No caso de `style_checkbox.accdb`, o relatorio `scratch/reverse_forms/style_checkbox_layout.md` tambem passou a mapear `MSysAccessStorage` com sucesso:
+
+- `formularios mapeados em MSysAccessStorage = 1`
+- `Blob = 14626 bytes`
+- `PropData = 22 bytes`
+
+O achado mais util dessa fixture foi a divergencia entre a tipagem canonica e a pista binaria:
+
+- o controle `ctlProbe` apareceu no canônico como `TextBox`;
+- mas o `Blob` apontou um retangulo `293..296`, isto e, a mesma familia empirica de `CheckBox` e `CommandButton`;
+- `layout x blob` permaneceu `allMatch=true`.
+
+### Conclusao pratica da rodada nova
+
+As ferramentas agora conseguem:
+
+- gerar fixtures com variacao visual controlada;
+- produzir um relatorio reverso com confirmacao automatica de quartetos geometricos;
+- expor rapidamente inconsistencias entre a inferencia canonica de tipo e a serializacao real do `Blob`.
+
+Isso abre uma trilha objetiva para o proximo passo: usar a familia geometrica inferida do `Blob` como sinal adicional para corrigir a classificacao de controles no pipeline canonico.
+
+### 13.6 Fechamento da rodada estendida com `ListBox`, `OptionGroup` e `SubForm`
+
+Depois da ampliacao da fixture multiponto, foi executada uma rodada adicional com:
+
+- `scratch/reverse_forms/layout_probe_extended.accdb`
+- `scratch/reverse_forms/layout_probe_extended.md`
+
+O relatorio consolidado confirmou mais dois quartetos geometricos estaveis, todos com `layout x blob = allMatch=true`:
+
+- `ListBox`: `300..303`
+- `SubForm`: `279..282`
+
+No mesmo ciclo, o caso `style_checkbox.accdb` deixou de divergir no canônico:
+
+- `ctlProbe` passou a sair como `CheckBox`;
+- a geometria canonica ficou alinhada com o `Blob` em `293..296`;
+- o retangulo continuou com `layout x blob = allMatch=true`.
+
+### Conclusao complementar da rodada estendida
+
+Com as evidencias atuais, o mapeamento geometrico mais estavel fica assim:
+
+- `Label`: `282..285`
+- `CheckBox`: `293..296`
+- `CommandButton`: `293..296`
+- `OptionButton`: `293..296`
+- `ListBox`: `300..303`
+- `TextBox`: `302..305`
+- `ComboBox`: `310..313`
+- `SubForm`: `279..282`
+
+Para `OptionGroup`, a fixture nova ainda nao produziu uma familia propria tao limpa quanto as demais. O controle foi identificado corretamente no canônico por propriedades e nome, mas o retangulo ainda caiu em fallback e pode refletir o bloco de caption ou label do grupo. Portanto, por enquanto, ele deve continuar tratado como caso em aberto para uma rodada especifica de isolamento.
+
+### 13.7 Isolamento dedicado de `OptionGroup`
+
+Para remover a contaminacao da fixture multiponto, foi criada uma fixture dedicada:
+
+- `tools/create_access_option_group_probe_form.dart`
+
+Ela gera duas variantes uteis:
+
+- `scratch/reverse_forms/option_group_isolated.accdb`
+- `scratch/reverse_forms/option_group_with_label.accdb`
+
+Resultado observado:
+
+- na variante isolada, `grpEstadoIsolado` foi identificado como `OptionGroup`, mas nao apareceu nenhum quarteto geometrico confiavel proprio;
+- quando a janela de leitura foi ampliada, o fallback passou a capturar `293..296` do primeiro `OptionButton`, o que caracteriza vazamento do filho e nao geometria do grupo;
+- na variante com label externo, o fallback voltou a capturar `282..285`, isto e, o retangulo do label.
+
+### Conclusao especifica para `OptionGroup`
+
+Com a evidencia atual, o parser nao deve promover fallback geometrico arbitrario para `OptionGroup`.
+
+Em outras palavras:
+
+- `OptionGroup` continua sendo identificado por propriedades e nome;
+- mas, ate aparecer uma familia dedicada validada, o resultado correto e considerar a geometria do grupo como `desconhecida`, em vez de herdar retangulos de label ou de `OptionButton`.

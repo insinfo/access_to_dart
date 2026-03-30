@@ -24,21 +24,24 @@ class {{className}}Service {
     }
   }
 
-  Future<Map<String, dynamic>?> findById(int id) {
+  Future<Map<String, dynamic>?> findById({{primaryKeyParamType}} id) {
     return repository.findById(id);
   }
 
   Future<Map<String, dynamic>?> create({{className}} item) async {
     final insertedId = await repository.insert(item);
+    if (insertedId == null) {
+      return null;
+    }
     return repository.findById(insertedId);
   }
 
-  Future<Map<String, dynamic>?> update(int id, {{className}} item) async {
+  Future<Map<String, dynamic>?> update({{primaryKeyParamType}} id, {{className}} item) async {
     await repository.update(id, item);
     return repository.findById(id);
   }
 
-  Future<void> delete(int id) {
+  Future<void> delete({{primaryKeyParamType}} id) {
     return repository.delete(id);
   }
 }

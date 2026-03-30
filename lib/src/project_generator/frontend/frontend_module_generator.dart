@@ -238,7 +238,7 @@ $dynamicLookupSource;
   set entityInput($namePascal? val) {
     _draft
       ..clear()
-      ..addAll(val?.toMap() ?? <String, dynamic>{});
+      ..addAll(val?.toMap() ?? $namePascal.defaultValues());
   }
 
   final _updateEntityController = StreamController<$namePascal>.broadcast();
@@ -656,8 +656,17 @@ String? _buildFieldHint(GeneratedFieldDescriptor field) {
   if (field.validationRule != null && field.validationRule!.trim().isNotEmpty) {
     parts.add('Regra Access: ${field.validationRule!.trim()}');
   }
+  if (field.accessDefaultValue != null && field.accessDefaultValue!.trim().isNotEmpty) {
+    parts.add('Default Access: ${field.accessDefaultValue!.trim()}');
+  }
+  if (field.semanticDefaultExpression != null && field.semanticDefaultExpression!.trim().isNotEmpty) {
+    parts.add('Default semantico aplicado no scaffold.');
+  }
   if (field.allowZeroLength == false) {
     parts.add('Nao aceita string vazia.');
+  }
+  if (field.isUuidSuggested) {
+    parts.add('Campo UUID/GUID do Access.');
   }
   if (field.isCalculated) {
     parts.add('Campo calculado do Access; leitura somente.');
@@ -707,6 +716,12 @@ String _buildFieldPresentationSource(List<GeneratedFieldDescriptor> fields) {
         }
         if (field.maxLength != null) {
           values.add("'maxLength': ${field.maxLength}");
+        }
+        if (field.accessDefaultValue != null && field.accessDefaultValue!.trim().isNotEmpty) {
+          values.add("'accessDefaultValue': ${_dartStringLiteral(field.accessDefaultValue!.trim())}");
+        }
+        if (field.semanticDefaultExpression != null && field.semanticDefaultExpression!.trim().isNotEmpty) {
+          values.add("'hasSemanticDefault': true");
         }
         if (field.allowMultipleValues != null) {
           values.add("'allowMultipleValues': ${field.allowMultipleValues}");

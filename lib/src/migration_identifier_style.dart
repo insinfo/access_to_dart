@@ -40,10 +40,15 @@ class MigrationIdentifierPolicy {
 
   String columnName(String rawName) => _normalize(rawName);
 
+  String objectName(String rawName) => _normalize(rawName);
+
   String quotedTableName(String rawName) => quoteIdentifier(tableName(rawName));
 
   String quotedColumnName(String rawName) =>
       quoteIdentifier(columnName(rawName));
+
+  String quotedObjectName(String rawName) =>
+      quoteIdentifier(objectName(rawName));
 
   String quoteIdentifier(String value) {
     return '"${value.replaceAll('"', '""')}"';

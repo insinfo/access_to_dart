@@ -9,3 +9,6 @@ Regras permanentes deste workspace:
 - Testes de componentes frontend em NgDart devem ser executados com `dart run build_runner test`.
 - Sempre escape `$` de forma segura ao gerar literais Dart a partir de dados externos, metadados do Access, SQL, formatos e textos vindos do `.accdb` ou do `.accdb.src`.
 - Ao implementar melhorias de forms/reports do Access, priorize fidelidade estrutural: tipo real de controle, ordem visual, agrupamentos, captions e semantica original antes de cosmetica.
+- Em integracoes com PostgreSQL usando o pacote `postgres` 3.x, use `connection.runTx(...)` para transacoes e nao emita `BEGIN` / `COMMIT` manualmente.
+- Dentro de `connection.runTx((session) async { ... })`, use apenas o `TxSession session` fornecido pelo callback para executar statements transacionais.
+- Ao criar bancos locais de validacao PostgreSQL, prefira `TEMPLATE template0` para evitar falhas ligadas a `template1` e `collation version`.

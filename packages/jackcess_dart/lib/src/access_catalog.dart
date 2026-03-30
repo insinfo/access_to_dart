@@ -245,7 +245,6 @@ class AccessCatalog {
       try {
         final rows = await dataReader.readPageRows(pageNum);
         for (final row in rows) {
-          if (row.isDeleted || row.isOverflow) continue;
           final map = await rowReader.readRow(row);
           final entry = _mapToEntry(map);
           if (entry != null) entries.add(entry);
@@ -438,7 +437,6 @@ class AccessCatalog {
         try {
           final rows = await dataReader.readPageRows(pageNum);
           for (final row in rows) {
-            if (row.isDeleted || row.isOverflow) continue;
             final map = await rowReader.readRow(row);
             final objId = map['ObjectId'];
             if (objId == null) continue;

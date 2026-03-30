@@ -137,10 +137,8 @@ class TableReader {
       try {
         final rows = await dataReader.readPageRows(pageNum);
         for (final row in rows) {
-          if (!row.isDeleted && !row.isOverflow) {
-            final map = await rowReader.readRow(row);
-            if (map.isNotEmpty) result.add(map);
-          }
+          final map = await rowReader.readRow(row);
+          if (map.isNotEmpty) result.add(map);
         }
       } catch (_) {
         // Skip pages that fail to parse

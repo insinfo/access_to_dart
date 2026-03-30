@@ -10,6 +10,7 @@ class AnalysisProject {
   final Map<String, dynamic> summary;
   final List<AnalysisTable> tables;
   final List<AnalysisLinkedTable> linkedTables;
+  final List<AnalysisRelationship> relationships;
   final List<AnalysisForm> forms;
   final AnalysisCanonicalAnalysis? canonicalAnalysis;
   final Map<String, dynamic>? queryReconciliation;
@@ -22,6 +23,7 @@ class AnalysisProject {
     required this.summary,
     required this.tables,
     required this.linkedTables,
+    required this.relationships,
     required this.forms,
     required this.canonicalAnalysis,
     required this.queryReconciliation,
@@ -42,6 +44,14 @@ class AnalysisProject {
           .whereType<Map>()
           .map((table) =>
               AnalysisLinkedTable.fromJson(table.cast<String, dynamic>()))
+          .toList(),
+      relationships: ((json['relationships'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (relationship) => AnalysisRelationship.fromJson(
+              relationship.cast<String, dynamic>(),
+            ),
+          )
           .toList(),
       forms: ((json['forms'] as List?) ?? const [])
           .whereType<Map>()
@@ -503,19 +513,40 @@ class AnalysisColumn {
 
 class AnalysisIndex {
   final String name;
+  final int? indexNumber;
+  final int? backingDataNumber;
   final bool isPrimaryKey;
+  final bool isForeignKey;
+  final bool isUnique;
+  final bool isRequired;
+  final bool ignoreNulls;
+  final int? flags;
   final List<AnalysisIndexColumn> columns;
 
   AnalysisIndex({
     required this.name,
+    required this.indexNumber,
+    required this.backingDataNumber,
     required this.isPrimaryKey,
+    required this.isForeignKey,
+    required this.isUnique,
+    required this.isRequired,
+    required this.ignoreNulls,
+    required this.flags,
     required this.columns,
   });
 
   factory AnalysisIndex.fromJson(Map<String, dynamic> json) {
     return AnalysisIndex(
       name: json['name'] as String? ?? 'index',
+      indexNumber: json['indexNumber'] as int?,
+      backingDataNumber: json['backingDataNumber'] as int?,
       isPrimaryKey: json['isPrimaryKey'] as bool? ?? false,
+      isForeignKey: json['isForeignKey'] as bool? ?? false,
+      isUnique: json['isUnique'] as bool? ?? false,
+      isRequired: json['isRequired'] as bool? ?? false,
+      ignoreNulls: json['ignoreNulls'] as bool? ?? false,
+      flags: json['flags'] as int?,
       columns: ((json['columns'] as List?) ?? const [])
           .whereType<Map>()
           .map((column) =>
@@ -527,11 +558,60 @@ class AnalysisIndex {
 
 class AnalysisIndexColumn {
   final String name;
+  final int? columnNumber;
+  final bool ascending;
+  final int? flags;
 
-  AnalysisIndexColumn({required this.name});
+  AnalysisIndexColumn({
+    required this.name,
+    required this.columnNumber,
+    required this.ascending,
+    required this.flags,
+  });
 
   factory AnalysisIndexColumn.fromJson(Map<String, dynamic> json) {
-    return AnalysisIndexColumn(name: json['name'] as String? ?? 'column');
+    return AnalysisIndexColumn(
+      name: json['name'] as String? ?? 'column',
+      columnNumber: json['columnNumber'] as int?,
+      ascending: json['ascending'] as bool? ?? true,
+      flags: json['flags'] as int?,
+    );
+  }
+}
+
+class AnalysisRelationship {
+  final String name;
+  final String fromTable;
+  final List<String> fromColumns;
+  final String toTable;
+  final List<String> toColumns;
+  final int? flags;
+  final int? columnCount;
+
+  AnalysisRelationship({
+    required this.name,
+    required this.fromTable,
+    required this.fromColumns,
+    required this.toTable,
+    required this.toColumns,
+    required this.flags,
+    required this.columnCount,
+  });
+
+  factory AnalysisRelationship.fromJson(Map<String, dynamic> json) {
+    return AnalysisRelationship(
+      name: json['name'] as String? ?? 'relationship',
+      fromTable: json['fromTable'] as String? ?? '',
+      fromColumns: ((json['fromColumns'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      toTable: json['toTable'] as String? ?? '',
+      toColumns: ((json['toColumns'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      flags: json['flags'] as int?,
+      columnCount: json['columnCount'] as int?,
+    );
   }
 }
 

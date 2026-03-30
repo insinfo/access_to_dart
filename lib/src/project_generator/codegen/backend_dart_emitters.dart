@@ -8,6 +8,10 @@ String _buildBackendRepositorySource(GeneratedBackendModule module) {
       'className': module.className,
       'tableRuntimeName': module.tableRuntimeName,
       'primaryKeyRuntimeName': module.primaryKeyRuntimeName,
+      'primaryKeyFieldName': module.primaryKeyFieldName,
+      'primaryKeyParamType': module.primaryKeyParamType,
+      'primaryKeyRouteParseExpression': module.primaryKeyRouteParseExpression,
+      'primaryKeyIsAutoNumber': module.primaryKeyIsAutoNumber,
     },
   );
 }
@@ -33,6 +37,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
       'className': module.className,
       'normalizedName': module.normalizedName,
       'routeName': module.routeName,
+      'primaryKeyParamType': module.primaryKeyParamType,
       'lookupCases': lookupCases,
     },
   );
@@ -45,6 +50,8 @@ String _buildBackendControllerSource(GeneratedBackendModule module) {
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,
+      'primaryKeyParamType': module.primaryKeyParamType,
+      'primaryKeyRouteParseExpression': module.primaryKeyRouteParseExpression,
     },
   );
 }
