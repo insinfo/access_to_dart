@@ -4,7 +4,42 @@
 
 ##  Portar um leitor completo de PropertyMap binário no jackcess_dart para extrair campos de tabelas locais
 
+
+dart run access_to_dart migrate --accdb fixtures\SIGAsul.accdb --backend-accdb fixtures\SIGA2021-CENTRAL_be_2026_senha_4461.accdb --backend-password 4461 --output build\migration_access_siga_codex_schema_and_data_fix3 --mode schema-and-data --pg "postgresql://postgres:s1sadm1n@localhost:5432/access_siga_codex_20260329_fix3?sslmode=disable" --identifier-style snake_ascii
+
 ## Status Atual em 28/03/2026
+
+## Status Atual em 29/03/2026
+
+Correcao importante no backend de analise e na trilha PostgreSQL:
+
+- O modo padrao de `AutoNumber` no migrador passou a ser `plain-int`, preservando os IDs do Access e nao emitindo sequence por padrao.
+- O modo padrao de `NOT NULL` no migrador passou a ser `relax-not-null`, para evitar que colunas obrigatorias inconsistentes no Access bloqueiem a conversao logo no schema PostgreSQL.
+- Os modos alternativos continuam disponiveis no CLI:
+  - `sequence`
+  - `force-sequence`
+- A escolha do padrao `plain-int` ficou alinhada ao dump de referencia `fixtures/access_siga_struture.sql`, que nao emite `CREATE SEQUENCE`, `SERIAL` nem `nextval(...)`.
+
+- Fechei a origem das 5 tabelas faltantes no backend `fixtures/SIGA2021-CENTRAL_be_2026_senha_4461.accdb`.
+- A causa estava em rows de `MSysObjects` marcadas como `overflow` e tambem como `deleted`; o leitor seguia o ponteiro, mas descartava o payload final por causa do bit `deleted`.
+- A correcao foi aplicada no leitor binario em `packages/jackcess_dart/lib/src/row_reader.dart`, preservando o payload resolvido dessas entradas de overflow.
+- A ferramenta de inspeção em `tools/inspect_access_catalog.dart` confirmou o diagnostico na pagina `11230`, nos slots `12`, `19`, `26`, `32` e `40`.
+- Depois da correcao, o catalogo do backend passou a bater `49/49` com `fixtures/access_siga_struture.sql`, zerando o diff de tabelas contra o dump do Full Convert.
+- A analise unificada com `fixtures/SIGAsul.accdb` + backend central agora sai com:
+  - `Tables: 49`
+  - `Linked: 45`
+- A trilha PostgreSQL local foi validada com a senha correta `s1sadm1n`; a senha digitada anteriormente `slsadm1n` reproduzia o erro `FormatException: Missing extension byte` ja na autenticacao.
+- O executor PostgreSQL foi alinhado ao pacote `postgres` 3.x para usar `connection.runTx(...)` em vez de `BEGIN` / `COMMIT` manualmente.
+- Regra importante confirmada em pratica: dentro de `connection.runTx((session) async { ... })`, so pode ser usado o `TxSession session` recebido pelo callback para executar statements transacionais.
+- Para criacao de bancos locais de validacao PostgreSQL, deve-se preferir `TEMPLATE template0`, porque `template1` local pode falhar com incompatibilidade de `collation version`.
+- Com a conexao local funcionando e o banco criado via `template0`, o `migrate` passou da fase de conexao e falhou em `pre-data`, revelando o proximo bloqueio real no SQL gerado:
+  - `timestamp without time zone + integer`
+  - isso ocorre em expressao calculada emitida para `tb_gest_det`, no trecho equivalente a `("dpp" + 180)`
+- Conclusao do estado atual:
+  - conexao local PostgreSQL validada
+  - autenticacao isolada e corrigida
+  - catalogo/backend unificado corrigido
+  - proximo defeito raiz do migrador esta na traducao de expressoes calculadas de data do Access para PostgreSQL
 
 Implementei a promoção das famílias geométricas tipadas no analisador, filtrei queries temporárias do Access no pipeline analítico e fechei o experimento complementar para CommandButton e Label.
 

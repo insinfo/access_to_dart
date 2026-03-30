@@ -11,7 +11,10 @@ import 'src/access_src_reader.dart';
 import 'src/analysis_overlay_merger.dart';
 import 'src/analysis_doctor.dart';
 import 'src/analysis_model.dart';
+import 'src/migration_auto_number_mode.dart';
+import 'src/migration_export_mode.dart';
 import 'src/migration_identifier_style.dart';
+import 'src/migration_not_null_mode.dart';
 import 'src/migration_writer.dart';
 import 'src/postgres_connection_options.dart';
 import 'src/postgres_migration_executor.dart';
@@ -215,9 +218,9 @@ Future<int> _runAnalyze(
     ..addOption('password',
         help: 'Optional password for encrypted .accdb files')
     ..addOption('backend-accdb',
-      help: 'Optional path to the linked backend .accdb file')
+        help: 'Optional path to the linked backend .accdb file')
     ..addOption('backend-password',
-      help: 'Optional password for encrypted linked backend .accdb files')
+        help: 'Optional password for encrypted linked backend .accdb files')
     ..addOption('src', help: 'Optional path to the .accdb.src directory')
     ..addOption('output',
         abbr: 'o', help: 'Output directory for analysis.json');
@@ -295,16 +298,18 @@ Future<int> _runAnalyze(
           .writeAsString(const JsonEncoder.withIndent('  ').convert(analysis));
 
       out.writeln('Analysis written to: ${analysisFile.path}');
-        final summary = (analysis['summary'] as Map?)?.cast<String, dynamic>() ??
+      final summary = (analysis['summary'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-        out.writeln('  Tables : ${summary['tables'] ?? model.tables.length}');
-        out.writeln('  Linked : ${summary['linkedTables'] ?? model.linkedTables.length}');
-        out.writeln('  Rels   : ${summary['relationships'] ?? model.relationships.length}');
-        out.writeln('  Queries: ${summary['queries'] ?? model.queries.length}');
-        out.writeln('  Forms  : ${summary['forms'] ?? model.forms.length}');
-        out.writeln('  Reports: ${summary['reports'] ?? model.reports.length}');
-        out.writeln('  Macros : ${summary['macros'] ?? model.macros.length}');
-        out.writeln('  Modules: ${summary['modules'] ?? model.modules.length}');
+      out.writeln('  Tables : ${summary['tables'] ?? model.tables.length}');
+      out.writeln(
+          '  Linked : ${summary['linkedTables'] ?? model.linkedTables.length}');
+      out.writeln(
+          '  Rels   : ${summary['relationships'] ?? model.relationships.length}');
+      out.writeln('  Queries: ${summary['queries'] ?? model.queries.length}');
+      out.writeln('  Forms  : ${summary['forms'] ?? model.forms.length}');
+      out.writeln('  Reports: ${summary['reports'] ?? model.reports.length}');
+      out.writeln('  Macros : ${summary['macros'] ?? model.macros.length}');
+      out.writeln('  Modules: ${summary['modules'] ?? model.modules.length}');
 
       final reconciliation = analysis['query_reconciliation'];
       if (reconciliation is Map<String, dynamic>) {
@@ -493,11 +498,30 @@ Future<int> _runMigrate(
     ..addOption('accdb', help: 'Path to the .accdb file for direct migration')
     ..addOption('password',
         help: 'Optional password for encrypted .accdb files')
+    ..addOption('backend-accdb',
+        help: 'Optional path to the linked backend .accdb file')
+    ..addOption('backend-password',
+        help: 'Optional password for encrypted linked backend .accdb files')
     ..addOption('pg', help: 'Optional PostgreSQL connection string')
+    ..addOption(
+      'mode',
+      help: 'Migration mode: schema-only or schema-and-data',
+      defaultsTo: 'schema-and-data',
+    )
     ..addOption(
       'identifier-style',
       help: 'Identifier style: snake_ascii or original',
       defaultsTo: 'snake_ascii',
+    )
+    ..addOption(
+      'auto-number-mode',
+      help: 'Auto-number handling: sequence, plain-int or force-sequence',
+      defaultsTo: 'plain-int',
+    )
+    ..addOption(
+      'not-null-mode',
+      help: 'NOT NULL handling: strict, skip-row, relax-not-null or fix',
+      defaultsTo: 'relax-not-null',
     )
     ..addOption('output',
         abbr: 'o', help: 'Output directory for migration assets');
@@ -523,6 +547,29 @@ Future<int> _runMigrate(
   final outputDir = args['output'] as String? ?? 'build/migration';
   final pg = args['pg'] as String?;
   final password = args['password'] as String?;
+  final backendAccdbPath = args['backend-accdb'] as String?;
+  final backendPassword = args['backend-password'] as String?;
+  final exportMode = MigrationExportMode.parse(
+    args['mode'] as String? ?? 'schema-and-data',
+  );
+  final MigrationAutoNumberMode autoNumberMode;
+  try {
+    autoNumberMode = MigrationAutoNumberMode.parse(
+      args['auto-number-mode'] as String? ?? 'plain-int',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
+  final MigrationNotNullMode notNullMode;
+  try {
+    notNullMode = MigrationNotNullMode.parse(
+      args['not-null-mode'] as String? ?? 'relax-not-null',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
 
   final MigrationIdentifierStyle identifierStyle;
   try {
@@ -540,21 +587,30 @@ Future<int> _runMigrate(
         : await _loadAnalysisProjectFromAccdb(
             accdbPath!,
             password: password,
+            backendAccdbPath: backendAccdbPath,
+            backendPassword: backendPassword,
           );
 
-    final migrationRows = await _loadMigrationRows(
-      explicitAccdbPath: accdbPath,
-      inferredAccdbPath: project.source,
-      password: password,
-      out: out,
-      err: err,
-    );
+    final migrationRows = exportMode.includesData
+        ? await _loadMigrationRows(
+            project: project,
+            explicitAccdbPath: accdbPath,
+            password: password,
+            explicitBackendAccdbPath: backendAccdbPath,
+            explicitBackendPassword: backendPassword,
+            out: out,
+            err: err,
+          )
+        : null;
 
     final artifacts = await MigrationWriter().write(
       project: project,
       outputDirectory: outputDir,
       connectionString: pg,
       identifierStyle: identifierStyle,
+      autoNumberMode: autoNumberMode,
+      notNullMode: notNullMode,
+      exportMode: exportMode,
       tableRowsByName: migrationRows?.rowsByTable,
     );
     out.writeln('Migration assets written to: $outputDir');
@@ -569,11 +625,16 @@ Future<int> _runMigrate(
         project: project,
         statementBuilder: MigrationStatementBuilder(
           identifierPolicy: MigrationIdentifierPolicy(style: identifierStyle),
+          autoNumberMode: autoNumberMode,
+          notNullMode: notNullMode,
         ),
+        exportMode: exportMode,
         tableRowsByName: migrationRows?.rowsByTable,
       );
       out.writeln('  PostgreSQL apply: OK');
       out.writeln('  Tables created : ${execution.tablesCreated}');
+      out.writeln('  Foreign keys   : ${execution.foreignKeysCreated}');
+      out.writeln('  Indexes created: ${execution.indexesCreated}');
       out.writeln('  Rows inserted  : ${execution.rowsInserted}');
     }
     return 0;
@@ -596,6 +657,8 @@ Future<int> _runMigrate(
 Future<AnalysisProject> _loadAnalysisProjectFromAccdb(
   String accdbPath, {
   String? password,
+  String? backendAccdbPath,
+  String? backendPassword,
 }) async {
   final database = await AccessDatabase.openPath(accdbPath, password: password);
   try {
@@ -604,7 +667,30 @@ Future<AnalysisProject> _loadAnalysisProjectFromAccdb(
       pageChannel: database.pageChannel,
     );
     final model = await catalog.read(accdbPath);
-    final analysis = await AccdbAnalyzer(model: model, db: database).analyze();
+    var analysis = await AccdbAnalyzer(model: model, db: database).analyze();
+    if (backendAccdbPath != null && backendAccdbPath.isNotEmpty) {
+      final backendDatabase = await AccessDatabase.openPath(
+        backendAccdbPath,
+        password: backendPassword,
+      );
+      try {
+        final backendCatalog = AccessCatalog(
+          format: backendDatabase.format,
+          pageChannel: backendDatabase.pageChannel,
+        );
+        final backendModel = await backendCatalog.read(backendAccdbPath);
+        final backendAnalysis = await AccdbAnalyzer(
+          model: backendModel,
+          db: backendDatabase,
+        ).analyze();
+        analysis = AnalysisBackendLinker().mergeLinkedBackendAnalysis(
+          analysis,
+          backendAnalysis,
+        );
+      } finally {
+        await backendDatabase.close();
+      }
+    }
     return AnalysisProject.fromJson(analysis);
   } finally {
     await database.close();
@@ -612,40 +698,104 @@ Future<AnalysisProject> _loadAnalysisProjectFromAccdb(
 }
 
 Future<AccessTableRowsSnapshot?> _loadMigrationRows({
+  required AnalysisProject project,
   required String? explicitAccdbPath,
-  required String inferredAccdbPath,
   required String? password,
+  required String? explicitBackendAccdbPath,
+  required String? explicitBackendPassword,
   required StringSink out,
   required StringSink err,
 }) async {
-  final resolvedPath =
-      explicitAccdbPath != null && explicitAccdbPath.isNotEmpty
-          ? explicitAccdbPath
-          : inferredAccdbPath;
-
-  if (resolvedPath.isEmpty) {
+  final targetTableNames = <String>{
+    for (final table in project.tables) table.name,
+  };
+  if (targetTableNames.isEmpty) {
     return null;
   }
 
-  final sourceFile = File(resolvedPath);
-  if (!await sourceFile.exists()) {
+  final mergedRows = <String, List<Map<String, dynamic>>>{};
+  final primaryPath = explicitAccdbPath != null && explicitAccdbPath.isNotEmpty
+      ? explicitAccdbPath
+      : project.source;
+  await _mergeMigrationRowsFromSource(
+    accdbPath: primaryPath,
+    password: password,
+    targetTableNames: targetTableNames,
+    mergedRows: mergedRows,
+    out: out,
+    err: err,
+  );
+
+  final backendPath = explicitBackendAccdbPath != null &&
+          explicitBackendAccdbPath.isNotEmpty
+      ? explicitBackendAccdbPath
+      : ((project.raw['backend_analysis'] as Map?)?['source'] as String? ?? '');
+  if (backendPath.isNotEmpty && backendPath != primaryPath) {
+    await _mergeMigrationRowsFromSource(
+      accdbPath: backendPath,
+      password: explicitBackendPassword,
+      targetTableNames: targetTableNames,
+      mergedRows: mergedRows,
+      out: out,
+      err: err,
+    );
+  }
+
+  if (mergedRows.isEmpty) {
     return null;
+  }
+
+  final snapshot = AccessTableRowsSnapshot(rowsByTable: mergedRows);
+  out.writeln(
+    'Loaded ${snapshot.rowCount} Access rows from ${snapshot.tableCount} effective tables for migration.',
+  );
+  return snapshot;
+}
+
+Future<void> _mergeMigrationRowsFromSource({
+  required String accdbPath,
+  required String? password,
+  required Set<String> targetTableNames,
+  required Map<String, List<Map<String, dynamic>>> mergedRows,
+  required StringSink out,
+  required StringSink err,
+}) async {
+  if (accdbPath.isEmpty) {
+    return;
+  }
+
+  final sourceFile = File(accdbPath);
+  if (!await sourceFile.exists()) {
+    err.writeln('Warning: migration source not found: $accdbPath');
+    return;
   }
 
   try {
     final snapshot = await AccessTableRowsReader().readAll(
-      accdbPath: resolvedPath,
+      accdbPath: accdbPath,
       password: password,
     );
+    var loadedTableCount = 0;
+    var loadedRowCount = 0;
+    for (final entry in snapshot.rowsByTable.entries) {
+      if (!targetTableNames.contains(entry.key) ||
+          mergedRows.containsKey(entry.key)) {
+        continue;
+      }
+      final rows = entry.value
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+      mergedRows[entry.key] = rows;
+      loadedTableCount++;
+      loadedRowCount += rows.length;
+    }
     out.writeln(
-      'Loaded ${snapshot.rowCount} Access rows from ${snapshot.tableCount} tables for migration.',
+      'Loaded $loadedRowCount rows from $loadedTableCount target tables in $accdbPath.',
     );
-    return snapshot;
   } catch (e) {
     err.writeln(
-      'Warning: failed to load full Access rows from $resolvedPath, falling back to sampleRows. Error: $e',
+      'Warning: failed to load full Access rows from $accdbPath, falling back to sampleRows. Error: $e',
     );
-    return null;
   }
 }
 
@@ -675,7 +825,7 @@ void _writeUsage(StringSink sink) {
     '  doctor        --analysis <analysis.json>            Validate generated analysis',
   );
   sink.writeln(
-    '  migrate       [--analysis <analysis.json> | --accdb <file.accdb>] [-o dir] [--pg <conn>] [--identifier-style snake_ascii|original]  Emit/apply PostgreSQL migration assets',
+    '  migrate       [--analysis <analysis.json> | --accdb <file.accdb>] [--backend-accdb <file.accdb>] [--mode schema-only|schema-and-data] [-o dir] [--pg <conn>] [--identifier-style snake_ascii|original]  Emit/apply PostgreSQL migration assets',
   );
   sink.writeln(
     '  generate      --analysis <analysis.json> [-o dir] [--identifier-style snake_ascii|original]  Generate core/backend/frontend scaffold',

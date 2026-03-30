@@ -25,23 +25,40 @@ class RowReader {
   });
 
   Future<Map<String, dynamic>> readRow(DataPageRow row) async {
-    if (row.isDeleted || row.isOverflow) {
+    if (row.isDeleted && !row.isOverflow) {
       return {};
     }
 
-    final data = row.rowData;
+    final data = row.isOverflow
+        ? await _resolveOverflowRowData(row.rowData)
+        : row.rowData;
+    if (data.isEmpty) {
+      return {};
+    }
     final bytes = ByteData.view(data.buffer, data.offsetInBytes, data.length);
 
     // 1. Read column count
-    int columnCount = bytes.getInt16(0, Endian.little);
+    if (data.length < 4) {
+      return {};
+    }
+    final columnCount = bytes.getInt16(0, Endian.little);
+    if (columnCount < 0) {
+      return {};
+    }
 
     // 2. Read Null Mask
-    int nullMaskSize = (columnCount + 7) ~/ 8;
-    int nullMaskOffset = data.length - nullMaskSize;
-    Uint8List nullMask = data.sublist(nullMaskOffset);
+    final nullMaskSize = (columnCount + 7) ~/ 8;
+    final nullMaskOffset = data.length - nullMaskSize;
+    if (nullMaskOffset < 2 || nullMaskOffset > data.length) {
+      return {};
+    }
+    final nullMask = data.sublist(nullMaskOffset);
 
     // 3. Read var columns metadata
-    int numVarCols = bytes.getInt16(nullMaskOffset - 2, Endian.little);
+    final numVarCols = bytes.getInt16(nullMaskOffset - 2, Endian.little);
+    if (numVarCols < 0) {
+      return {};
+    }
 
     Map<String, dynamic> result = {};
     for (var col in columns) {
@@ -72,12 +89,17 @@ class RowReader {
           if (col.variableColumnNumber >= numVarCols) continue;
 
           // Jet4 simple var length value jump table
-          int varColumnOffsetPos =
+          final varColumnOffsetPos =
               nullMaskOffset - 4 - (col.variableColumnNumber * 2);
-          int dataStart = bytes.getInt16(varColumnOffsetPos, Endian.little);
-          int dataEnd = bytes.getInt16(varColumnOffsetPos - 2, Endian.little);
+          if (varColumnOffsetPos < 2 || varColumnOffsetPos + 2 > data.length) {
+            continue;
+          }
+          final dataStart = bytes.getInt16(varColumnOffsetPos, Endian.little);
+          final dataEnd = bytes.getInt16(varColumnOffsetPos - 2, Endian.little);
 
-          if (dataStart <= dataEnd && dataEnd <= data.length) {
+          if (dataStart >= 0 &&
+              dataStart <= dataEnd &&
+              dataEnd <= data.length) {
             var raw = data.sublist(dataStart, dataEnd);
             if (col.isCalculated) {
               raw = _unwrapCalculatedValue(raw);
@@ -93,6 +115,50 @@ class RowReader {
     }
 
     return result;
+  }
+
+  Future<Uint8List> _resolveOverflowRowData(Uint8List definition) async {
+    var current = definition;
+    while (true) {
+      if (current.length < 4) {
+        return Uint8List(0);
+      }
+
+      final rowNum = current[0];
+      final pageNum = current[1] | (current[2] << 8) | (current[3] << 16);
+      if (pageNum <= 0) {
+        return Uint8List(0);
+      }
+
+      final page = await _readPageBytes(pageNum);
+      if (page.isEmpty || page[0] != 0x01) {
+        return Uint8List(0);
+      }
+
+      final bytes = ByteData.view(page.buffer, page.offsetInBytes, page.length);
+      final rowCount = bytes.getInt16(12, Endian.little);
+      if (rowNum < 0 || rowNum >= rowCount) {
+        return Uint8List(0);
+      }
+
+      final rowStartOffset = 14 + (2 * rowNum);
+      final rawRowStart = bytes.getInt16(rowStartOffset, Endian.little);
+      final isOverflow = (rawRowStart & 0x4000) != 0;
+      final startPos = rawRowStart & 0x0FFF;
+      final endPos = (rowNum == 0)
+          ? format.pageSize
+          : (bytes.getInt16(14 + (2 * (rowNum - 1)), Endian.little) & 0x0FFF);
+
+      if (startPos > endPos || endPos > page.length) {
+        return Uint8List(0);
+      }
+
+      current = page.sublist(startPos, endPos);
+      if (isOverflow) {
+        continue;
+      }
+      return current;
+    }
   }
 
   bool isVariableLengthType(int type) {
@@ -167,8 +233,17 @@ class RowReader {
     }
 
     final base = DateTime.utc(1899, 12, 30);
-    final micros = (value * Duration.microsecondsPerDay).round();
-    return base.add(Duration(microseconds: micros));
+    final microsAsDouble = value * Duration.microsecondsPerDay;
+    if (!microsAsDouble.isFinite) {
+      return null;
+    }
+
+    final micros = microsAsDouble.round();
+    try {
+      return base.add(Duration(microseconds: micros));
+    } on RangeError {
+      return null;
+    }
   }
 
   String? _parseNumeric(Uint8List data, {int? scale}) {
@@ -466,4 +541,3 @@ class RowReader {
     return String.fromCharCodes(codeUnits);
   }
 }
-
