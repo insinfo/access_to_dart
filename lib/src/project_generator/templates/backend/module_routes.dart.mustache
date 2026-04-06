@@ -6,6 +6,9 @@ void setup{{className}}Routes(Router app, String basePath) {
     ..get('/', {{className}}Controller.list)
     ..get('/lookups/<fieldKey>', {{className}}Controller.lookup)
     ..get('/<id>', {{className}}Controller.show)
+    ..get('/<id>/attachments/<fieldKey>', {{className}}Controller.attachments)
+    ..post('/<id>/attachments/<fieldKey>', {{className}}Controller.createAttachment)
+    ..delete('/<id>/attachments/<fieldKey>/<ordinal>', {{className}}Controller.deleteAttachment)
     ..post('/', {{className}}Controller.create)
     ..put('/<id>', {{className}}Controller.update)
     ..delete('/<id>', {{className}}Controller.delete);

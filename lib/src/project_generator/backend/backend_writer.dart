@@ -41,7 +41,7 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
     await File('${backendDir.path}/lib/src/shared/extensions/request_extension.dart')
         .writeAsString(_backendRequestExtension(project));
 
-    for (final table in project.tables) {
+        for (final table in scaffoldTables(project)) {
       final modDir = '${backendDir.path}/lib/src/modules/${table.normalizedName}';
       await Directory('$modDir/controllers').create(recursive: true);
       await Directory('$modDir/repositories').create(recursive: true);

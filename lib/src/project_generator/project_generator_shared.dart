@@ -116,14 +116,45 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     return steps;
   }
 
-  String _fromMapValue(AnalysisColumn column) {
+  String _fromMapValue(
+    AnalysisColumn column, {
+    Iterable<Map<String, dynamic>>? rows,
+  }) {
     final mapAccess = "map[${column.columnConstantName}]";
     final dartType = column.dartType;
     if (dartType == 'int?') return '$mapAccess as int?';
     if (dartType == 'double?') return '($mapAccess as num?)?.toDouble()';
     if (dartType == 'bool?') return '$mapAccess as bool?';
-    if (dartType == 'DateTime?') return '$mapAccess as DateTime?';
+    if (dartType == 'DateTime?') {
+      final semantic = switch (
+        inferAccessTemporalSemanticWithRows(column, rows: rows)
+      ) {
+        AccessTemporalSemantic.dateOnly => 'date',
+        AccessTemporalSemantic.timeOnly => 'time',
+        _ => 'timestamp',
+      };
+      return "_accessParseTemporalValue($mapAccess, semantic: '$semantic')";
+    }
     return '$mapAccess as String?';
+  }
+
+  String _toMapValue(
+    AnalysisColumn column, {
+    Iterable<Map<String, dynamic>>? rows,
+  }) {
+    final fieldAccess = column.fieldName;
+    final dartType = column.dartType;
+    if (dartType == 'DateTime?') {
+      final semantic = switch (
+        inferAccessTemporalSemanticWithRows(column, rows: rows)
+      ) {
+        AccessTemporalSemantic.dateOnly => 'date',
+        AccessTemporalSemantic.timeOnly => 'time',
+        _ => 'timestamp',
+      };
+      return "_accessFormatTemporalValue($fieldAccess, semantic: '$semantic')";
+    }
+    return fieldAccess;
   }
 
   String _idWriteBackBlock(AnalysisTable table) {

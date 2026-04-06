@@ -305,6 +305,56 @@ void main() {
       expect(fixedResult['Identificador'], isNull);
     });
 
+    test('sanitiza texto variavel com nulos controles e surrogate quebrado', () async {
+      final env = await _openTestPageChannel();
+      addTearDown(env.dispose);
+
+      final reader = RowReader(
+        format: env.pageChannel.format,
+        pageChannel: env.pageChannel,
+        columns: const <ColumnDef>[
+          ColumnDef(
+            name: 'Descricao',
+            type: 10,
+            columnNumber: 0,
+            variableColumnNumber: 0,
+            fixedOffset: 0,
+            length: 10,
+            flags: 0,
+            extFlags: 0,
+            precision: null,
+            scale: null,
+          ),
+        ],
+      );
+
+      final textBytes = Uint8List.fromList(_utf16Units(<int>[
+        0x0041,
+        0x0000,
+        0x0001,
+        0xD800,
+        0x0042,
+      ]));
+      final rowBytes = BytesBuilder(copy: false)
+        ..add(_int16Le(1))
+        ..add(textBytes)
+        ..add(_int16Le(2 + textBytes.length))
+        ..add(_int16Le(2))
+        ..add(_int16Le(1))
+        ..addByte(0x01);
+
+      final result = await reader.readRow(
+        DataPageRow(
+          rowNumber: 0,
+          isDeleted: false,
+          isOverflow: false,
+          rowData: rowBytes.takeBytes(),
+        ),
+      );
+
+      expect(result['Descricao'], 'AB');
+    });
+
     test('follows overflow row pointers before decoding data', () async {
       final env = await _openTestPageChannel();
       addTearDown(env.dispose);
@@ -340,7 +390,11 @@ void main() {
       final page = Uint8List(pageSize * 2);
       final targetPageStart = pageSize;
       page[targetPageStart] = 0x01;
-      final pageData = ByteData.sublistView(page, targetPageStart, pageSize);
+      final pageData = ByteData.sublistView(
+        page,
+        targetPageStart,
+        targetPageStart + pageSize,
+      );
       pageData.setInt16(12, 1, Endian.little);
       final finalRowStart = pageSize - finalRowBytes.length;
       pageData.setInt16(14, finalRowStart, Endian.little);
@@ -430,6 +484,15 @@ Uint8List _guidBytes(String guid) {
   _reverseRange(bytes, 0, 4);
   _reverseRange(bytes, 4, 6);
   _reverseRange(bytes, 6, 8);
+  return bytes;
+}
+
+List<int> _utf16Units(List<int> units) {
+  final bytes = <int>[];
+  for (final unit in units) {
+    bytes.add(unit & 0xFF);
+    bytes.add((unit >> 8) & 0xFF);
+  }
   return bytes;
 }
 

@@ -35,12 +35,25 @@ void main() {
     expect(coreModelContent, contains('dataBaseCol: _accessDateSerial(2024, 2, 30)'));
     expect(coreModelContent, contains('horaBaseCol: _accessTimeSerial(15, 57, 34)'));
     expect(coreModelContent, contains('static String _accessUuidV4()'));
+    expect(coreModelContent, contains('static DateTime? _accessParseTemporalValue('));
+    expect(coreModelContent, contains('static Object? _accessFormatTemporalValue('));
+    expect(coreModelContent, contains("_accessFormatTemporalValue(dataBase, semantic: 'date')"));
+    expect(coreModelContent, contains("_accessFormatTemporalValue(horaBase, semantic: 'time')"));
 
     final frontendPageFile = File(
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}eventos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_eventos${Platform.pathSeparator}incluir_eventos_page.dart',
     );
     final frontendPageContent = await frontendPageFile.readAsString();
     expect(frontendPageContent, contains('..addAll(val?.toMap() ?? Eventos.defaultValues());'));
+    expect(frontendPageContent, contains("case 'time':"));
+    expect(frontendPageContent, contains("case 'datetime-local':"));
+
+    final frontendHtmlFile = File(
+      '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}eventos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_eventos${Platform.pathSeparator}incluir_eventos_page.html',
+    );
+    final frontendHtmlContent = await frontendHtmlFile.readAsString();
+    expect(frontendHtmlContent, contains('type="date"'));
+    expect(frontendHtmlContent, contains('type="time"'));
 
     final frontendServiceFile = File(
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}eventos${Platform.pathSeparator}services${Platform.pathSeparator}eventos_service.dart',
@@ -55,6 +68,8 @@ void main() {
     final backendRepositoryContent = await backendRepositoryFile.readAsString();
     expect(backendRepositoryContent, contains('Future<Map<String, dynamic>?> findById(String id)'));
     expect(backendRepositoryContent, contains("return payload['evento_id'] as String?;"));
+    expect(backendRepositoryContent, contains('Map<String, dynamic> _normalizeRow(Map<String, dynamic> row)'));
+    expect(backendRepositoryContent, contains('final item = Eventos.fromMap(row);'));
 
     final backendControllerFile = File(
       '$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}eventos${Platform.pathSeparator}controllers${Platform.pathSeparator}eventos_controller.dart',

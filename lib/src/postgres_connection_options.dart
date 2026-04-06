@@ -1,4 +1,4 @@
-import 'package:postgres/postgres.dart';
+import 'package:dpgsql/dpgsql.dart';
 
 class PostgresConnectionOptions {
   final String host;
@@ -17,6 +17,28 @@ class PostgresConnectionOptions {
     required this.sslMode,
   });
 
+  PostgresConnectionOptions copyWith({
+    String? host,
+    int? port,
+    String? database,
+    String? username,
+    String? password,
+    SslMode? sslMode,
+  }) {
+    return PostgresConnectionOptions(
+      host: host ?? this.host,
+      port: port ?? this.port,
+      database: database ?? this.database,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      sslMode: sslMode ?? this.sslMode,
+    );
+  }
+
+  PostgresConnectionOptions forAdminDatabase([String databaseName = 'postgres']) {
+    return copyWith(database: databaseName);
+  }
+
   factory PostgresConnectionOptions.parse(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -31,22 +53,21 @@ class PostgresConnectionOptions {
     return _fromKeyValuePairs(trimmed);
   }
 
-  Endpoint toEndpoint() {
-    return Endpoint(
-      host: host,
-      port: port,
-      database: database,
-      username: username,
-      password: password,
-    );
-  }
-
-  ConnectionSettings? toSettings() {
-    final sslMode = this.sslMode;
-    if (sslMode == null) {
-      return null;
+  String toDpgsqlConnectionString() {
+    final parts = <String>[
+      'Host=$host',
+      'Port=$port',
+      'Database=$database',
+      'Username=$username',
+    ];
+    if (password != null) {
+      parts.add('Password=$password');
     }
-    return ConnectionSettings(sslMode: sslMode);
+    final sslMode = this.sslMode;
+    if (sslMode != null) {
+      parts.add('SSL Mode=${_dpgsqlSslMode(sslMode)}');
+    }
+    return parts.join(';');
   }
 
   static PostgresConnectionOptions _fromUri(Uri uri) {
@@ -177,8 +198,25 @@ class PostgresConnectionOptions {
       case 'verifyfull':
       case 'full':
         return SslMode.verifyFull;
+      case 'prefer':
+        return SslMode.prefer;
+      case 'allow':
+        return SslMode.allow;
+      case 'require':
+        return SslMode.require;
       default:
         return null;
     }
+  }
+
+  static String _dpgsqlSslMode(SslMode value) {
+    return switch (value) {
+      SslMode.disable => 'Disable',
+      SslMode.allow => 'Allow',
+      SslMode.prefer => 'Prefer',
+      SslMode.require => 'Require',
+      SslMode.verifyCa => 'VerifyCA',
+      SslMode.verifyFull => 'VerifyFull',
+    };
   }
 }

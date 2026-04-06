@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'jet_format.dart';
 import 'page_channel.dart';
 
+const int _rowOffsetMask = 0x1FFF;
+
 /// Parses an Access Usage Map, ported from Jackcess's UsageMap.java.
 ///
 /// A usage map records which pages belong to a table.
@@ -129,7 +131,7 @@ class UsageMap {
 
   /// Find the start position of a row in a usage-map data page.
   /// Mirrors TableImpl.findRowStart(buffer, rowNum, format):
-  ///   rowStart = page[OFFSET_ROW_START + rowNum * SIZE_ROW_LOCATION] & 0x0FFF
+  ///   rowStart = page[OFFSET_ROW_START + rowNum * SIZE_ROW_LOCATION] & 0x1FFF
   /// For Jet4: OFFSET_ROW_START=14, SIZE_ROW_LOCATION=2.
   static int _findRowStart(ByteData bd, int rowNum, Uint8List data) {
     const offsetRowStart = 14;
@@ -137,7 +139,7 @@ class UsageMap {
     final offsetInPage = offsetRowStart + (rowNum * sizeRowLocation);
     if (offsetInPage + 2 > data.length) return -1;
     final raw = bd.getInt16(offsetInPage, Endian.little);
-    return raw & 0x0FFF;
+    return raw & _rowOffsetMask;
   }
 
   /// Find the end position of a row.
@@ -147,7 +149,7 @@ class UsageMap {
     const sizeRowLocation = 2;
     final prevOffset = offsetRowStart + ((rowNum - 1) * sizeRowLocation);
     if (prevOffset + 2 > data.length) return pageSize;
-    return bd.getInt16(prevOffset, Endian.little) & 0x0FFF;
+    return bd.getInt16(prevOffset, Endian.little) & _rowOffsetMask;
   }
 
   static List<int> _parseBitmap(Uint8List bitmap, int startPage) {

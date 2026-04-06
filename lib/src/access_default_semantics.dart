@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:jackcess_dart/jackcess_dart.dart';
 
+import 'access_temporal_semantics.dart';
 import 'analysis_model.dart';
 import 'identifier_utils.dart';
 
@@ -26,7 +27,10 @@ class AccessDefaultSemanticValue {
 class AccessDefaultSemanticTranslator {
   const AccessDefaultSemanticTranslator();
 
-  AccessDefaultSemanticValue? translate(AnalysisColumn column) {
+  AccessDefaultSemanticValue? translate(
+    AnalysisColumn column, {
+    Iterable<Map<String, dynamic>>? rows,
+  }) {
     final rawValue = column.defaultValue?.trim();
     if (rawValue == null || rawValue.isEmpty) {
       return null;
@@ -38,11 +42,16 @@ class AccessDefaultSemanticTranslator {
     }
 
     final dartHelpers = <String>{};
-    final postgresExpression = _translateForPostgres(column, normalizedValue);
+    final postgresExpression = _translateForPostgres(
+      column,
+      normalizedValue,
+      rows: rows,
+    );
     final dartExpression = _translateForDart(
       column,
       normalizedValue,
       dartHelpers,
+      rows: rows,
     );
 
     return AccessDefaultSemanticValue(
@@ -56,7 +65,11 @@ class AccessDefaultSemanticTranslator {
     );
   }
 
-  String _translateForPostgres(AnalysisColumn column, String normalizedValue) {
+  String _translateForPostgres(
+    AnalysisColumn column,
+    String normalizedValue, {
+    Iterable<Map<String, dynamic>>? rows,
+  }) {
     final upper = normalizedValue.toUpperCase();
     if (_isGuidType(column) && upper == 'GENGUID()') {
       return 'gen_random_uuid()';
@@ -71,7 +84,7 @@ class AccessDefaultSemanticTranslator {
       return 'CURRENT_DATE';
     }
     if (upper == 'TIME()') {
-      return _isDateTimeType(column)
+      return _isDateTimeType(column, rows: rows)
           ? "(TIMESTAMP '1899-12-30 00:00:00' + (LOCALTIME - TIME '00:00:00'))"
           : 'LOCALTIME';
     }
@@ -109,7 +122,7 @@ class AccessDefaultSemanticTranslator {
           ? _singleQuotedLiteral(normalizedValue)
           : normalizedValue;
     }
-    return _translateNodeToPostgres(parsed, column) ??
+    return _translateNodeToPostgres(parsed, column, rows: rows) ??
         (_isTextType(column)
             ? _singleQuotedLiteral(normalizedValue)
             : normalizedValue);
@@ -117,7 +130,9 @@ class AccessDefaultSemanticTranslator {
 
   String? _translateNodeToPostgres(
     AccessExpressionNode node,
-    AnalysisColumn column,
+    AnalysisColumn column, {
+    Iterable<Map<String, dynamic>>? rows,
+  }
   ) {
     if (node is AccessStringNode) {
       return _singleQuotedLiteral(node.value);
@@ -143,7 +158,7 @@ class AccessDefaultSemanticTranslator {
       return _isTextType(column) ? _singleQuotedLiteral(joined) : null;
     }
     if (node is AccessUnaryNode) {
-      final operand = _translateNodeToPostgres(node.operand, column);
+      final operand = _translateNodeToPostgres(node.operand, column, rows: rows);
       if (operand == null) {
         return null;
       }
@@ -153,8 +168,8 @@ class AccessDefaultSemanticTranslator {
       return '($op$operand)';
     }
     if (node is AccessBinaryNode) {
-      final left = _translateNodeToPostgres(node.left, column);
-      final right = _translateNodeToPostgres(node.right, column);
+      final left = _translateNodeToPostgres(node.left, column, rows: rows);
+      final right = _translateNodeToPostgres(node.right, column, rows: rows);
       if (left == null || right == null) {
         return null;
       }
@@ -182,7 +197,7 @@ class AccessDefaultSemanticTranslator {
     if (node is AccessFunctionCallNode) {
       final name = foldToAscii(node.name).toUpperCase();
       final translatedArgs = node.arguments
-          .map((argument) => _translateNodeToPostgres(argument, column))
+          .map((argument) => _translateNodeToPostgres(argument, column, rows: rows))
           .toList(growable: false);
       if (translatedArgs.any((argument) => argument == null)) {
         return null;
@@ -255,17 +270,17 @@ class AccessDefaultSemanticTranslator {
         case 'DATE()':
         case 'NOW()':
         case 'TIME()':
-          return _translateForPostgres(column, name);
+          return _translateForPostgres(column, name, rows: rows);
         case 'DATESERIAL':
           if (args.length != 3) {
             return null;
           }
-          return _buildPostgresDateSerial(args, column);
+          return _buildPostgresDateSerial(args, column, rows: rows);
         case 'TIMESERIAL':
           if (args.length != 3) {
             return null;
           }
-          return _buildPostgresTimeSerial(args, column);
+          return _buildPostgresTimeSerial(args, column, rows: rows);
         case 'NZ':
           if (args.length == 1) {
             return 'COALESCE(${args[0]}, \'\')';
@@ -285,6 +300,9 @@ class AccessDefaultSemanticTranslator {
     AnalysisColumn column,
     String normalizedValue,
     Set<String> dartHelpers,
+    {
+    Iterable<Map<String, dynamic>>? rows,
+  }
   ) {
     final upper = normalizedValue.toUpperCase();
     if (_isGuidType(column) && upper == 'GENGUID()') {
@@ -306,7 +324,7 @@ class AccessDefaultSemanticTranslator {
       return '_accessTimeNow()';
     }
     if (_isAccessDateLiteral(normalizedValue)) {
-      if (_isDateTimeType(column)) {
+      if (_isDateTimeType(column, rows: rows)) {
         dartHelpers.add('dateLiteral');
         return '_accessDateLiteral(${_dartStringLiteral(normalizedValue.substring(1, normalizedValue.length - 1).trim())})';
       }
@@ -338,7 +356,7 @@ class AccessDefaultSemanticTranslator {
     if (parsed == null) {
       return _isTextType(column) ? _dartStringLiteral(normalizedValue) : null;
     }
-    return _translateNodeToDart(parsed, column, dartHelpers) ??
+    return _translateNodeToDart(parsed, column, dartHelpers, rows: rows) ??
         (_isTextType(column) ? _dartStringLiteral(normalizedValue) : null);
   }
 
@@ -346,6 +364,9 @@ class AccessDefaultSemanticTranslator {
     AccessExpressionNode node,
     AnalysisColumn column,
     Set<String> dartHelpers,
+    {
+    Iterable<Map<String, dynamic>>? rows,
+  }
   ) {
     if (node is AccessStringNode) {
       return _dartStringLiteral(node.value);
@@ -371,7 +392,7 @@ class AccessDefaultSemanticTranslator {
       return _isTextType(column) ? _dartStringLiteral(joined) : null;
     }
     if (node is AccessUnaryNode) {
-      final operand = _translateNodeToDart(node.operand, column, dartHelpers);
+      final operand = _translateNodeToDart(node.operand, column, dartHelpers, rows: rows);
       if (operand == null) {
         return null;
       }
@@ -381,8 +402,8 @@ class AccessDefaultSemanticTranslator {
       return '($op$operand)';
     }
     if (node is AccessBinaryNode) {
-      final left = _translateNodeToDart(node.left, column, dartHelpers);
-      final right = _translateNodeToDart(node.right, column, dartHelpers);
+      final left = _translateNodeToDart(node.left, column, dartHelpers, rows: rows);
+      final right = _translateNodeToDart(node.right, column, dartHelpers, rows: rows);
       if (left == null || right == null) {
         return null;
       }
@@ -410,7 +431,7 @@ class AccessDefaultSemanticTranslator {
     if (node is AccessFunctionCallNode) {
       final name = foldToAscii(node.name).toUpperCase();
       final translatedArgs = node.arguments
-          .map((argument) => _translateNodeToDart(argument, column, dartHelpers))
+          .map((argument) => _translateNodeToDart(argument, column, dartHelpers, rows: rows))
           .toList(growable: false);
       if (translatedArgs.any((argument) => argument == null)) {
         return null;
@@ -512,11 +533,14 @@ class AccessDefaultSemanticTranslator {
   String _buildPostgresDateSerial(
     List<String> args,
     AnalysisColumn column,
+    {
+    Iterable<Map<String, dynamic>>? rows,
+  }
   ) {
     final year = _normalizeAccessYearExpression(args[0]);
     final expression =
         "(MAKE_DATE($year, 1, 1) + ((${args[1]}) - 1) * INTERVAL '1 month' + ((${args[2]}) - 1) * INTERVAL '1 day')";
-    if (_isDateTimeType(column)) {
+    if (_isDateTimeType(column, rows: rows)) {
       return '($expression)::timestamp';
     }
     return '($expression)::date';
@@ -525,8 +549,11 @@ class AccessDefaultSemanticTranslator {
   String _buildPostgresTimeSerial(
     List<String> args,
     AnalysisColumn column,
+    {
+    Iterable<Map<String, dynamic>>? rows,
+  }
   ) {
-    if (_isDateTimeType(column)) {
+    if (_isDateTimeType(column, rows: rows)) {
       return "(TIMESTAMP '1899-12-30 00:00:00' + (${args[0]}) * INTERVAL '1 hour' + (${args[1]}) * INTERVAL '1 minute' + (${args[2]}) * INTERVAL '1 second')";
     }
     return "((TIME '00:00:00' + (${args[0]}) * INTERVAL '1 hour' + (${args[1]}) * INTERVAL '1 minute' + (${args[2]}) * INTERVAL '1 second'))::time";
@@ -560,9 +587,12 @@ class AccessDefaultSemanticTranslator {
     return normalized == 'uniqueidentifier' || normalized == 'guid';
   }
 
-  bool _isDateTimeType(AnalysisColumn column) {
-    final normalized = foldToAscii(column.typeName).toLowerCase();
-    return normalized == 'datetime';
+  bool _isDateTimeType(
+    AnalysisColumn column, {
+    Iterable<Map<String, dynamic>>? rows,
+  }) {
+    return inferAccessTemporalSemanticWithRows(column, rows: rows) ==
+        AccessTemporalSemantic.timestamp;
   }
 
   bool _isAccessDateLiteral(String value) {

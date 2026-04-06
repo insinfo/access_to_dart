@@ -121,6 +121,28 @@ void main() {
     expect(propertyMap['RowSource'], '"A";"B";"C"');
     expect(propertyMap['WSSFieldID'], 'Category');
   });
+
+  test('sanitiza nulos controles e surrogates quebrados em texto do PropertyMap', () {
+    final reader = PropertyMapReader();
+    final bytes = Uint8List.fromList(<int>[
+      ..._header(),
+      ..._namesBlock(['Caption']),
+      ..._valuesBlock(
+        'Descricao',
+        [
+          _propertyValue(
+            typeCode: 0x0A,
+            nameIndex: 0,
+            data: _utf16FromUnits(<int>[0x0041, 0x0000, 0x0001, 0xD800, 0x0042]),
+          ),
+        ],
+      ),
+    ]);
+
+    final propertyMap = reader.read(bytes).forName('Descricao');
+
+    expect(propertyMap['Caption'], 'AB');
+  });
 }
 
 List<int> _header() => const [0x4D, 0x52, 0x32, 0x00];
@@ -164,6 +186,15 @@ List<int> _propertyValue({
 List<int> _utf16(String value) {
   final bytes = <int>[];
   for (final codeUnit in value.codeUnits) {
+    bytes.add(codeUnit & 0xFF);
+    bytes.add((codeUnit >> 8) & 0xFF);
+  }
+  return bytes;
+}
+
+List<int> _utf16FromUnits(List<int> units) {
+  final bytes = <int>[];
+  for (final codeUnit in units) {
     bytes.add(codeUnit & 0xFF);
     bytes.add((codeUnit >> 8) & 0xFF);
   }

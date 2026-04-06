@@ -1,14 +1,34 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:eloquent/eloquent.dart';
 import 'package:{{corePackageName}}_core/core.dart';
 
 class {{className}}Repository {
   final Connection db;
 
+  static const Map<String, Set<String>> _attachmentBinaryColumns = {
+{{{attachmentBinaryColumns}}}
+  };
+
   {{className}}Repository(this.db);
+
+{{#hasTemporalFields}}
+  Map<String, dynamic> _normalizeRow(Map<String, dynamic> row) {
+    final item = {{className}}.fromMap(row);
+    return item.toMap();
+  }
+{{/hasTemporalFields}}
 
   Future<List<Map<String, dynamic>>> all() async {
     final query = db.table('{{tableRuntimeName}}');
-    return await query.get();
+    final rows = List<Map<String, dynamic>>.from(await query.get());
+{{#hasTemporalFields}}
+    return rows.map(_normalizeRow).toList(growable: false);
+{{/hasTemporalFields}}
+{{^hasTemporalFields}}
+    return rows;
+{{/hasTemporalFields}}
   }
 
   Future<List<Map<String, dynamic>>> lookupOptions({
@@ -39,7 +59,16 @@ class {{className}}Repository {
   }
 
   Future<Map<String, dynamic>?> findById({{primaryKeyParamType}} id) async {
-    return await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).first();
+    final row = await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).first();
+    if (row == null) {
+      return null;
+    }
+{{#hasTemporalFields}}
+    return _normalizeRow(Map<String, dynamic>.from(row));
+{{/hasTemporalFields}}
+{{^hasTemporalFields}}
+    return Map<String, dynamic>.from(row);
+{{/hasTemporalFields}}
   }
 
   Future<{{primaryKeyParamType}}?> insert({{className}} item) async {
@@ -60,5 +89,217 @@ class {{className}}Repository {
 
   Future<void> delete({{primaryKeyParamType}} id) async {
     await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).delete();
+  }
+
+  Future<List<Map<String, dynamic>>> attachmentRows(
+    {{primaryKeyParamType}} id, {
+    required String parentAttachmentField,
+    required String attachmentTable,
+    required String attachmentLinkColumn,
+    Set<String> binaryColumns = const <String>{},
+  }) async {
+    final parent = await findById(id);
+    if (parent == null) {
+      return const <Map<String, dynamic>>[];
+    }
+    final linkValue = parent[parentAttachmentField];
+    if (linkValue == null) {
+      return const <Map<String, dynamic>>[];
+    }
+    final rows = await _loadAttachmentRawRows(
+      attachmentTable: attachmentTable,
+      attachmentLinkColumn: attachmentLinkColumn,
+      linkValue: linkValue,
+    );
+    final effectiveBinaryColumns = binaryColumns.isEmpty
+        ? (_attachmentBinaryColumns[parentAttachmentField] ?? const <String>{})
+        : binaryColumns;
+    return rows.asMap().entries
+        .map(
+          (entry) => _normalizeAttachmentRow(
+            Map<String, dynamic>.from(entry.value),
+            binaryColumns: effectiveBinaryColumns,
+            ordinal: entry.key,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> insertAttachmentRow(
+    {{primaryKeyParamType}} id, {
+    required String parentAttachmentField,
+    required String attachmentTable,
+    required String attachmentLinkColumn,
+    required Map<String, dynamic> payload,
+    Set<String> binaryColumns = const <String>{},
+  }) async {
+    final effectiveBinaryColumns = binaryColumns.isEmpty
+        ? (_attachmentBinaryColumns[parentAttachmentField] ?? const <String>{})
+        : binaryColumns;
+    final linkValue = await _resolveAttachmentLinkValue(
+      id,
+      parentAttachmentField: parentAttachmentField,
+      attachmentTable: attachmentTable,
+      attachmentLinkColumn: attachmentLinkColumn,
+    );
+
+    final insertPayload = <String, dynamic>{
+      attachmentLinkColumn: linkValue,
+    };
+    payload.forEach((key, value) {
+      if (key == attachmentLinkColumn || key == '_attachmentOrdinal') {
+        return;
+      }
+      insertPayload[key] = _coerceAttachmentValue(
+        key,
+        value,
+        binaryColumns: effectiveBinaryColumns,
+      );
+    });
+
+    await db.table(attachmentTable).insert(insertPayload);
+    final rows = await attachmentRows(
+      id,
+      parentAttachmentField: parentAttachmentField,
+      attachmentTable: attachmentTable,
+      attachmentLinkColumn: attachmentLinkColumn,
+      binaryColumns: effectiveBinaryColumns,
+    );
+    if (rows.isNotEmpty) {
+      return rows.last;
+    }
+    return _normalizeAttachmentRow(
+      Map<String, dynamic>.from(insertPayload),
+      binaryColumns: effectiveBinaryColumns,
+      ordinal: 0,
+    );
+  }
+
+  Future<void> deleteAttachmentRow(
+    {{primaryKeyParamType}} id, {
+    required String parentAttachmentField,
+    required String attachmentTable,
+    required String attachmentLinkColumn,
+    required int ordinal,
+  }) async {
+    final parent = await findById(id);
+    if (parent == null) {
+      throw StateError('Registro pai nao encontrado para remocao de attachment.');
+    }
+    final linkValue = parent[parentAttachmentField];
+    if (linkValue == null) {
+      throw StateError('Campo de attachment sem vinculo materializado.');
+    }
+
+    final rows = await _loadAttachmentRawRows(
+      attachmentTable: attachmentTable,
+      attachmentLinkColumn: attachmentLinkColumn,
+      linkValue: linkValue,
+    );
+    if (ordinal < 0 || ordinal >= rows.length) {
+      throw StateError('Attachment informado nao existe para remocao.');
+    }
+
+    rows.removeAt(ordinal);
+    await db.table(attachmentTable).where(attachmentLinkColumn, '=', linkValue).delete();
+    for (final survivor in rows) {
+      await db.table(attachmentTable).insert(survivor);
+    }
+    if (rows.isEmpty) {
+      await db.table('{{tableRuntimeName}}')
+          .where('{{primaryKeyRuntimeName}}', '=', id)
+          .update(<String, dynamic>{parentAttachmentField: null});
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAttachmentRawRows({
+    required String attachmentTable,
+    required String attachmentLinkColumn,
+    required Object linkValue,
+  }) async {
+    return List<Map<String, dynamic>>.from(
+      await db.table(attachmentTable).where(attachmentLinkColumn, '=', linkValue).get(),
+    );
+  }
+
+  Future<Object> _resolveAttachmentLinkValue(
+    {{primaryKeyParamType}} id, {
+    required String parentAttachmentField,
+    required String attachmentTable,
+    required String attachmentLinkColumn,
+  }) async {
+    final parent = await findById(id);
+    if (parent == null) {
+      throw StateError('Registro pai nao encontrado para criar attachment.');
+    }
+    final existingLink = parent[parentAttachmentField];
+    if (existingLink != null) {
+      return existingLink;
+    }
+
+    final attachmentRows = List<Map<String, dynamic>>.from(
+      await db.table(attachmentTable).get(),
+    );
+    var maxValue = 0;
+    for (final row in attachmentRows) {
+      final rawValue = row[attachmentLinkColumn];
+      final numericValue = rawValue is num
+          ? rawValue.toInt()
+          : int.tryParse(rawValue?.toString() ?? '');
+      if (numericValue != null && numericValue > maxValue) {
+        maxValue = numericValue;
+      }
+    }
+    final createdLink = maxValue + 1;
+    await db.table('{{tableRuntimeName}}')
+        .where('{{primaryKeyRuntimeName}}', '=', id)
+        .update(<String, dynamic>{parentAttachmentField: createdLink});
+    return createdLink;
+  }
+
+  Map<String, dynamic> _normalizeAttachmentRow(
+    Map<String, dynamic> row, {
+    Set<String> binaryColumns = const <String>{},
+    required int ordinal,
+  }) {
+    final normalized = <String, dynamic>{'_attachmentOrdinal': ordinal};
+    row.forEach((key, value) {
+      if (value is DateTime) {
+        normalized[key] = value.toUtc().toIso8601String();
+        return;
+      }
+      if (binaryColumns.contains(key) || value is List<int>) {
+        final byteLength = value is List<int> ? value.length : null;
+        normalized[key] = '<binary>';
+        if (byteLength != null) {
+          normalized['${key}_byte_length'] = byteLength;
+        }
+        return;
+      }
+      normalized[key] = value;
+    });
+    return normalized;
+  }
+
+  Object? _coerceAttachmentValue(
+    String key,
+    Object? value, {
+    Set<String> binaryColumns = const <String>{},
+  }) {
+    if (value == null) {
+      return null;
+    }
+    if (!binaryColumns.contains(key)) {
+      return value;
+    }
+    if (value is List<int>) {
+      return value;
+    }
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return Uint8List(0);
+    }
+    final normalized = text.contains(',') ? text.split(',').last.trim() : text;
+    return Uint8List.fromList(base64Decode(normalized));
   }
 }

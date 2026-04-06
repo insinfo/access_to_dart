@@ -320,18 +320,28 @@ class AnalysisCanonicalModule {
 
 class AnalysisTable {
   final String name;
+  final int? tdefPageNumber;
   final int rowCount;
   final String? postgresDdl;
   final String? dartClassName;
+  final String? syntheticKind;
+  final String? attachmentParentTable;
+  final String? attachmentParentColumn;
+  final String? attachmentLinkColumn;
   final List<AnalysisColumn> columns;
   final List<AnalysisIndex> indexes;
   final List<Map<String, dynamic>> sampleRows;
 
   AnalysisTable({
     required this.name,
+    this.tdefPageNumber,
     required this.rowCount,
     required this.postgresDdl,
     required this.dartClassName,
+    this.syntheticKind,
+    this.attachmentParentTable,
+    this.attachmentParentColumn,
+    this.attachmentLinkColumn,
     required this.columns,
     required this.indexes,
     required this.sampleRows,
@@ -340,9 +350,14 @@ class AnalysisTable {
   factory AnalysisTable.fromJson(Map<String, dynamic> json) {
     return AnalysisTable(
       name: json['name'] as String? ?? 'UnnamedTable',
+      tdefPageNumber: json['tdefPage'] as int?,
       rowCount: json['rowCount'] as int? ?? 0,
       postgresDdl: json['postgres_ddl'] as String?,
       dartClassName: json['dart_class_name'] as String?,
+      syntheticKind: json['syntheticKind'] as String?,
+      attachmentParentTable: json['attachmentParentTable'] as String?,
+      attachmentParentColumn: json['attachmentParentColumn'] as String?,
+      attachmentLinkColumn: json['attachmentLinkColumn'] as String?,
       columns: ((json['columns'] as List?) ?? const [])
           .whereType<Map>()
           .map((column) =>
@@ -366,6 +381,8 @@ class AnalysisTable {
   String get normalizedName => toSnakeCaseIdentifier(name);
 
   String get routeFieldName => toCamelCaseIdentifier(name);
+
+  bool get isSyntheticAttachmentTable => syntheticKind == 'attachment';
 
   AnalysisIndex? get primaryKey {
     for (final index in indexes) {
@@ -407,6 +424,9 @@ class AnalysisColumn {
   final bool? allowZeroLength;
   final int? precision;
   final int? scale;
+  final String? complexTypeClassification;
+  final String? attachmentTableName;
+  final String? attachmentLinkColumn;
 
   AnalysisColumn({
     required this.name,
@@ -438,6 +458,9 @@ class AnalysisColumn {
     required this.allowZeroLength,
     required this.precision,
     required this.scale,
+    this.complexTypeClassification,
+    this.attachmentTableName,
+    this.attachmentLinkColumn,
   });
 
   factory AnalysisColumn.fromJson(Map<String, dynamic> json) {
@@ -471,6 +494,9 @@ class AnalysisColumn {
       allowZeroLength: json['allowZeroLength'] as bool?,
       precision: json['precision'] as int?,
       scale: json['scale'] as int?,
+      complexTypeClassification: json['complexTypeClassification'] as String?,
+      attachmentTableName: json['attachmentTableName'] as String?,
+      attachmentLinkColumn: json['attachmentLinkColumn'] as String?,
     );
   }
 

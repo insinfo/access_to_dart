@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'jet_format.dart';
 import 'page_channel.dart';
 
+const int _rowOffsetMask = 0x1FFF;
+
 class DataPageRow {
   final int rowNumber;
   final bool isDeleted;
@@ -46,7 +48,7 @@ class DataPageReader {
         
         bool isDeleted = (rowStart & 0x8000) != 0;
         bool isOverflow = (rowStart & 0x4000) != 0;
-        int startPos = rowStart & 0x0FFF;
+        int startPos = rowStart & _rowOffsetMask;
         
         // Find row end
         int endPos;
@@ -54,7 +56,7 @@ class DataPageReader {
             endPos = format.pageSize;
         } else {
             int prevRowStartOffset = 14 + (2 * (i - 1));
-            endPos = bytes.getInt16(prevRowStartOffset, Endian.little) & 0x0FFF;
+            endPos = bytes.getInt16(prevRowStartOffset, Endian.little) & _rowOffsetMask;
         }
         
         if (startPos > endPos || endPos > format.pageSize) {

@@ -4,6 +4,9 @@ import 'jet_format.dart';
 import 'table_def_reader.dart';
 import 'data_page_reader.dart';
 import 'page_channel.dart';
+import 'text_sanitizer.dart';
+
+const int _rowOffsetMask = 0x1FFF;
 
 class RowReader {
   static const int _calcDataLenOffset = 16;
@@ -25,7 +28,8 @@ class RowReader {
   });
 
   Future<Map<String, dynamic>> readRow(DataPageRow row) async {
-    if (row.isDeleted && !row.isOverflow) {
+    // Deleted rows must be ignored even when they carry an overflow pointer.
+    if (row.isDeleted) {
       return {};
     }
 
@@ -144,10 +148,10 @@ class RowReader {
       final rowStartOffset = 14 + (2 * rowNum);
       final rawRowStart = bytes.getInt16(rowStartOffset, Endian.little);
       final isOverflow = (rawRowStart & 0x4000) != 0;
-      final startPos = rawRowStart & 0x0FFF;
+        final startPos = rawRowStart & _rowOffsetMask;
       final endPos = (rowNum == 0)
           ? format.pageSize
-          : (bytes.getInt16(14 + (2 * (rowNum - 1)), Endian.little) & 0x0FFF);
+          : (bytes.getInt16(14 + (2 * (rowNum - 1)), Endian.little) & _rowOffsetMask);
 
       if (startPos > endPos || endPos > page.length) {
         return Uint8List(0);
@@ -452,10 +456,10 @@ class RowReader {
 
     final rowStartOffset = 14 + (2 * rowNum);
     final rawRowStart = bytes.getInt16(rowStartOffset, Endian.little);
-    final startPos = rawRowStart & 0x0FFF;
+    final startPos = rawRowStart & _rowOffsetMask;
     final endPos = (rowNum == 0)
         ? format.pageSize
-        : (bytes.getInt16(14 + (2 * (rowNum - 1)), Endian.little) & 0x0FFF);
+      : (bytes.getInt16(14 + (2 * (rowNum - 1)), Endian.little) & _rowOffsetMask);
 
     if (startPos > endPos || endPos > page.length) {
       return Uint8List(0);
@@ -493,7 +497,7 @@ class RowReader {
       data.length,
       inCompressedMode,
     );
-    return output.toString();
+    return sanitizeDecodedText(output.toString());
   }
 
   void _appendTextSegment(
@@ -533,11 +537,6 @@ class RowReader {
   }
 
   String _decodeUtf16Le(Uint8List data, int offset, int length) {
-    final evenLength = length - (length % 2);
-    final codeUnits = <int>[];
-    for (var i = 0; i < evenLength; i += 2) {
-      codeUnits.add(data[offset + i] | (data[offset + i + 1] << 8));
-    }
-    return String.fromCharCodes(codeUnits);
+    return decodeSanitizedUtf16Le(data, offset, length);
   }
 }

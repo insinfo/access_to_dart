@@ -41,6 +41,57 @@ class {{className}}Controller {
     }
   }
 
+  static Future<Response> attachments(
+    Request req,
+    String idRaw,
+    String fieldKey,
+  ) async {
+    try {
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
+      final service = req.make<{{className}}Service>();
+      final rows = await service.attachmentRows(id, fieldKey);
+      return responseJson(rows);
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> createAttachment(
+    Request req,
+    String idRaw,
+    String fieldKey,
+  ) async {
+    try {
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
+      final payload = await req.bodyAsMap();
+      final service = req.make<{{className}}Service>();
+      final row = await service.createAttachmentRow(id, fieldKey, payload);
+      return responseJson(row);
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
+  static Future<Response> deleteAttachment(
+    Request req,
+    String idRaw,
+    String fieldKey,
+    String ordinalRaw,
+  ) async {
+    try {
+      final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
+      final ordinal = int.tryParse(ordinalRaw);
+      if (ordinal == null) {
+        return responseError('Ordinal de attachment invalido.');
+      }
+      final service = req.make<{{className}}Service>();
+      await service.removeAttachmentRow(id, fieldKey, ordinal);
+      return responseJson({'success': true});
+    } catch (e) {
+      return responseError(e.toString());
+    }
+  }
+
   static Future<Response> create(Request req) async {
     try {
       final body = <String, dynamic>{

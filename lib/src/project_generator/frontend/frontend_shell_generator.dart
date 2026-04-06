@@ -14,7 +14,8 @@ extension _FrontendShellGenerator on ProjectGenerator {
       webDir.createSync(recursive: true);
     }
 
-    final modules = project.tables
+    final tables = scaffoldTables(project);
+    final modules = tables
         .map(
           (table) => <String, Object?>{
             'nameSnake': table.normalizedName,
@@ -24,9 +25,9 @@ extension _FrontendShellGenerator on ProjectGenerator {
         )
         .toList(growable: false);
 
-    final initialModule = project.tables.isEmpty
+    final initialModule = tables.isEmpty
         ? ''
-        : tableRouteSegment(project.tables.first);
+      : tableRouteSegment(tables.first);
 
     await File(p.join(libDir.path, 'app_component.dart')).writeAsString(
       _buildFrontendShellDartSource(

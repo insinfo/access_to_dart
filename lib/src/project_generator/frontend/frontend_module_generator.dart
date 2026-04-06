@@ -152,12 +152,19 @@ class Consultar${namePascal}Page implements OnInit {
                 : _htmlTextLiteral(_buildFieldHint(field)!),
             'isCheckboxControl': field.isCheckboxControl,
             'isTextAreaControl': field.isTextAreaControl,
+            'isAttachmentField': field.isAttachmentField,
             'isMultiValueSelect': field.isMultiValueSuggested,
             'isSingleSelect': field.isDropdownSuggested && !field.isMultiValueSuggested,
             'isSelect': field.isDropdownSuggested,
             'isNotSelect': !field.isDropdownSuggested,
-            'isPlainInput': !field.isDropdownSuggested && !field.isCheckboxControl && !field.isTextAreaControl,
+            'isPlainInput': !field.isDropdownSuggested && !field.isCheckboxControl && !field.isTextAreaControl && !field.isAttachmentField,
             'isDynamicSelect': field.hasDynamicLookup,
+            'attachmentTableName': field.attachmentTableName == null
+              ? null
+              : _htmlTextLiteral(field.attachmentTableName!),
+            'attachmentLinkColumn': field.attachmentLinkColumn == null
+              ? null
+              : _htmlTextLiteral(field.attachmentLinkColumn!),
             'format': field.formatString == null
                 ? null
                 : _htmlTextLiteral(field.formatString!),
@@ -190,6 +197,9 @@ class Consultar${namePascal}Page implements OnInit {
 
     final fieldPresentationSource = _buildFieldPresentationSource(module.fields);
     final dynamicLookupSource = _buildDynamicLookupSource(module.fields);
+    final attachmentPresentationSource = _buildAttachmentPresentationSource(
+      module.attachments,
+    );
 
     final htmlContent = _buildIncluirPageHtml(
       namePascal: namePascal,
@@ -197,7 +207,8 @@ class Consultar${namePascal}Page implements OnInit {
     );
 
     final dartContent = '''
-import 'dart:async';
+  import 'dart:async';
+  import 'dart:html' as html;
 
 import 'package:ngdart/angular.dart';
 import 'package:ngforms/ngforms.dart';
@@ -229,16 +240,30 @@ class Incluir${namePascal}Page implements OnInit {
   final Map<String, String> validationErrors = <String, String>{};
   final Map<String, List<LookupOption>> _lookupOptionsByField =
       <String, List<LookupOption>>{};
+  final Map<String, List<Map<String, dynamic>>> _attachmentRowsByField =
+      <String, List<Map<String, dynamic>>>{};
+  final Map<String, Map<String, String>> _attachmentDraftsByField =
+      <String, Map<String, String>>{};
+  final Map<String, Map<String, String>> _attachmentSelectedFilesByField =
+      <String, Map<String, String>>{};
+  final Map<String, String> _attachmentErrorsByField =
+      <String, String>{};
+  final Set<String> _attachmentLoadingFields = <String>{};
   static const Map<String, Map<String, Object?>> _fieldPresentation =
 $fieldPresentationSource;
   static const Map<String, String> _dynamicLookupFields =
 $dynamicLookupSource;
+  static const Map<String, Map<String, Object?>> _attachmentPresentation =
+$attachmentPresentationSource;
 
   @Input('entity')
   set entityInput($namePascal? val) {
     _draft
       ..clear()
       ..addAll(val?.toMap() ?? $namePascal.defaultValues());
+    _attachmentDraftsByField.clear();
+    _attachmentSelectedFilesByField.clear();
+    _loadAttachmentSubresources();
   }
 
   final _updateEntityController = StreamController<$namePascal>.broadcast();
@@ -249,6 +274,7 @@ $dynamicLookupSource;
   @override
   void ngOnInit() {
     _loadLookupOptions();
+    _loadAttachmentSubresources();
   }
 
   List<String> get validationHints => $formLogicClassName.validationHints;
@@ -274,6 +300,184 @@ $dynamicLookupSource;
 
   List<LookupOption> lookupOptions(String key) {
     return _lookupOptionsByField[key] ?? const <LookupOption>[];
+  }
+
+  List<Map<String, dynamic>> attachmentRows(String key) {
+    return _attachmentRowsByField[key] ?? const <Map<String, dynamic>>[];
+  }
+
+  List<Map<String, Object?>> attachmentColumns(String key) {
+    final metadata = _attachmentPresentation[key] ?? const <String, Object?>{};
+    final columns = metadata['columns'];
+    if (columns is! List) {
+      return const <Map<String, Object?>>[];
+    }
+    return columns.whereType<Map>().map((entry) {
+      return entry.cast<String, Object?>();
+    }).toList(growable: false);
+  }
+
+  String? attachmentError(String key) => _attachmentErrorsByField[key];
+
+  bool isAttachmentLoading(String key) {
+    return _attachmentLoadingFields.contains(key);
+  }
+
+  bool hasAttachmentParentId() {
+    return _currentEntityIdOrNull() != null;
+  }
+
+  String attachmentDraftValue(String key, String columnRuntimeName) {
+    return _attachmentDraftsByField[key]?[columnRuntimeName] ?? '';
+  }
+
+  String? attachmentSelectedFileName(String key, String columnRuntimeName) {
+    return _attachmentSelectedFilesByField[key]?[columnRuntimeName];
+  }
+
+  void updateAttachmentDraftField(
+    String key,
+    String columnRuntimeName,
+    Object? value,
+  ) {
+    final draft = _attachmentDraftsByField.putIfAbsent(
+      key,
+      () => <String, String>{},
+    );
+    draft[columnRuntimeName] = value?.toString() ?? '';
+    _attachmentErrorsByField.remove(key);
+  }
+
+  String attachmentColumnRuntimeName(Map<String, Object?> column) {
+    return column['runtimeName']?.toString() ?? '';
+  }
+
+  String attachmentColumnLabel(Map<String, Object?> column) {
+    return column['label']?.toString() ?? attachmentColumnRuntimeName(column);
+  }
+
+  bool attachmentColumnIsBinary(Map<String, Object?> column) {
+    return column['isBinary'] == true;
+  }
+
+  Future<void> onAttachmentFileSelected(
+    String key,
+    String columnRuntimeName,
+    html.Event event,
+  ) async {
+    final target = event.target;
+    if (target is! html.FileUploadInputElement) {
+      return;
+    }
+    final files = target.files;
+    if (files == null || files.isEmpty) {
+      final fieldDrafts = _attachmentDraftsByField[key];
+      fieldDrafts?.remove(columnRuntimeName);
+      _attachmentSelectedFilesByField[key]?.remove(columnRuntimeName);
+      return;
+    }
+
+    final file = files.first;
+    try {
+      final encoded = await _readAttachmentFileAsBase64(file);
+      updateAttachmentDraftField(key, columnRuntimeName, encoded);
+      final selectedFiles = _attachmentSelectedFilesByField.putIfAbsent(
+        key,
+        () => <String, String>{},
+      );
+      selectedFiles[columnRuntimeName] = file.name;
+      _autoFillAttachmentFileName(key, file.name);
+    } catch (e) {
+      _attachmentErrorsByField[key] =
+          'Falha ao ler arquivo do attachment no campo \$key: \$e';
+    }
+  }
+
+  Future<void> createAttachment(String key) async {
+    final id = _currentEntityIdOrNull();
+    if (id == null) {
+      _attachmentErrorsByField[key] =
+          'Salve o registro principal antes de incluir anexos.';
+      return;
+    }
+
+    final payload = <String, dynamic>{};
+    final draft = _attachmentDraftsByField[key] ?? const <String, String>{};
+    for (final column in attachmentColumns(key)) {
+      final runtimeName = attachmentColumnRuntimeName(column);
+      if (runtimeName.isEmpty) {
+        continue;
+      }
+      final text = draft[runtimeName]?.trim() ?? '';
+      if (text.isEmpty) {
+        continue;
+      }
+      payload[runtimeName] = text;
+    }
+    if (payload.isEmpty) {
+      _attachmentErrorsByField[key] =
+          'Informe ao menos um campo do attachment antes de incluir.';
+      return;
+    }
+
+    _attachmentLoadingFields.add(key);
+    _attachmentErrorsByField.remove(key);
+    try {
+      await _service.createAttachmentRow(id, key, payload);
+      _attachmentDraftsByField[key] = <String, String>{};
+      _attachmentSelectedFilesByField[key] = <String, String>{};
+      await _reloadAttachmentField(key, id);
+    } catch (e) {
+      _attachmentErrorsByField[key] =
+          'Falha ao incluir attachment no campo \$key: \$e';
+    } finally {
+      _attachmentLoadingFields.remove(key);
+    }
+  }
+
+  Future<void> removeAttachment(String key, int ordinal) async {
+    final id = _currentEntityIdOrNull();
+    if (id == null) {
+      return;
+    }
+    _attachmentLoadingFields.add(key);
+    _attachmentErrorsByField.remove(key);
+    try {
+      await _service.removeAttachmentRow(id, key, ordinal);
+      await _reloadAttachmentField(key, id);
+    } catch (e) {
+      _attachmentErrorsByField[key] =
+          'Falha ao remover attachment do campo \$key: \$e';
+    } finally {
+      _attachmentLoadingFields.remove(key);
+    }
+  }
+
+  String attachmentRowSummary(String key, Map<String, dynamic> row) {
+    final metadata = _attachmentPresentation[key] ?? const <String, Object?>{};
+    final columns = (metadata['columns'] as List?) ?? const <Object?>[];
+    final parts = <String>[];
+    for (final entry in columns.whereType<Map>()) {
+      final column = entry.cast<String, Object?>();
+      final runtimeName = column['runtimeName'] as String?;
+      final label = column['label'] as String? ?? runtimeName;
+      if (runtimeName == null || runtimeName.isEmpty) {
+        continue;
+      }
+      final value = row[runtimeName];
+      if (value == null) {
+        continue;
+      }
+      final text = value.toString().trim();
+      if (text.isEmpty) {
+        continue;
+      }
+      parts.add('\$label: \$text');
+    }
+    if (parts.isEmpty) {
+      return row.toString();
+    }
+    return parts.join(' | ');
   }
 
   List<String> selectedFieldValues(String key) {
@@ -335,15 +539,138 @@ $dynamicLookupSource;
     }
   }
 
+  Future<void> _loadAttachmentSubresources() async {
+    if (_attachmentPresentation.isEmpty) {
+      return;
+    }
+
+    final id = _currentEntityIdOrNull();
+    if (id == null) {
+      _attachmentRowsByField.clear();
+      _attachmentDraftsByField.clear();
+      _attachmentSelectedFilesByField.clear();
+      _attachmentErrorsByField.clear();
+      _attachmentLoadingFields.clear();
+      return;
+    }
+
+    for (final entry in _attachmentPresentation.entries) {
+      await _reloadAttachmentField(entry.key, id);
+    }
+  }
+
+  Future<void> _reloadAttachmentField(
+    String fieldKey,
+    ${module.primaryKeyParamType} id,
+  ) async {
+    _attachmentLoadingFields.add(fieldKey);
+    _attachmentErrorsByField.remove(fieldKey);
+    try {
+      _attachmentRowsByField[fieldKey] = await _service.attachmentRows(
+        id,
+        fieldKey,
+      );
+    } catch (e) {
+      _attachmentErrorsByField[fieldKey] =
+          'Falha ao carregar anexos do campo \$fieldKey: \$e';
+    } finally {
+      _attachmentLoadingFields.remove(fieldKey);
+    }
+  }
+
+  void _autoFillAttachmentFileName(String key, String fileName) {
+    final targetColumn = _attachmentFileNameColumn(key);
+    if (targetColumn == null || targetColumn.isEmpty) {
+      return;
+    }
+    final draft = _attachmentDraftsByField.putIfAbsent(
+      key,
+      () => <String, String>{},
+    );
+    final current = draft[targetColumn]?.trim() ?? '';
+    if (current.isEmpty) {
+      draft[targetColumn] = fileName;
+    }
+  }
+
+  String? _attachmentFileNameColumn(String key) {
+    for (final column in attachmentColumns(key)) {
+      if (attachmentColumnIsBinary(column)) {
+        continue;
+      }
+      final runtimeName = attachmentColumnRuntimeName(column);
+      final label = attachmentColumnLabel(column);
+      if (_looksLikeAttachmentFileNameColumn(runtimeName, label)) {
+        return runtimeName;
+      }
+    }
+    return null;
+  }
+
+  bool _looksLikeAttachmentFileNameColumn(String runtimeName, String label) {
+    final combined =
+      '\${runtimeName.toLowerCase()} \${label.toLowerCase()}';
+    return combined.contains('file') ||
+        combined.contains('nome') ||
+        combined.contains('arquivo') ||
+        combined.contains('anexo') ||
+        combined.contains('title') ||
+        combined.contains('titulo');
+  }
+
+  Future<String> _readAttachmentFileAsBase64(html.File file) {
+    final completer = Completer<String>();
+    final reader = html.FileReader();
+
+    StreamSubscription<html.ProgressEvent>? loadSubscription;
+    StreamSubscription<html.ProgressEvent>? errorSubscription;
+
+    loadSubscription = reader.onLoad.listen((_) {
+      final result = reader.result;
+      if (result is! String) {
+        completer.completeError(
+          StateError('Leitura do arquivo nao retornou Data URL.'),
+        );
+        return;
+      }
+      final separator = result.indexOf(',');
+      completer.complete(separator >= 0 ? result.substring(separator + 1) : result);
+      loadSubscription?.cancel();
+      errorSubscription?.cancel();
+    });
+
+    errorSubscription = reader.onError.listen((_) {
+      completer.completeError(
+        reader.error ?? StateError('Falha ao ler arquivo selecionado.'),
+      );
+      loadSubscription?.cancel();
+      errorSubscription?.cancel();
+    });
+
+    reader.readAsDataUrl(file);
+    return completer.future;
+  }
+
+  ${module.primaryKeyParamType}? _currentEntityIdOrNull() {
+    final entity = $namePascal.fromMap(_draft);
+    return entity.${module.primaryKeyField};
+  }
+
   String _presentFieldValue(String key, Object? value) {
     if (value == null) {
       return '';
+    }
+    final metadata = _fieldPresentation[key] ?? const <String, Object?>{};
+    if (value is DateTime) {
+      return _formatTemporalInputValue(
+        metadata['inputType'] as String?,
+        value,
+      );
     }
     if (value is! String) {
       return value.toString();
     }
 
-    final metadata = _fieldPresentation[key] ?? const <String, Object?>{};
     var text = value;
     final inputMask = metadata['inputMask'] as String?;
     if (inputMask != null && inputMask.trim().isNotEmpty) {
@@ -385,9 +712,58 @@ $dynamicLookupSource;
       case 'double?':
         return double.tryParse(text.replaceAll(',', '.'));
       case 'DateTime?':
-        return DateTime.tryParse(text);
+        return _parseTemporalInputValue(
+          metadata['inputType'] as String?,
+          text,
+        );
       default:
         return text;
+    }
+  }
+
+  static String _formatTemporalInputValue(String? inputType, DateTime value) {
+    final utc = value.toUtc();
+    final year = utc.year.toString().padLeft(4, '0');
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    final hour = utc.hour.toString().padLeft(2, '0');
+    final minute = utc.minute.toString().padLeft(2, '0');
+    final second = utc.second.toString().padLeft(2, '0');
+    switch (inputType) {
+      case 'date':
+        return '\$year-\$month-\$day';
+      case 'time':
+        return '\$hour:\$minute:\$second';
+      case 'datetime-local':
+        return '\$year-\$month-\$day' 'T' '\$hour:\$minute:\$second';
+      default:
+        return utc.toIso8601String();
+    }
+  }
+
+  static DateTime? _parseTemporalInputValue(String? inputType, String value) {
+    final text = value.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    switch (inputType) {
+      case 'date':
+      case 'datetime-local':
+        return DateTime.tryParse(text);
+      case 'time':
+        final parts = text.split(':');
+        if (parts.length < 2) {
+          return null;
+        }
+        final hour = int.tryParse(parts[0]);
+        final minute = int.tryParse(parts[1]);
+        final second = parts.length >= 3 ? int.tryParse(parts[2]) : 0;
+        if (hour == null || minute == null || second == null) {
+          return null;
+        }
+        return DateTime.utc(1899, 12, 30, hour, minute, second);
+      default:
+        return DateTime.tryParse(text);
     }
   }
 
@@ -671,6 +1047,18 @@ String? _buildFieldHint(GeneratedFieldDescriptor field) {
   if (field.isCalculated) {
     parts.add('Campo calculado do Access; leitura somente.');
   }
+  if (field.isAttachmentField) {
+    final attachmentTableName = field.attachmentTableName?.trim();
+    final attachmentLinkColumn = field.attachmentLinkColumn?.trim();
+    parts.add('Campo de anexos do Access; o scaffold atual lista, inclui e remove linhas da relacao materializada.');
+    parts.add('Campos binarios do attachment usam upload real de arquivo no formulario gerado.');
+    if (attachmentTableName != null && attachmentTableName.isNotEmpty) {
+      parts.add('Tabela auxiliar de anexos: $attachmentTableName.');
+    }
+    if (attachmentLinkColumn != null && attachmentLinkColumn.isNotEmpty) {
+      parts.add('Coluna de vinculo do attachment: $attachmentLinkColumn.');
+    }
+  }
   if (field.displayControl != null) {
     parts.add('DisplayControl Access: ${field.displayControl}');
   }
@@ -708,6 +1096,7 @@ String _buildFieldPresentationSource(List<GeneratedFieldDescriptor> fields) {
       .map((field) {
         final values = <String>[];
         values.add("'dartType': ${_dartStringLiteral(field.dartType)}");
+        values.add("'inputType': ${_dartStringLiteral(field.inputType)}");
         if (field.formatString != null && field.formatString!.trim().isNotEmpty) {
           values.add("'format': ${_dartStringLiteral(field.formatString!.trim())}");
         }
@@ -756,4 +1145,24 @@ String _buildDynamicLookupSource(List<GeneratedFieldDescriptor> fields) {
   }
 
   return 'const <String, String>{\n$entries\n  }';
+}
+
+String _buildAttachmentPresentationSource(
+  List<GeneratedAttachmentSubresource> attachments,
+) {
+  if (attachments.isEmpty) {
+    return 'const <String, Map<String, Object?>>{}';
+  }
+
+  final entries = attachments.map((attachment) {
+    final columns = attachment.columns
+        .map(
+          (column) =>
+              "        <String, Object?>{'runtimeName': ${_dartStringLiteral(column.runtimeName)}, 'label': ${_dartStringLiteral(column.label)}, 'isBinary': ${column.isBinary}},",
+        )
+        .join('\n');
+    return "    ${_dartStringLiteral(attachment.fieldRuntimeName)}: <String, Object?>{'fieldLabel': ${_dartStringLiteral(attachment.fieldLabel)}, 'attachmentTableName': ${_dartStringLiteral(attachment.attachmentTableName)}, 'attachmentLinkColumn': ${_dartStringLiteral(attachment.attachmentLinkColumnName)}, 'columns': <Map<String, Object?>>[\n$columns\n      ]},";
+  }).join('\n');
+
+  return '<String, Map<String, Object?>>{\n$entries\n  }';
 }

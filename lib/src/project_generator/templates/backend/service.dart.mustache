@@ -5,6 +5,10 @@ import '../repositories/{{normalizedName}}_repository.dart';
 class {{className}}Service {
   static const resourcePath = '/api/v1/{{routeName}}';
 
+  static const Map<String, Set<String>> _attachmentBinaryColumns = {
+{{{attachmentBinaryColumns}}}
+  };
+
   final {{className}}Repository repository;
 
   {{className}}Service(this.repository);
@@ -26,6 +30,41 @@ class {{className}}Service {
 
   Future<Map<String, dynamic>?> findById({{primaryKeyParamType}} id) {
     return repository.findById(id);
+  }
+
+  Future<List<Map<String, dynamic>>> attachmentRows(
+    {{primaryKeyParamType}} id,
+    String fieldKey,
+  ) {
+    switch (fieldKey) {
+{{{attachmentCases}}}
+      default:
+        throw StateError('Attachment nao suportado para o campo: $fieldKey');
+    }
+  }
+
+  Future<Map<String, dynamic>> createAttachmentRow(
+    {{primaryKeyParamType}} id,
+    String fieldKey,
+    Map<String, dynamic> payload,
+  ) {
+    switch (fieldKey) {
+{{{attachmentCreateCases}}}
+      default:
+        throw StateError('Attachment nao suportado para o campo: $fieldKey');
+    }
+  }
+
+  Future<void> removeAttachmentRow(
+    {{primaryKeyParamType}} id,
+    String fieldKey,
+    int ordinal,
+  ) {
+    switch (fieldKey) {
+{{{attachmentDeleteCases}}}
+      default:
+        throw StateError('Attachment nao suportado para o campo: $fieldKey');
+    }
   }
 
   Future<Map<String, dynamic>?> create({{className}} item) async {

@@ -114,6 +114,86 @@
               [class.is-invalid]="readFieldError('<%updateKey%>') != null"
               class="form-control"></textarea>
 <%/isTextAreaControl%>
+<%#isAttachmentField%>
+            <div
+              class="border rounded bg-light-subtle px-3 py-2 small text-body-secondary"
+<%#title%>
+              title="<%title%>"
+<%/title%>
+              >
+              <div class="fw-semibold text-body-emphasis mb-2">Subrecurso de anexos</div>
+              <div *ngIf="hasAttachmentParentId() == false">
+                Os anexos deste campo ficam disponiveis apos salvar o registro principal.
+              </div>
+              <div *ngIf="hasAttachmentParentId() && isAttachmentLoading('<%updateKey%>')">
+                Carregando anexos...
+              </div>
+              <div *ngIf="attachmentError('<%updateKey%>') != null" class="text-danger">
+                {{ attachmentError('<%updateKey%>') }}
+              </div>
+              <div *ngIf="hasAttachmentParentId() && attachmentRows('<%updateKey%>').isEmpty && attachmentError('<%updateKey%>') == null && isAttachmentLoading('<%updateKey%>') == false">
+                Nenhum anexo vinculado.
+              </div>
+              <div *ngIf="attachmentRows('<%updateKey%>').isNotEmpty" class="d-grid gap-2">
+                <div *ngFor="let row of attachmentRows('<%updateKey%>'); let idx = index" class="border rounded bg-white px-2 py-2">
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <div class="fw-semibold text-body-emphasis">Anexo {{ idx + 1 }}</div>
+                      <div>{{ attachmentRowSummary('<%updateKey%>', row) }}</div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      (click)="removeAttachment('<%updateKey%>', row['_attachmentOrdinal'])"
+                      [disabled]="isAttachmentLoading('<%updateKey%>')">
+                      Remover
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div *ngIf="hasAttachmentParentId()" class="border rounded bg-white px-2 py-2 mt-2">
+                <div class="fw-semibold text-body-emphasis mb-2">Novo anexo</div>
+                <div class="d-grid gap-2">
+                  <div *ngFor="let column of attachmentColumns('<%updateKey%>')">
+                    <label class="form-label small mb-1">{{ attachmentColumnLabel(column) }}</label>
+                    <input
+                      *ngIf="attachmentColumnIsBinary(column)"
+                      class="form-control form-control-sm"
+                      type="file"
+                      (change)="onAttachmentFileSelected('<%updateKey%>', attachmentColumnRuntimeName(column), $event)">
+                    <div *ngIf="attachmentColumnIsBinary(column) && attachmentSelectedFileName('<%updateKey%>', attachmentColumnRuntimeName(column)) != null" class="form-text">
+                      Arquivo selecionado: {{ attachmentSelectedFileName('<%updateKey%>', attachmentColumnRuntimeName(column)) }}
+                    </div>
+                    <input
+                      *ngIf="attachmentColumnIsBinary(column) == false"
+                      class="form-control form-control-sm"
+                      type="text"
+                      [ngModel]="attachmentDraftValue('<%updateKey%>', attachmentColumnRuntimeName(column))"
+                      (ngModelChange)="updateAttachmentDraftField('<%updateKey%>', attachmentColumnRuntimeName(column), $event)"
+                      ngControl="attachment_<%ngControl%>"
+                      [placeholder]="attachmentColumnLabel(column)">
+                  </div>
+                </div>
+                <div class="mt-2 text-end">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    (click)="createAttachment('<%updateKey%>')"
+                    [disabled]="isAttachmentLoading('<%updateKey%>')">
+                    Incluir anexo
+                  </button>
+                </div>
+              </div>
+              <div class="mt-2">
+<%#attachmentTableName%>
+                Origem materializada: <strong><%attachmentTableName%></strong>.
+<%/attachmentTableName%>
+<%#attachmentLinkColumn%>
+                Vinculo interno: <strong><%attachmentLinkColumn%></strong>.
+<%/attachmentLinkColumn%>
+              </div>
+            </div>
+<%/isAttachmentField%>
 <%#isPlainInput%>
             <input
               [ngModel]="readField('<%readKey%>')"

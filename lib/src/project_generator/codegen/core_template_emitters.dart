@@ -11,11 +11,12 @@ String _buildCorePubspecSource(AnalysisProject project) {
 }
 
 String _buildCoreLibrarySource(AnalysisProject project) {
+  final tables = _scaffoldTables(project);
   final exports = <String>[
     "export 'src/schema.dart';",
     "export 'src/validation/validation_contract.dart';",
-    for (final table in project.tables) "export 'src/models/${table.fileName}';",
-    for (final table in project.tables)
+    for (final table in tables) "export 'src/models/${table.fileName}';",
+    for (final table in tables)
       "export 'src/validation/${table.normalizedName}_validation.dart';",
   ];
   return '${exports.join('\n')}\n';

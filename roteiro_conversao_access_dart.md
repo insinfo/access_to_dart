@@ -2,14 +2,94 @@
 
 ## continue melhorando a extração de informações do arquivo binario para geraçãode SQL e exportação para postgresql e melhorias de geração de codigo para aproximar cada vez mais do objetivo de conseguir tranforma a aplicação C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb em uma aplicação dart fullstack funcional e conseguir C:\MyDartProjects\access_to_dart\fixtures\SIGAsul.accdb  exportar para postgresql a base de dados da forma mais fiel possivel
 
-##  Portar um leitor completo de PropertyMap binário no jackcess_dart para extrair campos de tabelas locais
-
+se existe de fato restrição no esquema no lado access e esta dando erro ao tentar importar o dump gerado no postgresql pode esta havendo um erro de leitura dos dados do .accdb, compare com os dados lidos pelo C:\Full Convert full convert para ver pois pode ter  bugs na leitura do arquivo binario veja o C:\MyDartProjects\access_to_dart\fixtures\access_siga_struture_end_data.sql gerado pelo full convert
+veja tambem as referencias como elas lidam com a leitura  C:\MyDartProjects\access_to_dart\referencias\jackcess-master e C:\MyDartProjects\access_to_dart\referencias\mdbtools-dev
 
 dart run access_to_dart migrate --accdb fixtures\SIGAsul.accdb --backend-accdb fixtures\SIGA2021-CENTRAL_be_2026_senha_4461.accdb --backend-password 4461 --output build\migration_access_siga_codex_schema_and_data_fix3 --mode schema-and-data --pg "postgresql://postgres:s1sadm1n@localhost:5432/access_siga_codex_20260329_fix3?sslmode=disable" --identifier-style snake_ascii
 
-## Status Atual em 28/03/2026
+## Atualizacao recente sobre fidelidade de leitura versus Full Convert
 
-## Status Atual em 29/03/2026
+- A comparacao direta entre o dump de referencia do Full Convert em `fixtures/access_siga_struture_end_data.sql` e o `seed.sql` gerado localmente confirmou que o bloqueio original de `tb_atend.cod_atend` nao era uma restricao falsa do Access, mas um bug real do leitor binario.
+- O probe dedicado de `TbAtend` mostrou que todas as rows lixo com `CodAtend = 0` vinham de slots marcados ao mesmo tempo como `deleted` e `overflow`.
+- A correcao raiz foi aplicada em `packages/jackcess_dart/lib/src/row_reader.dart`: row deletada agora e descartada sempre, mesmo quando carrega ponteiro de overflow.
+- A leitura foi comparada com as referencias em `referencias/jackcess-master` e `referencias/mdbtools-dev`; ambas sustentam que row deletada nao deve ser materializada como linha valida so porque existe overflow.
+- A trilha de offsets de row tambem foi alinhada ao contrato do Jackcess, trocando a mascara de offset para `0x1FFF` em `data_page_reader.dart`, `usage_map.dart` e `row_reader.dart`.
+- Depois da correcao, o probe de `TbAtend` passou de duplicidade real para `duplicates=0` e `suspicious=0`.
+- A migracao real do SIGA voltou a aplicar com sucesso no PostgreSQL local, com `Tables created: 55`, `Foreign keys: 25`, `Indexes created: 79` e `Rows inserted: 213053`.
+- Foi criado o probe generico `tools/probe_missing_access_rows.dart` para comparar leitura direta do ACCDB versus Full Convert por tabela e chave.
+- Com esse probe e com a regeneracao do seed, `tb_atend` e `tb_pessoa` passaram a bater exatamente com o Full Convert: `missingInSeed=0` e `extraInSeed=0`.
+- O aviso `Page 41 is not a TableDef page` no merge de rows do `SIGAsul.accdb` foi eliminado ao separar corretamente as tabelas locais do frontend das tabelas resolvidas no backend durante a carga de rows para migracao.
+
+Divergencias reais que foram zeradas nesta rodada:
+
+- `tb_pessoa`: agora bate `16403/16403`
+- `tb_atend`: agora bate `19952/19952`
+
+Diferencas remanescentes que continuam visiveis no comparador, mas ja nao indicam perda real de row nas tabelas criticas:
+
+- normalizacao ou encoding de nome de tabela, como `tb_recepcao` versus `tb_recepã§ã£o`
+- variacoes de nome como `tb_scfv_ext_*` versus `tb_scfvext_*`
+- tabelas sinteticas de attachment emitidas so no pipeline local, como `tb_unidade_logo_attachment`, `tb_unidade_rodape_attachment` e afins
+- a classificacao automatizada do comparador agora fecha com `unexplained=0`, ou seja: nao restou nenhum caso remanescente apontando bug fisico novo de leitura nas diferencas atuais
+
+Classificacao objetiva das diferencas remanescentes nesta rodada:
+
+- `nameOnly`: `tb_recepã§ã£o => tb_recepcao` com `55` rows
+- `nameOnly`: `tb_scfv_ext_atualiz => tb_scfvext_atualiz` com `831` rows
+- `nameOnly`: `tb_scfv_ext_detalhe => tb_scfvext_detalhe` com `340` rows
+- `attachmentOnly`: `tb_reuniao_ata_attachment` com `8` rows
+- `attachmentOnly`: `tb_unidade_img_cartao_suas_attachment` com `1` row
+- `attachmentOnly`: `tb_unidade_logo_attachment` com `1` row
+- `attachmentOnly`: `tb_unidade_rma1_attachment` com `1` row
+- `attachmentOnly`: `tb_unidade_rodape_attachment` com `1` row
+
+Ferramentas de apoio criadas ou ampliadas nesta trilha:
+
+- `tools/probe_tb_atend_zero.dart` para inspecionar rows suspeitas com metadados fisicos de pagina e slot
+- `tools/compare_fullconvert_dump.dart` para comparar contagens e amostras de chaves entre o Full Convert e o seed local, agora parametrizavel por `--seed-sql`
+- `tools/probe_missing_access_rows.dart` para comparar diretamente ACCDB versus Full Convert por tabela e coluna-chave
+- `tools/compare_fullconvert_dump.dart` agora tambem classifica automaticamente os deltas em `nameOnly`, `attachmentOnly` e `unexplained`
+
+Proximo passo tecnico recomendado:
+
+- expandir o mesmo fechamento empirico para outras tabelas com diferencas pequenas no comparador e confirmar, uma a uma, se sao naming drift, tabela sintetica ou novo bug fisico de leitura
+- continuar endurecendo o merge frontend + backend para que a exportacao PostgreSQL do `SIGAsul.accdb` use sempre a origem correta de cada tabela e preserve a fidelidade estrutural do Access
+
+## Status Atual em 03/04/2026
+
+Criei dois probes em probe_access_complex_columns.dart e probe_access_ole_columns.dart. Eles foram inspirados diretamente no comportamento observado em Jackcess e MDBTools, e validados com análise estática sem issues.
+
+A execução real na TbUnidade fechou o diagnóstico sem gambiarra:
+
+CODBARRAS é OLE puro e sai como blob real Uint8List com 1689163 bytes. Para PostgreSQL, o contrato correto é BYTEA.
+LOGO, RODAPE, imgCartaoSuas e RMA1 não são blobs inline. Eles são ComplexType e foram classificados como attachment via MSysComplexColumns.
+Cada um aponta para uma tabela flat auxiliar com estrutura do tipo FileURL, FileName, FileType, FileData, FileTimeStamp e FileFlags.
+O FileData dessas tabelas auxiliares é OLE real, então o contrato correto não é INTEGER escalar nem TEXT. O correto é tratar isso como relação auxiliar de anexos e mapear o payload para BYTEA.
+Em outras palavras, o que o probe provou é:
+
+CODBARRAS deve virar coluna binária real.
+LOGO, RODAPE, imgCartaoSuas e RMA1 devem sair da tabela principal como attachment/child table, preservando metadados e FileData.
+Comandos úteis para repetir a validação:
+dart run probe_access_complex_columns.dart --accdb SIGA2021-CENTRAL_be_2026_senha_4461.accdb --password 4461 --table TbUnidade
+
+dart run probe_access_ole_columns.dart --accdb SIGA2021-CENTRAL_be_2026_senha_4461.accdb --password 4461 --table TbUnidade
+
+Próximo passo natural:
+
+Corrigir o gerador/migrador para mapear OLE como BYTEA.
+Abrir uma trilha formal para ComplexType attachment gerar tabela auxiliar no PostgreSQL em vez de cair como INTEGER.
+Rerodar o migrate real do SIGA depois dessa correção estrutural.
+
+Correcao importante na trilha PostgreSQL e na sanitizacao de texto do pipeline de migracao:
+
+- O workspace root deixou de depender do pacote `postgres`; o nucleo de aplicacao PostgreSQL agora usa apenas `dpgsql`.
+- O entrypoint em `bin/access_to_dart.dart` passou a usar `exit(await run(arguments));`, garantindo encerramento explicito do processo quando houver erro.
+- O helper de conexao administrativa e os testes E2E foram migrados para a API real do `dpgsql`, eliminando residuos de `Connection.open`, `Sql(...)` e tipos do driver antigo.
+- A trilha de conexao local continua validada com a senha correta `s1sadm1n`; a senha digitada anteriormente `slsadm1n` reproduzia erro ja na autenticacao e atrapalhava o diagnostico.
+- A criacao de bancos locais de validacao continua devendo preferir `TEMPLATE template0`, porque `template1` local pode falhar com incompatibilidade de `collation version`.
+- O leitor binario e a geracao SQL passaram a sanitizar melhor texto invalido vindo do Access, removendo `NUL`, controles indevidos e sequencias quebradas que contaminavam `seed.sql`.
+- A geracao real do seed para o caso SIGA foi revalidada sem bytes `NUL` nem controles proibidos no SQL emitido.
+- O proximo bloqueio tecnico relevante na trilha de migracao continua sendo a traducao correta de expressoes calculadas de data do Access para PostgreSQL, incluindo casos como `("dpp" + 180)`.
 
 Correcao importante no backend de analise e na trilha PostgreSQL:
 
@@ -29,8 +109,7 @@ Correcao importante no backend de analise e na trilha PostgreSQL:
   - `Tables: 49`
   - `Linked: 45`
 - A trilha PostgreSQL local foi validada com a senha correta `s1sadm1n`; a senha digitada anteriormente `slsadm1n` reproduzia o erro `FormatException: Missing extension byte` ja na autenticacao.
-- O executor PostgreSQL foi alinhado ao pacote `postgres` 3.x para usar `connection.runTx(...)` em vez de `BEGIN` / `COMMIT` manualmente.
-- Regra importante confirmada em pratica: dentro de `connection.runTx((session) async { ... })`, so pode ser usado o `TxSession session` recebido pelo callback para executar statements transacionais.
+- Na evolucao mais recente do workspace root, a aplicacao PostgreSQL deixou de usar o pacote `postgres` e ficou centralizada apenas em `dpgsql`.
 - Para criacao de bancos locais de validacao PostgreSQL, deve-se preferir `TEMPLATE template0`, porque `template1` local pode falhar com incompatibilidade de `collation version`.
 - Com a conexao local funcionando e o banco criado via `template0`, o `migrate` passou da fase de conexao e falhou em `pre-data`, revelando o proximo bloqueio real no SQL gerado:
   - `timestamp without time zone + integer`
@@ -196,12 +275,13 @@ Aplicar o mesmo filtro de ruído temporário a outros tipos de objeto efêmero d
   - `DEFAULT` agora respeita metadados promovidos do Access
   - colunas calculadas passam a sair como `GENERATED ALWAYS AS (...) STORED` quando a tradução da expressão é suportada
   - o seed deixa de inserir colunas calculadas
-- O codegen frontend passou a consumir esse enriquecimento de schema com mais fidelidade:
   - campos `AutoNumber` e calculados ficam `readonly`
   - hints exibem `description` e propriedades relevantes do Access (`DisplayControl`, `TextFormat`, `IMEMode`, `IMESentenceMode`)
   - campos booleanos já podem virar `checkbox` no IR gerado
   - `RowSourceType = Value List` e `RowSourceType = Table/Query` agora passam a sugerir `dropdown` no frontend gerado em vez de cair sempre em `input text`
   - listas literais vindas de `RowSource` em `Value List` já viram opções estáticas no HTML gerado
+  - campos `DateTime` sem `Format`/`InputMask` explicitos agora tambem podem herdar semantica observacional de `date-only` a partir das rows amostradas, alinhando melhor o scaffold e a serializacao auxiliar com casos reais como `DPP`
+  - campos `ComplexType/attachment` deixaram de virar modulo CRUD isolado no scaffold e passaram a aparecer como subrecurso do modulo pai, com rota aninhada backend (`/<id>/attachments/<fieldKey>`) e carregamento dedicado no formulario gerado
 - O pipeline de colunas ficou semanticamente mais fiel ao Access para exportação SQL/PostgreSQL e codegen:
   - `isRequired` do overlay agora participa do `postgres_ddl` e gera `NOT NULL` real em vez de depender de heurística por posição de coluna
   - `defaultValue` do overlay já é propagado até o migrador, com emissão segura de `DEFAULT` para casos suportados (`NULL`, números, booleanos, literais quoted e funções simples como `Now()`, `Date()` e `Time()`)
@@ -298,87 +378,3 @@ Aplicar o mesmo filtro de ruído temporário a outros tipos de objeto efêmero d
 
 
 
-## 1. Visão Geral e Objetivo
-Construir uma ferramenta de linha de comando (CLI) profissional (sem gambiaras e regex) e nativa em Dart capaz de realizar a **engenharia reversa profunda e direta de arquivos `.accdb`**, extraindo nativamente componentes fundamentais como **Tabelas, Consultas (Queries), Formulários (Forms), e Macros, VB... etc** diretamente da estrutura binária, **sem depender de instalações locais do Microsoft Access** (eliminando a necessidade do `win32com` ou do export manual para `.accdb.src`).
-
-Observação de escopo: o uso de COM/Access via `win32` é permitido apenas para scripts auxiliares de laboratório voltados à geração controlada de fixtures e comparação binária. Esse caminho não faz parte do pipeline obrigatório de conversão nem do runtime do produto final.
-
-regras importantes, implementação tem que ser modular organizada e manutenivel orientada a objetos
-regra sem porcaria de regex sepre prefira implementação de parser AST
-regra evite arquivos gigantes prefira arquivos menores com menos de 4 mil linhas sempre que possivel
-organização em pastas/modulos
-regra sempre implemente e execute  testes
-regra nunca deixe o codigo quebrado; toda vez que alterar codigo rode `dart analyze` e corrija os erros antes de seguir
-
- implementar a ferramenta de converção de access para dart se necssario implemente um parse de VBA e um conversos de VBA para codigo dart para as regras de negocio de formularios access para os formularios angularDart (ngdart 8....) como referencia veja C:\MyDartProjects\access_to_dart\referencias\vbconverter-master  C:\MyDartProjects\access_to_dart\referencias\ViperMonkey-master C:\MyDartProjects\access_to_dart\referencias\vb8-parser-master C:\MyDartProjects\access_to_dart\referencias\jackcess-master C:\MyDartProjects\access_to_dart\referencias\jackcess-encrypt-4.0.3-sources C:\MyDartProjects\access_to_dart\referencias\ensemble-main\packages\parsejs_null_safety C:\MyDartProjects\access_to_dart\referencias\drift-develop\drift-develop\sqlparser C:\MyDartProjects\access_to_dart\referencias\ensemble-main\packages\ensemble_ts_interpreter
-
- se necessario você pode analizar o binario C:\Program Files\Microsoft Office\root\Office16\MSACCESS.EXE com o  C:\tools\radare2-6.1.0-w64\bin ou o C:\tools\BinaryNinja  ou C:\tools\ghidra_12.0.4_PUBLIC  ou C:\tools\IDA Professional 9.3
-
-O objetivo é que, ao apontar a ferramenta unicamente para um arquivo bruto como `teste1.accdb`, o processamento produza automaticamente um projeto completo ("Full-Stack") rodando Dart moderno sob uma arquitetura de três camadas:
-
-```text
-/teste1_app_generated
-  |-- /core       (Modelos OOP, classes estruturais, serialização JSON e DTOs cruzados)
-  |-- /backend    (API REST usando servidor `shelf` 1.4.2 com rotas e Controllers/Repositories/Services (se precisar) manuais com `eloquent` 3.4.3 para PostgreSQL conectando script de migrando esquema)
-  |-- /frontend   (SPA em AngularDart `ngdart` 8.0.0-dev.4, construindo telas visuais baseadas em componentes ricos e Bootstrap CSS)
-  |-- conversion-report.md (Warning logs e registros do motor)
-```
-
-## 2. Bases Técnicas e Referências Locais Curadas
-A ferramenta baseia-se num parser profundo e cross-platform em fase de construção (`jackcess_dart`). Para garantir parsers avançados com Tokenizers e analisadores sintáticos sólidos (ASTs) e evitar gambiarras com Regex brutas, o time utilizará como inspiração os seguintes ativos já disponíveis em `C:\MyDartProjects\access_to_dart\referencias\`:
-
-- **A Trilha Jackcess (Análise Binária Pura do Access)**: O repositório Java `jackcess-master` (e seu JAR `jackcess-4.0.10-sources.jar`) fornecem o guia arquitetônico e os algoritmos exatos de OLE, FileBlocks, ACE / JetFormat, etc. Este núcleo será traduzido linha por linha para Dart e mantido internamente isolado no pacote em `packages/jackcess_dart` focando primordialmente nas engrenagens de "Ler Dados" e "Decodificar Páginas" binárias.
-- **A Trilha Parser AST (Para código gerado)**: O pacote `sqlparser-0.44.2` serve de forte inspiração de boas práticas na criação de compiladores utilizando tokens em contraposto a quebras inseguras de string.
-- **Estruturas de Árvore VBA e Layouts (Aces VCS)**: O formato da pasta `.accdb.src` é decodificado baseando-se em ferramentas como `vbs_access_export-master` e `msaccess-vcs-addin-main`, usando o pacote nativo Dart `xml`. 
-- **Estudos Avançados**: A documentação não-oficial de `Microsoft Access ACCDB File Format Family.html` e a arquitetura do projeto C `mdbtools-dev` complementam gaps documentais sobre decodificação de senhas ou formatos obscuros do binário ACCDB.
-
-## 3. Escopo de Camadas (Arquitetura)
-O sistema terá no final uma modularidade robusta e pura orientada ao binário, reduzindo drasticamente o acoplamento:
-
-1. **`accdb_reader` / `jackcess_dart`**: A fundação central (Motor de Engenharia Reversa). Lê os fluxos binários e não apenas extrai o esquema relacional, mas **navega intensivamente pelas tabelas de sistema do Access (como `MSysObjects`, `MSysQueries`, e blobs OLE)**. É a responsabilidade principal deste núcleo decifrar **Formulários (conteúdo binário UI), Macros compiladas, Módulos VBA e Relatórios**, traduzindo esses dados opacos em estruturas semânticas, resolvendo de vez a dependência do MS Access para resgatar lógicas embarcadas.
-2. **`access_analysis` / Modelo Canônico (`access_model`)**: Uma AST que unifica o "Esquema" Binário ACCDB lido em uma camada de tradução intermediária rica e universal, exportando um superarquivo unificado de metadados interpretáveis como `analysis.json`.
-3. **`postgres_migrator`**: Consegue instanciar consultas de transação em PostgreSQL ativo no sistema via DDLs extraídas para criar e formatar automaticamente o DataPump inicial vazio e sem dados legados, carregando os registros extraídos em disco rígido pelo `accdb_reader`.
-4. **`dart_codegen`**: Scaffold final contendo templates (ejs/string/mustache styles) capaz de materializar Controllers, Repositories manuais, Modelos e os Componentes AngularDart responsivos e consistentes.
-
-## 4. O CLI Alvo 🛠️ 
-A aplicação Dart CLI implementará comandos precisos baseando-se no escopo traçado acima:
-```bash
-access_to_dart inspect-accdb --accdb fixtures/teste1/teste1.accdb
-access_to_dart inspect-accdb --accdb fixtures/SIGA2021-SUL_be_senha_4462.accdb --password 4462
-access_to_dart read-src --src fixtures/teste1/teste1.accdb.src
-access_to_dart analyze --accdb fixtures/teste1/teste1.accdb --src fixtures/teste1/teste1.accdb.src
-access_to_dart analyze --accdb fixtures/SIGA2021-SUL_be_senha_4462.accdb --password 4462 --output build/SIGA2021-SUL
-access_to_dart migrate --analysis build/teste1/analysis.json --pg <connection-string>
-access_to_dart generate --analysis build/teste1/analysis.json --output generated/teste1_app
-access_to_dart doctor --analysis build/teste1/analysis.json
-```
-
-## 5. Mapeamentos Críticos 
-Regras base de transformação dos tipos de Access primitivos que o código portado via Jackcess precisará refletir dentro das abstrações de UI e Postgres:
-- Auto-Numerações / Autoincrement 👉 Vira `postgresql sequence ( database object used to generate a unique series of numbers,)` e `int` ou `BigInt` Dart.
-- Tabela do `.accdb` onde o Tipo de LongText/Memo 👉 Vira `String` rica e o PG migra com dados.
-- Módulos / Complexos / Attachments 👉 O sistema separa como Relational Data "File_Path/Data".
-- Forms e Macros binárias nativas 👉 Serão extraídas do formato OLE/Blob das tabelas dinâmicas do Access em `MSysObjects` servindo apenas por semântica. Telas Access são orientadas ao input; A Web pede telas responsivas CRUD que consomem "Detalhes do Contato" baseado via JSON REST.
-- Calculated Expressions Internas 👉 O Access guarda as expressões como fields calculados de texto encapsulados ou AST nativo. Transformam-se em `Computed fields` na View SQL ou Domain Model.
-
-## 6. Marcos da Fase de Projeto (Definition of Done)
-1. Extração bem sucedida de schemas `MSysObjects` usando portagens parciais das rotinas Java Jackcess de catálogos via código local interno do projeto.
-Status: parcialmente concluído. O catálogo binário, tabelas, queries, forms, reports, macros e modules já são detectados na fixture `.accdb`.
-Observação: queries `SELECT` da fixture `teste1.accdb` já saem com colunas, aliases, `FROM` e `ORDER BY` reconstruídos a partir de `MSysQueries`. No frontend real `SIGAsul.accdb`, a leitura binária já enumera 426 queries e o overlay `.src` já disponibiliza SQL/Ast textual para validação cruzada, incluindo `query_reconciliation` extraído para módulo próprio com tokenizer/parser de cláusulas SQL e tiers `matched_normalized`, `matched_relaxed`, `matched_structural`, `matched_order_equivalent`, `matched_join_graph`, `matched_from_omitted` e `matched_set_operation`, `semanticSql` reconstruído de `.bas`, saneamento de escapes literais do exportador e fallback para query `bas-only`. No backend real `SIGA2021-SUL_be_senha_4462.accdb`, a leitura criptografada já abre e enumera 40 tabelas com senha, além de 34 relacionamentos e 114 índices lógicos, incluindo `CadResidencia`.
-2. Capacidade da CLI iterar propriedades cruciais dentro e fora das hierarquias DOM via XML parse limpo da pasta `.accdb.src`, gerando um JSON abstrato do mapa do sistema.
-Status: concluído para `teste1.accdb.src` e adaptado para o layout específico de `SIGAsul.accdb.src` no caso de linked tables e queries. Ainda não há export estruturado de forms/reports nesse layout do add-in.
-3. Geração limpa e assíncrona da pasta `/generated/teste1_app_generated`.
-Status: parcialmente concluído. O comando `generate --analysis ...` já cria scaffold funcional inicial de `core/backend/frontend`, incluindo `conversion-report.md`, shell frontend completo, wrappers de página, service HTTP compartilhado, backend com `repositories/services/controllers/routes`, `generated_data.dart`, `public_backend.dart`, DI e middleware de banco. O scaffold gerado já passa por `dart analyze`, build do frontend com `dart run webdev build` e compilação representativa em testes de geração. O codegen já passou a consumir `caption`, `isRequired` e `maxLength` do schema enriquecido para melhorar labels e inputs HTML. Ainda falta elevar esse scaffold para o nível final de aplicação completa com persistência PostgreSQL real, rotas mais ricas e frontend AngularDart pronto para produção.
-4. Quando entrarmos na pasta `/backend/` e rodarmos localmente `dart run bin/server.dart` associado à pasta `/frontend/` no Webdev (AngularDart), conseguirmos consultar visualmente de fato uma "Folha de Contatos".
-Status: parcialmente concluído. O backend e o frontend gerados já possuem estrutura modular, serviços HTTP, esqueleto de repositórios PostgreSQL e build validado do frontend AngularDart. Ainda falta fechar a integração ponta a ponta com banco real, fluxo HTTP real do frontend contra o backend gerado e navegação/telas mais completas.
-
-## Atualização Recente do Incremento
-- O merge do overlay `.accdb.src` com o modelo principal de análise foi consolidado para colunas, não apenas para um bloco auxiliar de `source_overlay`.
-- O `postgres_ddl` é recalculado depois desse merge, evitando perder `NOT NULL` e `DEFAULT` descobertos fora do binário puro.
-- A exportação PostgreSQL ficou mais fiel para defaults simples e para nulabilidade obrigatória de campos não `AutoNumber`.
-- O frontend gerado começou a refletir melhor a intenção original do Access em formulários simples, aproveitando `caption` e `maxLength` já presentes no overlay.
-- A cobertura de testes foi ampliada para:
-  - parsing sintético de `caption`, `required`, `maxLength` e `defaultValue` no leitor `.accdb.src`
-  - merge de overlay enriquecido e regeneração do DDL PostgreSQL
-  - emissão de `DEFAULT` no migrador
-  - scaffold HTML com `required` e `maxlength`

@@ -19,7 +19,7 @@ extension FrontendGenerator on ProjectGenerator {
       modulesDir.createSync(recursive: true);
     }
 
-    for (final table in project.tables) {
+    for (final table in scaffoldTables(project)) {
       final moduleDir = Directory(p.join(modulesDir.path, table.normalizedName));
       if (!moduleDir.existsSync()) {
         moduleDir.createSync(recursive: true);

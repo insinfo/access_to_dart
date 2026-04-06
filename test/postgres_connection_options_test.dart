@@ -25,4 +25,18 @@ void main() {
     expect(options.username, 'postgres');
     expect(options.password, 'secret');
   });
+
+  test('builds admin connection options preserving endpoint data', () {
+    final options = PostgresConnectionOptions.parse(
+      'postgresql://postgres:secret@localhost:5432/access_siga?sslmode=disable',
+    );
+
+    final admin = options.forAdminDatabase();
+
+    expect(admin.host, 'localhost');
+    expect(admin.port, 5432);
+    expect(admin.database, 'postgres');
+    expect(admin.username, 'postgres');
+    expect(admin.password, 'secret');
+  });
 }

@@ -21,7 +21,7 @@ extension _ProjectGeneratorCore on ProjectGenerator {
     await File('${validationDir.path}${Platform.pathSeparator}validation_contract.dart')
         .writeAsString(_coreValidationContract());
 
-    for (final table in project.tables) {
+    for (final table in scaffoldTables(project)) {
       await File('${modelsDir.path}${Platform.pathSeparator}${table.fileName}')
           .writeAsString(_buildModel(table));
       await File('${validationDir.path}${Platform.pathSeparator}${table.normalizedName}_validation.dart')
@@ -36,7 +36,7 @@ extension _ProjectGeneratorCore on ProjectGenerator {
       _buildCoreLibrarySource(project);
 
   String _coreSchema(AnalysisProject project) {
-    final tableEntries = project.tables
+    final tableEntries = scaffoldTables(project)
         .map(
           (table) =>
               "  '${tableRuntimeName(table)}': {'rows': ${table.rowCount}, 'columns': ${table.columns.length}},",

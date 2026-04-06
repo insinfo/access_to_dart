@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:access_to_dart/access_to_dart.dart';
-import 'package:postgres/postgres.dart';
+import 'package:dpgsql/dpgsql.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -62,12 +62,14 @@ void main() {
 
       final connection = await harness.openDatabase(databaseName);
       try {
-        final result = await connection.execute(
-          Sql('SELECT "user_name" FROM "e2_e_users" ORDER BY "user_id"'),
+        final result = await _readRows(
+          connection,
+          'SELECT "user_name" FROM "e2_e_users" ORDER BY "user_id"',
+          const ['user_name'],
         );
         expect(result.length, 2);
-        expect(result.first.first, 'Alice');
-        expect(result.last.first, 'Bruno');
+        expect(result.first['user_name'], 'Alice');
+        expect(result.last['user_name'], 'Bruno');
       } finally {
         await connection.close();
       }
@@ -268,7 +270,9 @@ class _LocalPostgresHarness {
         'access_e2e_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1 << 20).toRadixString(36)}';
     final connection = await openDatabase(adminDatabase);
     try {
-      await connection.execute(Sql('CREATE DATABASE ${_quoteIdentifier(name)}'));
+      await connection
+          .createCommand('CREATE DATABASE ${_quoteIdentifier(name)}')
+          .executeNonQuery();
       return name;
     } finally {
       await connection.close();
@@ -278,30 +282,25 @@ class _LocalPostgresHarness {
   Future<void> dropTempDatabase(String databaseName) async {
     final connection = await openDatabase(adminDatabase);
     try {
-      await connection.execute(
-        Sql(
-          "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${_escapeLiteral(databaseName)}' AND pid <> pg_backend_pid()",
-        ),
-      );
-      await connection.execute(
-        Sql('DROP DATABASE IF EXISTS ${_quoteIdentifier(databaseName)}'),
-      );
+      await connection
+          .createCommand(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${_escapeLiteral(databaseName)}' AND pid <> pg_backend_pid()",
+          )
+          .executeNonQuery();
+      await connection
+          .createCommand('DROP DATABASE IF EXISTS ${_quoteIdentifier(databaseName)}')
+          .executeNonQuery();
     } finally {
       await connection.close();
     }
   }
 
-  Future<Connection> openDatabase(String databaseName) {
-    return Connection.open(
-      Endpoint(
-        host: host,
-        port: port,
-        database: databaseName,
-        username: user,
-        password: password,
-      ),
-      settings: const ConnectionSettings(sslMode: SslMode.disable),
+  Future<NpgsqlConnection> openDatabase(String databaseName) async {
+    final connection = NpgsqlConnection(
+      'Host=$host;Port=$port;Database=$databaseName;Username=$user;Password=$password;SSL Mode=Disable',
     );
+    await connection.open();
+    return connection;
   }
 
   String connectionString(String databaseName) {
@@ -371,4 +370,25 @@ Future<ProcessResult> _runProcess(
   );
 
   return result;
+}
+
+Future<List<Map<String, dynamic>>> _readRows(
+  NpgsqlConnection connection,
+  String sql,
+  List<String> columnNames,
+) async {
+  final reader = await connection.executeReader(sql);
+  final rows = <Map<String, dynamic>>[];
+  try {
+    while (await reader.read()) {
+      final row = <String, dynamic>{};
+      for (var i = 0; i < columnNames.length; i++) {
+        row[columnNames[i]] = reader.getValue(i);
+      }
+      rows.add(row);
+    }
+  } finally {
+    await reader.close();
+  }
+  return rows;
 }

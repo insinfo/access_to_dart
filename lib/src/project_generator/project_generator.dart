@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:recase/recase.dart';
 
 import '../access_default_semantics.dart';
+import '../access_temporal_semantics.dart';
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
 import '../identifier_utils.dart';
@@ -98,5 +99,15 @@ class ProjectGenerator {
     }
     return 'id';
   }
+
+  List<AnalysisTable> scaffoldTables(AnalysisProject project) {
+    return _scaffoldTables(project);
+  }
   
+}
+
+List<AnalysisTable> _scaffoldTables(AnalysisProject project) {
+  return project.tables
+      .where((table) => !table.isSyntheticAttachmentTable)
+      .toList(growable: false);
 }

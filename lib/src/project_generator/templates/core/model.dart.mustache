@@ -25,12 +25,10 @@ class {{className}} {
     return {{className}}.fromMap(defaultValues());
   }
 
-{{#hasDefaults}}
 {{#defaultHelperMethods}}
   {{{.}}}
 
 {{/defaultHelperMethods}}
-{{/hasDefaults}}
 
   factory {{className}}.fromMap(Map<String, dynamic> map) {
     return {{className}}(
@@ -43,7 +41,7 @@ class {{className}} {
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{
 {{#toMapEntries}}
-      {{constantName}}: {{fieldName}},
+  {{constantName}}: {{{expression}}},
 {{/toMapEntries}}
     };
 {{{idWriteBackBlock}}}    return map;

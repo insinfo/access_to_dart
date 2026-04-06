@@ -26,10 +26,15 @@ class GeneratedFieldDescriptor {
   final String? rowSource;
   final String? accessControlType;
   final String? wssFieldId;
+  final String? complexTypeClassification;
+  final String? attachmentTableName;
+  final String? attachmentLinkColumn;
+  final AccessTemporalSemantic temporalSemantic;
   final String? accessDefaultValue;
   final String? semanticDefaultExpression;
   final List<String> semanticDefaultHelpers;
   final String? fromMapExpression;
+  final String? toMapExpression;
   final GeneratedLookupDescriptor? lookup;
 
   const GeneratedFieldDescriptor({
@@ -58,14 +63,24 @@ class GeneratedFieldDescriptor {
     required this.rowSource,
     required this.accessControlType,
     required this.wssFieldId,
+    required this.complexTypeClassification,
+    required this.attachmentTableName,
+    required this.attachmentLinkColumn,
+    required this.temporalSemantic,
     required this.accessDefaultValue,
     required this.semanticDefaultExpression,
     required this.semanticDefaultHelpers,
     this.fromMapExpression,
+    this.toMapExpression,
     this.lookup,
   });
 
-  bool get isReadOnly => isAutoNumber || isCalculated;
+  bool get isAttachmentField =>
+      complexTypeClassification == 'attachment' &&
+      attachmentTableName != null &&
+      attachmentTableName!.trim().isNotEmpty;
+
+  bool get isReadOnly => isAutoNumber || isCalculated || isAttachmentField;
 
     bool get hasSemanticDefault => semanticDefaultExpression != null;
 
@@ -113,6 +128,9 @@ class GeneratedFieldDescriptor {
   bool get isListBoxControl => normalizedAccessControlType == 'listbox';
 
   bool get isTextAreaControl {
+    if (isAttachmentField) {
+      return false;
+    }
     if (normalizedAccessControlType != 'textbox') {
       return false;
     }
@@ -124,10 +142,17 @@ class GeneratedFieldDescriptor {
   int? get selectSize => isListBoxControl && !isMultiValueSuggested ? 6 : null;
 
   String get inputType {
+    if (isAttachmentField) return 'attachment';
     if (isCheckboxControl) return 'checkbox';
     if (isDropdownSuggested) return 'select';
+    if (dartType == 'DateTime?') {
+      return switch (temporalSemantic) {
+        AccessTemporalSemantic.dateOnly => 'date',
+        AccessTemporalSemantic.timeOnly => 'time',
+        _ => 'datetime-local',
+      };
+    }
     if (inputMask != null && inputMask!.trim().isNotEmpty) return 'text';
-    if (dartType == 'DateTime?') return 'date';
     if (dartType == 'int?' || dartType == 'double?') return 'number';
     return 'text';
   }
@@ -141,10 +166,12 @@ class GeneratedFieldDescriptor {
         return 'numeric';
       }
     }
-    if (inputType == 'date') return 'numeric';
+    if (inputType == 'date' || inputType == 'time') return 'numeric';
     if (inputType == 'number') return 'decimal';
     return null;
   }
+
+  bool get isTemporalField => dartType == 'DateTime?';
 }
 
 class GeneratedLookupDescriptor {
@@ -166,6 +193,38 @@ class GeneratedLookupDescriptor {
     required this.labelColumnRuntimeName,
     required this.orderByColumnRuntimeName,
     required this.rowSourceSql,
+  });
+}
+
+class GeneratedAttachmentColumnDescriptor {
+  final String runtimeName;
+  final String label;
+  final bool isBinary;
+
+  const GeneratedAttachmentColumnDescriptor({
+    required this.runtimeName,
+    required this.label,
+    required this.isBinary,
+  });
+}
+
+class GeneratedAttachmentSubresource {
+  final String fieldRuntimeName;
+  final String fieldLabel;
+  final String attachmentTableName;
+  final String attachmentTableRuntimeName;
+  final String attachmentLinkColumnName;
+  final String attachmentLinkColumnRuntimeName;
+  final List<GeneratedAttachmentColumnDescriptor> columns;
+
+  const GeneratedAttachmentSubresource({
+    required this.fieldRuntimeName,
+    required this.fieldLabel,
+    required this.attachmentTableName,
+    required this.attachmentTableRuntimeName,
+    required this.attachmentLinkColumnName,
+    required this.attachmentLinkColumnRuntimeName,
+    required this.columns,
   });
 }
 
@@ -225,6 +284,8 @@ class GeneratedBackendModule {
   final String primaryKeyRouteParseExpression;
   final bool primaryKeyIsAutoNumber;
   final List<GeneratedLookupDescriptor> lookups;
+  final List<GeneratedFieldDescriptor> fields;
+  final List<GeneratedAttachmentSubresource> attachments;
 
   const GeneratedBackendModule({
     required this.packageName,
@@ -238,6 +299,8 @@ class GeneratedBackendModule {
     required this.primaryKeyRouteParseExpression,
     required this.primaryKeyIsAutoNumber,
     required this.lookups,
+    required this.fields,
+    required this.attachments,
   });
 }
 
@@ -250,6 +313,7 @@ class GeneratedFrontendModule {
   final String primaryKeyField;
   final String primaryKeyParamType;
   final List<GeneratedFieldDescriptor> fields;
+  final List<GeneratedAttachmentSubresource> attachments;
 
   const GeneratedFrontendModule({
     required this.packageName,
@@ -260,6 +324,7 @@ class GeneratedFrontendModule {
     required this.primaryKeyField,
     required this.primaryKeyParamType,
     required this.fields,
+    required this.attachments,
   });
 }
 
@@ -303,6 +368,51 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisTable table,
   ) {
     final primaryKeyColumn = _getPrimaryKey(table);
+    final attachments = _resolveAttachmentSubresources(project, table);
+    final fields = table.columns
+        .map(
+          (column) => GeneratedFieldDescriptor(
+            runtimeName: columnRuntimeName(column),
+            columnConstantName: column.columnConstantName,
+            fieldName: column.fieldName,
+            dartType: column.dartType,
+            accessTypeName: column.typeName,
+            label: column.label,
+            isRequired: column.isRequired,
+            allowZeroLength: column.allowZeroLength,
+            maxLength: column.maxLength,
+            validationRule: column.validationRule,
+            validationText: column.validationText,
+            description: column.description,
+            formatString: column.formatString,
+            inputMask: column.inputMask,
+            isAutoNumber: column.isAutoNumber,
+            isCalculated: column.isCalculated,
+            displayControl: column.displayControl,
+            textFormat: column.textFormat,
+            imeMode: column.imeMode,
+            imeSentenceMode: column.imeSentenceMode,
+            allowMultipleValues: column.allowMultipleValues,
+            rowSourceType: column.rowSourceType,
+            rowSource: column.rowSource,
+            accessControlType: null,
+            wssFieldId: column.wssFieldId,
+            complexTypeClassification: column.complexTypeClassification,
+            attachmentTableName: column.attachmentTableName,
+            attachmentLinkColumn: column.attachmentLinkColumn,
+            temporalSemantic: inferAccessTemporalSemanticWithRows(
+              column,
+              rows: table.sampleRows,
+            ),
+            accessDefaultValue: column.defaultValue,
+            semanticDefaultExpression: null,
+            semanticDefaultHelpers: const <String>[],
+            fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
+            toMapExpression: _toMapValue(column, rows: table.sampleRows),
+            lookup: _resolveLookupDescriptor(project, column),
+          ),
+        )
+        .toList(growable: false);
     return GeneratedBackendModule(
       packageName: project.dartPackageName,
       className: table.className,
@@ -315,6 +425,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         primaryKeyRouteParseExpression:
           _routeParameterParseExpression(primaryKeyColumn),
       primaryKeyIsAutoNumber: primaryKeyColumn.isAutoNumber,
+          fields: fields,
+      attachments: attachments,
       lookups: table.columns
           .map((column) => _resolveLookupDescriptor(project, column))
           .whereType<GeneratedLookupDescriptor>()
@@ -329,6 +441,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     final matchedForm = _resolveFrontendForm(project, table);
     final orderedColumns = _orderFrontendColumns(table, matchedForm);
     final primaryKeyColumn = _getPrimaryKey(table);
+    final attachments = _resolveAttachmentSubresources(project, table);
 
     return GeneratedFrontendModule(
       packageName: project.dartPackageName,
@@ -338,12 +451,16 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       formLogicClassName: '${table.className}FormLogic',
       primaryKeyField: primaryKeyColumn.fieldName,
       primaryKeyParamType: _routeParameterType(primaryKeyColumn),
+      attachments: attachments,
       fields: orderedColumns
           .map(
             (column) {
               final matchedControl = _resolveBoundControl(matchedForm, column);
               final defaultSemantics =
-                  ProjectGenerator.defaultSemanticTranslator.translate(column);
+                  ProjectGenerator.defaultSemanticTranslator.translate(
+                column,
+                rows: table.sampleRows,
+              );
               return GeneratedFieldDescriptor(
               runtimeName: columnRuntimeName(column),
               columnConstantName: column.columnConstantName,
@@ -370,18 +487,89 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               rowSource: column.rowSource,
               accessControlType: matchedControl?.type,
               wssFieldId: column.wssFieldId,
+              complexTypeClassification: column.complexTypeClassification,
+              attachmentTableName: column.attachmentTableName,
+              attachmentLinkColumn: column.attachmentLinkColumn,
+              temporalSemantic: inferAccessTemporalSemanticWithRows(
+                column,
+                rows: table.sampleRows,
+              ),
               accessDefaultValue: column.defaultValue,
               semanticDefaultExpression: defaultSemantics?.dartExpression,
               semanticDefaultHelpers: defaultSemantics == null
                   ? const <String>[]
                   : defaultSemantics.dartHelpers.toList(growable: false),
-              fromMapExpression: _fromMapValue(column),
+              fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
+                toMapExpression: _toMapValue(column, rows: table.sampleRows),
               lookup: _resolveLookupDescriptor(project, column),
               );
             },
           )
           .toList(growable: false),
     );
+  }
+
+  List<GeneratedAttachmentSubresource> _resolveAttachmentSubresources(
+    AnalysisProject project,
+    AnalysisTable table,
+  ) {
+    final attachments = <GeneratedAttachmentSubresource>[];
+    for (final column in table.columns) {
+      if (column.complexTypeClassification != 'attachment') {
+        continue;
+      }
+      final attachmentTableName = column.attachmentTableName;
+      final attachmentLinkColumnName = column.attachmentLinkColumn;
+      if (attachmentTableName == null ||
+          attachmentLinkColumnName == null ||
+          attachmentTableName.trim().isEmpty ||
+          attachmentLinkColumnName.trim().isEmpty) {
+        continue;
+      }
+      AnalysisTable? attachmentTable;
+      for (final candidate in project.tables) {
+        if (candidate.name == attachmentTableName &&
+            candidate.isSyntheticAttachmentTable) {
+          attachmentTable = candidate;
+          break;
+        }
+      }
+      if (attachmentTable == null) {
+        continue;
+      }
+      attachments.add(
+        GeneratedAttachmentSubresource(
+          fieldRuntimeName: columnRuntimeName(column),
+          fieldLabel: column.label,
+          attachmentTableName: attachmentTableName,
+          attachmentTableRuntimeName: tableRuntimeName(attachmentTable),
+          attachmentLinkColumnName: attachmentLinkColumnName,
+          attachmentLinkColumnRuntimeName:
+              identifierPolicy.columnName(attachmentLinkColumnName),
+          columns: attachmentTable.columns
+              .where(
+                (attachmentColumn) =>
+                    attachmentColumn.name != attachmentLinkColumnName,
+              )
+              .map(
+                (attachmentColumn) => GeneratedAttachmentColumnDescriptor(
+                  runtimeName: columnRuntimeName(attachmentColumn),
+                  label: attachmentColumn.label,
+                  isBinary: _isBinaryAttachmentColumn(attachmentColumn),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      );
+    }
+    return attachments;
+  }
+
+  bool _isBinaryAttachmentColumn(AnalysisColumn column) {
+    final normalized = foldToAscii(column.typeName).toLowerCase();
+    return normalized == 'binary' ||
+        normalized == 'longbinary' ||
+        normalized == 'ole';
   }
 
   AnalysisForm? _resolveFrontendForm(
@@ -517,9 +705,17 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         .map(
           (column) {
             final defaultSemantics =
-                ProjectGenerator.defaultSemanticTranslator.translate(column);
+                ProjectGenerator.defaultSemanticTranslator.translate(
+              column,
+              rows: table.sampleRows,
+            );
             if (defaultSemantics != null) {
               helperNames.addAll(defaultSemantics.dartHelpers);
+            }
+            if (column.dartType == 'DateTime?') {
+              helperNames
+                ..add('temporalParse')
+                ..add('temporalFormat');
             }
             return GeneratedFieldDescriptor(
               runtimeName: columnRuntimeName(column),
@@ -547,12 +743,20 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
               rowSource: column.rowSource,
               accessControlType: null,
               wssFieldId: column.wssFieldId,
+              complexTypeClassification: column.complexTypeClassification,
+              attachmentTableName: column.attachmentTableName,
+              attachmentLinkColumn: column.attachmentLinkColumn,
+              temporalSemantic: inferAccessTemporalSemanticWithRows(
+                column,
+                rows: table.sampleRows,
+              ),
               accessDefaultValue: column.defaultValue,
               semanticDefaultExpression: defaultSemantics?.dartExpression,
               semanticDefaultHelpers: defaultSemantics == null
                   ? const <String>[]
                   : defaultSemantics.dartHelpers.toList(growable: false),
-              fromMapExpression: _fromMapValue(column),
+              fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
+              toMapExpression: _toMapValue(column, rows: table.sampleRows),
               lookup: null,
             );
           },
@@ -960,6 +1164,68 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
     return value.substring(begin, end);
   }''');
     }
+  }
+  if (helperNames.contains('temporalParse') || helperNames.contains('temporalFormat')) {
+    methods.add('''
+  static DateTime? _accessParseTemporalValue(
+    Object? value, {
+    required String semantic,
+  }) {
+    if (value == null) {
+      return null;
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    switch (semantic) {
+      case 'date':
+      case 'timestamp':
+        return DateTime.tryParse(text);
+      case 'time':
+        final parts = text.split(':');
+        if (parts.length < 2) {
+          return null;
+        }
+        final hour = int.tryParse(parts[0]);
+        final minute = int.tryParse(parts[1]);
+        final second = parts.length >= 3 ? int.tryParse(parts[2]) : 0;
+        if (hour == null || minute == null || second == null) {
+          return null;
+        }
+        return DateTime.utc(1899, 12, 30, hour, minute, second);
+      default:
+        return DateTime.tryParse(text);
+    }
+  }
+
+  static Object? _accessFormatTemporalValue(
+    DateTime? value, {
+    required String semantic,
+  }) {
+    if (value == null) {
+      return null;
+    }
+    final utc = value.toUtc();
+    final year = utc.year.toString().padLeft(4, '0');
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    final hour = utc.hour.toString().padLeft(2, '0');
+    final minute = utc.minute.toString().padLeft(2, '0');
+    final second = utc.second.toString().padLeft(2, '0');
+    switch (semantic) {
+      case 'date':
+        return '\$year-\$month-\$day';
+      case 'time':
+        return '\$hour:\$minute:\$second';
+      case 'timestamp':
+      default:
+        return utc.toIso8601String();
+    }
+  }''');
   }
   return methods;
 }

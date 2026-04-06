@@ -174,10 +174,10 @@ void setupApiRoutes(Router app) {
 }
 ''',
     <String, Object?>{
-      'imports': project.tables
+        'imports': _scaffoldTables(project)
           .map((t) => "import '../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
           .join('\n'),
-      'setups': project.tables
+        'setups': _scaffoldTables(project)
           .map((t) => '  setup${t.className}Routes(app, basePath);')
           .join('\n'),
     },
@@ -201,10 +201,10 @@ void setupRoutes(Router app) {
 }
 ''',
     <String, Object?>{
-      'imports': project.tables
+        'imports': _scaffoldTables(project)
           .map((t) => "import '../../../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
           .join('\n'),
-      'setups': project.tables
+        'setups': _scaffoldTables(project)
           .map((t) => '  setup${t.className}Routes(app, basePath);')
           .join('\n'),
     },

@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'text_sanitizer.dart';
+
 class AccessPropertyMapGroup {
   final Map<String, Object?> defaultProperties;
   final Map<String, Map<String, Object?>> namedProperties;
@@ -313,7 +315,7 @@ class PropertyMapReader {
       }
     }
     _appendTextSegment(buffer, data, segmentStart, data.length, compressed);
-    return buffer.toString();
+    return sanitizeDecodedText(buffer.toString());
   }
 
   void _appendTextSegment(
@@ -336,12 +338,7 @@ class PropertyMapReader {
   }
 
   String _decodeUtf16Le(Uint8List data, int offset, int length) {
-    final evenLength = length - (length % 2);
-    final codeUnits = <int>[];
-    for (var index = 0; index < evenLength; index += 2) {
-      codeUnits.add(data[offset + index] | (data[offset + index + 1] << 8));
-    }
-    return String.fromCharCodes(codeUnits);
+    return decodeSanitizedUtf16Le(data, offset, length);
   }
 }
 

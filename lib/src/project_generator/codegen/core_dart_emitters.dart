@@ -48,7 +48,7 @@ String _buildCoreModelSource(GeneratedCoreModelDescriptor model) {
           .map(
             (field) => <String, Object?>{
               'constantName': field.columnConstantName,
-              'fieldName': field.fieldName,
+              'expression': field.toMapExpression ?? field.fieldName,
             },
           )
           .toList(growable: false),

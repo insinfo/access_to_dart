@@ -432,6 +432,37 @@ return rows
     .toList(growable: false);
 ''')),
             Method((method) => method
+              ..name = 'getJsonList'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<List<Map<String, dynamic>>>')
+              ..requiredParameters.add(
+                Parameter((param) => param..name = 'endpoint'..type = refer('String')),
+              )
+              ..body = const Code('''
+final payload = await _api.getJson(endpoint);
+return _expectList(payload, endpoint);
+''')),
+            Method((method) => method
+              ..name = 'postJsonMap'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<Map<String, dynamic>>')
+              ..requiredParameters.addAll(<Parameter>[
+                Parameter((param) => param..name = 'endpoint'..type = refer('String')),
+                Parameter((param) => param..name = 'payload'..type = refer('Map<String, dynamic>')),
+              ])
+              ..body = const Code('''
+final response = await _api.postJson(endpoint, payload);
+return _expectMap(response, endpoint);
+''')),
+            Method((method) => method
+              ..name = 'deletePath'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<void>')
+              ..requiredParameters.add(
+                Parameter((param) => param..name = 'endpoint'..type = refer('String')),
+              )
+              ..body = const Code('await _api.deleteJson(endpoint);')),
+            Method((method) => method
               ..name = '_filtersToQueryParameters'
               ..returns = refer('Map<String, String>?')
               ..requiredParameters.add(
@@ -681,6 +712,48 @@ return ${module.className}.fromMap(map);
 return getLookupOptions(
   '/${module.moduleNameKebab}/lookups/\$fieldKey',
   limit: limit,
+);
+''')),
+            Method((method) => method
+              ..name = 'attachmentRows'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<List<Map<String, dynamic>>>')
+              ..requiredParameters.addAll(<Parameter>[
+                Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
+                Parameter((param) => param..name = 'fieldKey'..type = refer('String')),
+              ])
+              ..body = Code('''
+return getJsonList(
+  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey',
+);
+''')),
+            Method((method) => method
+              ..name = 'createAttachmentRow'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<Map<String, dynamic>>')
+              ..requiredParameters.addAll(<Parameter>[
+                Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
+                Parameter((param) => param..name = 'fieldKey'..type = refer('String')),
+                Parameter((param) => param..name = 'payload'..type = refer('Map<String, dynamic>')),
+              ])
+              ..body = Code('''
+return postJsonMap(
+  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey',
+  payload,
+);
+''')),
+            Method((method) => method
+              ..name = 'removeAttachmentRow'
+              ..modifier = MethodModifier.async
+              ..returns = refer('Future<void>')
+              ..requiredParameters.addAll(<Parameter>[
+                Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
+                Parameter((param) => param..name = 'fieldKey'..type = refer('String')),
+                Parameter((param) => param..name = 'ordinal'..type = refer('int')),
+              ])
+              ..body = Code('''
+await deletePath(
+  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey/\$ordinal',
 );
 ''')),
           ]),

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'jet_format.dart';
 import 'page_channel.dart';
+import 'text_sanitizer.dart';
 
 /// Information about a column extracted from a TableDef page.
 class ColumnDef {
@@ -352,12 +353,7 @@ class TableDefReader {
       (await readDefinition()).indexes;
 
   String _decodeUtf16Le(Uint8List bytes, int offset, int length) {
-    final evenLength = length - (length % 2);
-    final codeUnits = <int>[];
-    for (var i = 0; i < evenLength; i += 2) {
-      codeUnits.add(bytes[offset + i] | (bytes[offset + i + 1] << 8));
-    }
-    return String.fromCharCodes(codeUnits);
+    return decodeSanitizedUtf16Le(bytes, offset, length);
   }
 }
 

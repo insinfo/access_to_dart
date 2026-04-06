@@ -18,7 +18,7 @@ extension _ProjectGeneratorBackendModule on ProjectGenerator {
 
   String _backendGeneratedData(AnalysisProject project) {
     final payload = <String, Object?>{
-      for (final table in project.tables)
+      for (final table in scaffoldTables(project))
         tableRuntimeName(table): table.sampleRows
             .map(
               (row) => {

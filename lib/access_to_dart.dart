@@ -11,13 +11,15 @@ import 'src/access_src_reader.dart';
 import 'src/analysis_overlay_merger.dart';
 import 'src/analysis_doctor.dart';
 import 'src/analysis_model.dart';
+import 'src/dpgsql_migration_executor.dart';
 import 'src/migration_auto_number_mode.dart';
 import 'src/migration_export_mode.dart';
 import 'src/migration_identifier_style.dart';
 import 'src/migration_not_null_mode.dart';
+import 'src/migration_seed_format.dart';
+import 'src/migration_unique_mode.dart';
 import 'src/migration_writer.dart';
 import 'src/postgres_connection_options.dart';
-import 'src/postgres_migration_executor.dart';
 import 'src/migration_statement_builder.dart';
 import 'src/project_generator/project_generator.dart';
 import 'src/query_reconciliation/query_reconciliation.dart';
@@ -523,6 +525,16 @@ Future<int> _runMigrate(
       help: 'NOT NULL handling: strict, skip-row, relax-not-null or fix',
       defaultsTo: 'relax-not-null',
     )
+    ..addOption(
+      'unique-mode',
+      help: 'UNIQUE handling: strict or relax-unique',
+      defaultsTo: 'relax-unique',
+    )
+    ..addOption(
+      'seed-format',
+      help: 'Seed output format: insert or copy',
+      defaultsTo: 'insert',
+    )
     ..addOption('output',
         abbr: 'o', help: 'Output directory for migration assets');
 
@@ -570,6 +582,24 @@ Future<int> _runMigrate(
     err.writeln(e.message);
     return 64;
   }
+  final MigrationUniqueMode uniqueMode;
+  try {
+    uniqueMode = MigrationUniqueMode.parse(
+      args['unique-mode'] as String? ?? 'relax-unique',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
+  final MigrationSeedFormat seedFormat;
+  try {
+    seedFormat = MigrationSeedFormat.parse(
+      args['seed-format'] as String? ?? 'insert',
+    );
+  } on FormatException catch (e) {
+    err.writeln(e.message);
+    return 64;
+  }
 
   final MigrationIdentifierStyle identifierStyle;
   try {
@@ -610,6 +640,8 @@ Future<int> _runMigrate(
       identifierStyle: identifierStyle,
       autoNumberMode: autoNumberMode,
       notNullMode: notNullMode,
+      uniqueMode: uniqueMode,
+      seedFormat: seedFormat,
       exportMode: exportMode,
       tableRowsByName: migrationRows?.rowsByTable,
     );
@@ -619,23 +651,27 @@ Future<int> _runMigrate(
     out.writeln('  Manifest: ${artifacts.manifestFile.path}');
     if (pg != null && pg.isNotEmpty) {
       final connectionOptions = PostgresConnectionOptions.parse(pg);
-      final execution = await PostgresMigrationExecutor(
+      final dpgsqlExecution = DpgsqlMigrationExecutor(
         connectionOptions: connectionOptions,
-      ).execute(
+      );
+      final statementBuilder = MigrationStatementBuilder(
+        identifierPolicy: MigrationIdentifierPolicy(style: identifierStyle),
+        autoNumberMode: autoNumberMode,
+        notNullMode: notNullMode,
+        uniqueMode: uniqueMode,
+      );
+      final result = await dpgsqlExecution.execute(
         project: project,
-        statementBuilder: MigrationStatementBuilder(
-          identifierPolicy: MigrationIdentifierPolicy(style: identifierStyle),
-          autoNumberMode: autoNumberMode,
-          notNullMode: notNullMode,
-        ),
+        statementBuilder: statementBuilder,
         exportMode: exportMode,
         tableRowsByName: migrationRows?.rowsByTable,
       );
       out.writeln('  PostgreSQL apply: OK');
-      out.writeln('  Tables created : ${execution.tablesCreated}');
-      out.writeln('  Foreign keys   : ${execution.foreignKeysCreated}');
-      out.writeln('  Indexes created: ${execution.indexesCreated}');
-      out.writeln('  Rows inserted  : ${execution.rowsInserted}');
+      out.writeln('  Apply driver   : dpgsql');
+      out.writeln('  Tables created : ${result.tablesCreated}');
+      out.writeln('  Foreign keys   : ${result.foreignKeysCreated}');
+      out.writeln('  Indexes created: ${result.indexesCreated}');
+      out.writeln('  Rows inserted  : ${result.rowsInserted}');
     }
     return 0;
   } on FileSystemException catch (e) {
@@ -709,6 +745,22 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
   final targetTableNames = <String>{
     for (final table in project.tables) table.name,
   };
+  final localTablePagesByName = _extractTablePagesByName(
+    (project.raw['tables'] as List?) ?? const <Object?>[],
+  );
+  final backendTablePagesByName = _extractTablePagesByName(
+    ((project.raw['backend_analysis'] as Map?)?['tables'] as List?) ??
+        const <Object?>[],
+  );
+  final backendTableNames = <String>{...backendTablePagesByName.keys};
+  final primaryTargetTableNames = <String>{
+    for (final tableName in targetTableNames)
+      if (!backendTableNames.contains(tableName)) tableName,
+  };
+  final backendTargetTableNames = <String>{
+    for (final tableName in targetTableNames)
+      if (backendTableNames.contains(tableName)) tableName,
+  };
   if (targetTableNames.isEmpty) {
     return null;
   }
@@ -720,7 +772,8 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
   await _mergeMigrationRowsFromSource(
     accdbPath: primaryPath,
     password: password,
-    targetTableNames: targetTableNames,
+    targetTableNames: primaryTargetTableNames,
+    tablePagesByName: localTablePagesByName,
     mergedRows: mergedRows,
     out: out,
     err: err,
@@ -734,7 +787,8 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
     await _mergeMigrationRowsFromSource(
       accdbPath: backendPath,
       password: explicitBackendPassword,
-      targetTableNames: targetTableNames,
+      targetTableNames: backendTargetTableNames,
+      tablePagesByName: backendTablePagesByName,
       mergedRows: mergedRows,
       out: out,
       err: err,
@@ -752,15 +806,27 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
   return snapshot;
 }
 
+Map<String, int> _extractTablePagesByName(List<Object?> tableEntries) {
+  return <String, int>{
+    for (final tableEntry in tableEntries.whereType<Map>())
+      if (tableEntry['name'] is String && tableEntry['tdefPage'] is int)
+        tableEntry['name'] as String: tableEntry['tdefPage'] as int,
+  };
+}
+
 Future<void> _mergeMigrationRowsFromSource({
   required String accdbPath,
   required String? password,
   required Set<String> targetTableNames,
+  required Map<String, int> tablePagesByName,
   required Map<String, List<Map<String, dynamic>>> mergedRows,
   required StringSink out,
   required StringSink err,
 }) async {
   if (accdbPath.isEmpty) {
+    return;
+  }
+  if (targetTableNames.isEmpty || tablePagesByName.isEmpty) {
     return;
   }
 
@@ -771,27 +837,35 @@ Future<void> _mergeMigrationRowsFromSource({
   }
 
   try {
-    final snapshot = await AccessTableRowsReader().readAll(
-      accdbPath: accdbPath,
-      password: password,
-    );
+    final database = await AccessDatabase.openPath(accdbPath, password: password);
+    try {
+      final tableReader = TableReader(
+        format: database.format,
+        pageChannel: database.pageChannel,
+      );
     var loadedTableCount = 0;
     var loadedRowCount = 0;
-    for (final entry in snapshot.rowsByTable.entries) {
-      if (!targetTableNames.contains(entry.key) ||
-          mergedRows.containsKey(entry.key)) {
+      for (final tableName in targetTableNames) {
+        if (mergedRows.containsKey(tableName)) {
+          continue;
+        }
+        final pageNumber = tablePagesByName[tableName];
+        if (pageNumber == null) {
         continue;
+        }
+        final rows = await tableReader.readAllRows(pageNumber);
+        mergedRows[tableName] = rows
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+        loadedTableCount++;
+        loadedRowCount += rows.length;
       }
-      final rows = entry.value
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
-      mergedRows[entry.key] = rows;
-      loadedTableCount++;
-      loadedRowCount += rows.length;
+      out.writeln(
+        'Loaded $loadedRowCount rows from $loadedTableCount target tables in $accdbPath.',
+      );
+    } finally {
+      await database.close();
     }
-    out.writeln(
-      'Loaded $loadedRowCount rows from $loadedTableCount target tables in $accdbPath.',
-    );
   } catch (e) {
     err.writeln(
       'Warning: failed to load full Access rows from $accdbPath, falling back to sampleRows. Error: $e',
@@ -825,7 +899,7 @@ void _writeUsage(StringSink sink) {
     '  doctor        --analysis <analysis.json>            Validate generated analysis',
   );
   sink.writeln(
-    '  migrate       [--analysis <analysis.json> | --accdb <file.accdb>] [--backend-accdb <file.accdb>] [--mode schema-only|schema-and-data] [-o dir] [--pg <conn>] [--identifier-style snake_ascii|original]  Emit/apply PostgreSQL migration assets',
+    '  migrate       [--analysis <analysis.json> | --accdb <file.accdb>] [--backend-accdb <file.accdb>] [--mode schema-only|schema-and-data] [--seed-format insert|copy] [-o dir] [--pg <conn>] [--identifier-style snake_ascii|original]  Emit/apply PostgreSQL migration assets',
   );
   sink.writeln(
     '  generate      --analysis <analysis.json> [-o dir] [--identifier-style snake_ascii|original]  Generate core/backend/frontend scaffold',
