@@ -6,13 +6,16 @@ import 'identifier_utils.dart';
 import 'access_analysis/access_analysis.dart';
 import 'analysis_model.dart';
 import 'migration_identifier_style.dart';
+import 'migration_not_null_mode.dart';
 import 'migration_statement_builder.dart';
 
 /// Produces a rich analysis JSON from an [AccessDatabaseModel] and [AccessDatabase].
 class AccdbAnalyzer {
   final AccessDatabaseModel model;
   final AccessDatabase? db;
+  // O analysis descreve o esquema de origem; relaxamento pertence à migração.
   final MigrationStatementBuilder _ddlBuilder = const MigrationStatementBuilder(
+    notNullMode: MigrationNotNullMode.strict,
     identifierPolicy: MigrationIdentifierPolicy(
       style: MigrationIdentifierStyle.snakeAscii,
     ),

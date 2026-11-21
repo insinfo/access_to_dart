@@ -1,9 +1,13 @@
 import 'package:access_to_dart/src/access_src_model.dart';
 import 'package:access_to_dart/src/analysis_overlay_merger.dart';
+import 'package:access_to_dart/src/analysis_model.dart';
+import 'package:access_to_dart/src/migration_identifier_style.dart';
+import 'package:access_to_dart/src/migration_statement_builder.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('mergeSourceOverlay enriches caption maxLength defaultValue and ddl', () {
+  test('mergeSourceOverlay enriches caption maxLength defaultValue and ddl',
+      () {
     final analysis = <String, dynamic>{
       'schema_version': '1.0',
       'source': 'fixtures/demo.accdb',
@@ -89,7 +93,8 @@ void main() {
 
     AnalysisOverlayMerger().mergeSourceOverlay(analysis, source);
 
-    final table = (analysis['tables'] as List<dynamic>).single as Map<String, dynamic>;
+    final table =
+        (analysis['tables'] as List<dynamic>).single as Map<String, dynamic>;
     final descricao = (table['columns'] as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .singleWhere((column) => column['name'] == 'Descricao');
@@ -107,7 +112,16 @@ void main() {
     expect(descricao['inputMask'], '>LLLL');
     expect(descricao['allowZeroLength'], isFalse);
     expect(ativo['defaultValue'], '0');
-    expect(table['postgres_ddl'], contains('"descricao" TEXT NOT NULL DEFAULT \'Padrao\''));
+    expect(table['postgres_ddl'],
+        contains('"descricao" TEXT NOT NULL DEFAULT \'Padrao\''));
     expect(table['postgres_ddl'], contains('"ativo" BOOLEAN DEFAULT FALSE'));
+    // O relatório preserva Required; o padrão tolerante da migração continua explícito.
+    final migrationDdl = const MigrationStatementBuilder(
+            identifierPolicy: MigrationIdentifierPolicy(
+                style: MigrationIdentifierStyle.snakeAscii))
+        .buildCreateTableStatement(
+            AnalysisProject.fromJson(analysis).tables.single);
+    expect(migrationDdl, contains('"descricao" TEXT DEFAULT \'Padrao\''));
+    expect(migrationDdl, isNot(contains('NOT NULL')));
   });
 }

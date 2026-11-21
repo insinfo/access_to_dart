@@ -1,6 +1,7 @@
 import 'analysis_model.dart';
 import 'access_src_model.dart';
 import 'migration_identifier_style.dart';
+import 'migration_not_null_mode.dart';
 import 'migration_statement_builder.dart';
 
 class AnalysisOverlayMerger {
@@ -9,6 +10,19 @@ class AnalysisOverlayMerger {
     AccessSrcProject sourceProject,
   ) {
     _mergeForms(analysis, sourceProject.forms);
+    if (sourceProject.reports.isNotEmpty) {
+      analysis['reports'] = _mergeReportRecords(
+        (analysis['reports'] as List?) ?? const [],
+        sourceProject.reports.map((report) => report.toJson()).toList(),
+      );
+      final summary = analysis['summary'];
+      if (summary is Map) {
+        analysis['summary'] = <String, dynamic>{
+          ...summary.cast<String, dynamic>(),
+          'reports': (analysis['reports'] as List).length,
+        };
+      }
+    }
     final rawTables = ((analysis['tables'] as List?) ?? const [])
         .whereType<Map>()
         .map((table) => table.cast<String, dynamic>())
@@ -33,6 +47,7 @@ class AnalysisOverlayMerger {
 
     final mergedProject = AnalysisProject.fromJson(analysis);
     final ddlBuilder = MigrationStatementBuilder(
+      notNullMode: MigrationNotNullMode.strict,
       identifierPolicy: const MigrationIdentifierPolicy(
         style: MigrationIdentifierStyle.snakeAscii,
       ),
@@ -44,6 +59,68 @@ class AnalysisOverlayMerger {
     }
 
     return analysis;
+  }
+
+  // Relatórios, seções e controles mantêm a ordem do export e os metadados
+  // binários que não têm equivalente no texto, inclusive identificadores.
+  List<Map<String, dynamic>> _mergeReportRecords(
+    List<Object?> binaryRecords,
+    List<Map<String, Object?>> sourceRecords,
+  ) {
+    final binary = binaryRecords
+        .whereType<Map>()
+        .map((record) => Map<String, dynamic>.from(record))
+        .toList();
+    final result = <Map<String, dynamic>>[];
+    final consumed = <int>{};
+    for (var sourceIndex = 0;
+        sourceIndex < sourceRecords.length;
+        sourceIndex++) {
+      final source = sourceRecords[sourceIndex];
+      final name = source['name'] as String?;
+      var index = -1;
+      for (var i = 0; i < binary.length; i++) {
+        if (consumed.contains(i)) continue;
+        final match = name == null
+            ? i == sourceIndex &&
+                binary[i]['name'] == null &&
+                binary[i]['type'] == source['type']
+            : (binary[i]['name'] as String? ?? '').toLowerCase() ==
+                name.toLowerCase();
+        if (match) {
+          index = i;
+          break;
+        }
+      }
+      final target = index < 0 ? <String, dynamic>{} : binary[index];
+      if (index >= 0) consumed.add(index);
+      for (final entry in source.entries) {
+        final value = entry.value;
+        if (value == null) continue;
+        if (entry.key == 'name' && target['name'] != null) continue;
+        if (entry.key == 'controls' || entry.key == 'sections') {
+          final records = (value as List)
+              .whereType<Map>()
+              .map((record) => record.cast<String, Object?>())
+              .toList();
+          target[entry.key] = _mergeReportRecords(
+              (target[entry.key] as List?) ?? const [], records);
+        } else if (entry.key == 'macros') {
+          target[entry.key] = <String, dynamic>{
+            ...((target[entry.key] as Map?)?.cast<String, dynamic>() ??
+                const {}),
+            ...(value as Map).cast<String, dynamic>(),
+          };
+        } else {
+          target[entry.key] = value;
+        }
+      }
+      result.add(target);
+    }
+    for (var i = 0; i < binary.length; i++) {
+      if (!consumed.contains(i)) result.add(binary[i]);
+    }
+    return result;
   }
 
   void _mergeForms(

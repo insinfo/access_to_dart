@@ -14,12 +14,14 @@ class AccessSrcReader {
     final tables = await _readTables(directory);
     final queries = await _readQueries(directory);
     final forms = await _readForms(directory);
+    final reports = await _readReports(directory);
 
     return AccessSrcProject(
       sourcePath: directory.path,
       tables: tables,
       queries: queries,
       forms: forms,
+      reports: reports,
     );
   }
 
@@ -142,6 +144,20 @@ class AccessSrcReader {
         return _parseForm(_basenameWithoutExtension(file.path), text);
       }),
     );
+  }
+
+  Future<List<AccessSrcReport>> _readReports(Directory directory) async {
+    final reportsDir =
+        Directory('${directory.path}${Platform.pathSeparator}reports');
+    if (!await reportsDir.exists()) return const [];
+    final files = await reportsDir
+        .list()
+        .where((entity) => entity is File && entity.path.endsWith('.bas'))
+        .cast<File>()
+        .toList();
+    files.sort((a, b) => a.path.compareTo(b.path));
+    return Future.wait(files.map((file) async => _parseReport(
+        _basenameWithoutExtension(file.path), await file.readAsString())));
   }
 
   AccessSrcTable _parseTable(String fallbackName, String sql, String? xml) {
@@ -547,6 +563,17 @@ class AccessSrcReader {
       (child) => child.type == 'Form',
       orElse: () => _BasNode('Form'),
     );
+    return AccessSrcForm(
+      name: name,
+      caption: formNode.properties['Caption'],
+      recordSource: formNode.properties['RecordSource'],
+      defaultView: int.tryParse(formNode.properties['DefaultView'] ?? ''),
+      controls: _collectControls(formNode),
+      macros: _collectMacros(formNode),
+    );
+  }
+
+  List<AccessSrcControl> _collectControls(_BasNode root) {
     final controls = <AccessSrcControl>[];
     void collectControls(_BasNode node) {
       if (_isRelevantControlType(node.type)) {
@@ -568,15 +595,51 @@ class AccessSrcReader {
       }
     }
 
-    collectControls(formNode);
+    collectControls(root);
+    return controls;
+  }
 
-    return AccessSrcForm(
+  AccessSrcReport _parseReport(String name, String text) {
+    final tree = _parseBasTree(text);
+    final report = tree.children.firstWhere(
+      (child) => child.type == 'Report',
+      orElse: () => _BasNode('Report'),
+    );
+    final sections = <AccessSrcReportSection>[];
+    void visit(_BasNode node) {
+      const sectionTypes = {
+        'FormHeader',
+        'FormFooter',
+        'ReportHeader',
+        'ReportFooter',
+        'PageHeader',
+        'PageFooter',
+        'BreakHeader',
+        'BreakFooter',
+        'Section',
+      };
+      if (sectionTypes.contains(node.type)) {
+        sections.add(AccessSrcReportSection(
+          type: node.type,
+          name: node.properties['Name'],
+          height: int.tryParse(node.properties['Height'] ?? ''),
+          controls: _collectControls(node),
+        ));
+        return;
+      }
+      for (final child in node.children) {
+        visit(child);
+      }
+    }
+
+    visit(report);
+    return AccessSrcReport(
       name: name,
-      caption: formNode.properties['Caption'],
-      recordSource: formNode.properties['RecordSource'],
-      defaultView: int.tryParse(formNode.properties['DefaultView'] ?? ''),
-      controls: controls,
-      macros: _collectMacros(formNode),
+      caption: report.properties['Caption'],
+      recordSource: report.properties['RecordSource'],
+      controls: _collectControls(report),
+      sections: sections,
+      macros: _collectMacros(report),
     );
   }
 

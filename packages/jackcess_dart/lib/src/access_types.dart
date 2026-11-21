@@ -124,6 +124,12 @@ class AccessCatalogEntry {
   ///   = 0x80000000 | 0x02 = 0x80000002
   bool get isSystem => ((flags & 0x80000000) | (flags & 0x02)) != 0;
 
+  /// Query definition exposed by DAO, including hidden form/control queries.
+  /// System query artifacts remain in the raw catalog, not in QueryDefs.
+  /// Unlike tables, bit 0x02 also occurs on DAO-visible control queries (0x03).
+  /// Only the high system bit excludes internal query artifacts here.
+  bool get isQueryDefinition => rawType == 5 && (flags & 0x80000000) == 0;
+
   /// Returns true if this is hidden.
   bool get isHidden => (flags & 0x08) != 0;
 

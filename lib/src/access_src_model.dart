@@ -3,12 +3,14 @@ class AccessSrcProject {
   final List<AccessSrcTable> tables;
   final List<AccessSrcQuery> queries;
   final List<AccessSrcForm> forms;
+  final List<AccessSrcReport> reports;
 
   const AccessSrcProject({
     required this.sourcePath,
     required this.tables,
     required this.queries,
     required this.forms,
+    this.reports = const [],
   });
 
   Map<String, Object?> toJson() {
@@ -17,6 +19,7 @@ class AccessSrcProject {
       'tables': tables.map((table) => table.toJson()).toList(),
       'queries': queries.map((query) => query.toJson()).toList(),
       'forms': forms.map((form) => form.toJson()).toList(),
+      'reports': reports.map((report) => report.toJson()).toList(),
     };
   }
 }
@@ -214,4 +217,53 @@ class AccessSrcControl {
       'macros': macros,
     };
   }
+}
+
+/// Inventário do export de relatório; não implica suporte à sua renderização.
+class AccessSrcReport {
+  final String name;
+  final String? caption;
+  final String? recordSource;
+  final List<AccessSrcControl> controls;
+  final List<AccessSrcReportSection> sections;
+  final Map<String, List<String>> macros;
+
+  const AccessSrcReport({
+    required this.name,
+    required this.caption,
+    required this.recordSource,
+    required this.controls,
+    required this.sections,
+    required this.macros,
+  });
+
+  Map<String, Object?> toJson() => {
+        'name': name,
+        'caption': caption,
+        'recordSource': recordSource,
+        'controls': controls.map((control) => control.toJson()).toList(),
+        'sections': sections.map((section) => section.toJson()).toList(),
+        'macros': macros,
+      };
+}
+
+class AccessSrcReportSection {
+  final String type;
+  final String? name;
+  final int? height;
+  final List<AccessSrcControl> controls;
+
+  const AccessSrcReportSection({
+    required this.type,
+    required this.name,
+    required this.height,
+    required this.controls,
+  });
+
+  Map<String, Object?> toJson() => {
+        'type': type,
+        'name': name,
+        'height': height,
+        'controls': controls.map((control) => control.toJson()).toList(),
+      };
 }

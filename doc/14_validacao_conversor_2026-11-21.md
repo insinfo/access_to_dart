@@ -77,3 +77,9 @@ dart test test/migration_postgres_e2e_test.dart --concurrency=1 --reporter=expan
 Os defeitos corrigidos não demonstram conversão integral de todo VBA, relatórios e interfaces
 Access. A continuidade deve preservar os testes diferenciais e corrigir sempre o gerador,
 nunca apenas o aplicativo emitido.
+
+## Fechamento da rodada em 21/11/2026
+
+As seis falhas mencionadas acima foram resolvidas pela reconciliação independente com DAO e pela política explícita de DDL analítico, documentadas em `17_catalogo_dao_e_politica_ddl_2026-11-21.md`. A preservação estrutural de reports e a análise REA estão em `15_access_rea_reports.md`; a atualização para dpgsql 1.3.1 e os testes com PostgreSQL real estão em `16_atualizacao_dpgsql_2026-11-21.md`.
+
+Validação final: análise estática de `lib` e `test` sem problemas; 77 testes unitários selecionados, 16 testes rápidos de geração e 13 testes de CLI/overlay/catálogo aprovados. Os quatro testes E2E PostgreSQL reais passaram com dpgsql 1.3.1. Os grupos têm sobreposição e não devem ser somados como testes únicos. A renderização fiel de relatórios Access permanece pendente; esta rodada preserva seu inventário, seções e controles.

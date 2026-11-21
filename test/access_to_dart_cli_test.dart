@@ -35,7 +35,7 @@ void main() {
     expect(out.toString(), contains('ACCDB inspection'));
     expect(out.toString(), contains('Format: VERSION_14'));
     expect(out.toString(), contains('System catalog page: 2 (TABLE_DEF)'));
-    expect(out.toString(), contains('System catalog row count hint: 53'));
+    expect(out.toString(), contains('System catalog row count hint: 54'));
     expect(err.toString(), isEmpty);
   });
 
@@ -121,11 +121,11 @@ void main() {
     );
 
     expect(exitCode, 0);
-    expect(out.toString(), contains('Linked Tables (38):'));
+    expect(out.toString(), contains('Linked Tables (45):'));
     expect(out.toString(), contains('[LINKED] TbPessoa'));
-    expect(out.toString(), contains('Queries (426):'));
-    expect(out.toString(), contains('Forms    (85):'));
-    expect(out.toString(), contains('Reports  (147):'));
+    expect(out.toString(), contains('Queries (501):'));
+    expect(out.toString(), contains('Forms    (97):'));
+    expect(out.toString(), contains('Reports  (165):'));
     expect(err.toString(), isEmpty);
   });
 
@@ -228,8 +228,8 @@ void main() {
     final binaryCoverage = featureCoverage['binary'] as Map<String, dynamic>;
     final sourceCoverage = featureCoverage['source'] as Map<String, dynamic>;
 
-    expect(summary['binaryQueries'], 426);
-    expect(summary['sourceQueries'], greaterThanOrEqualTo(409));
+    expect(summary['binaryQueries'], 501);
+    expect(summary['sourceQueries'], 409);
     expect(summary['matchedRelaxed'], greaterThan(0));
     expect(summary['matchedStructural'], greaterThan(0));
     expect(summary['matchedOrderEquivalent'], greaterThan(0));
@@ -237,7 +237,9 @@ void main() {
     expect(summary['matchedFromOmitted'], greaterThanOrEqualTo(0));
     expect(summary['matchedSetOperation'], greaterThan(0));
     expect(summary['mismatched'], 0);
-    expect(summary['missingInBinary'], greaterThan(0));
+    // Os 409 nomes do export estão no conjunto de 501 QueryDefs conferido via DAO.
+    expect(summary['missingInBinary'], 0);
+    expect(summary['missingInSource'], 92);
     expect(binaryCoverage['hasJoin'], greaterThan(0));
     expect(sourceCoverage['hasGroupBy'], greaterThan(0));
   }, timeout: const Timeout(Duration(minutes: 2)));
@@ -348,7 +350,7 @@ void main() {
 
       expect(exitCode, 0);
       expect(out.toString(), contains('Encryption: Office 4.4 AES-256'));
-      expect(out.toString(), contains('Tables (40):'));
+      expect(out.toString(), contains('Tables (45):'));
       expect(out.toString(), contains('[TABLE] CadResidencia'));
       expect(out.toString(), contains('[TABLE] TbPessoa'));
       expect(err.toString(), isEmpty);

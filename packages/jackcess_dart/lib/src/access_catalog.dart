@@ -22,7 +22,6 @@ class AccessCatalog {
 
   // Type values from DatabaseImpl
   static const int _typeTable = 1;
-  static const int _typeQuery = 5;
   static const int _typeForm = -32768;
   static const int _typeReport = -32764;
   static const int _typeMacro = -32766;
@@ -76,7 +75,7 @@ class AccessCatalog {
         .toList();
 
     final queryEntries =
-        allEntries.where((e) => e.rawType == _typeQuery).toList();
+        allEntries.where((e) => e.isQueryDefinition).toList();
     final formEntries =
         allEntries.where((e) => e.rawType == _typeForm).toList();
     final reportEntries =
