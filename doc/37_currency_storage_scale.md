@@ -15,4 +15,4 @@ Validação:
 - Um teste CLI→PostgreSQL real cria base TEMPLATE template0 e migra valores sintéticos `123.4567` e `0.0001`; confirma os dois valores completos e numeric_scale=4, depois remove a base.
 - Analyze dos quatro arquivos alterados ficou limpo.
 
-Evidência anterior preservada: `build/codex-sigasul-goal/migration-value-audit-null-fixed/postgres-value-audit.json`. A próxima execução integral do gate deve validar a alteração com o mesmo oráculo DAO. O escopo de 50 tabelas/188 colunas/quatro payloads é delimitado; a expansão de campos complexos do doc35 tem validação separada.
+Evidência anterior preservada: `build/codex-sigasul-goal/migration-value-audit-null-fixed/postgres-value-audit.json`. A nova execução com o mesmo oráculo DAO passou: 50/50 contagens, 188/188 hashes escalares e 4/4 payloads, além do smoke HTTP de 7.040 pessoas. O relatório privado `migration-value-audit-money-fixed/postgres-value-audit.json` tem SHA256 `602b9757070a4041d210912ee89eb39a4c83e973f0c09485fa9f5d1a05cfcebf`; o doc32 registra os demais artefatos. O escopo de 50 tabelas/188 colunas/quatro payloads é delimitado; a expansão de campos complexos do doc35 tem validação separada.

@@ -40,3 +40,17 @@ O mesmo ensaio identificou três divergências independentes de NULL em CadResid
 ## Handoff opcional para navegador
 
 Com `ACCESS_TO_DART_TEST_PG_HANDOFF_FILE` definido, o verificador só disponibiliza a base depois de contagens, valores e smoke HTTP aprovados. Grava um JSON privado com nome da base, host, porta e prazo (sem credenciais), espera o arquivo `.release` por no máximo 15 minutos e executa o cleanup no finally. Sem a variável, o comportamento anterior de cleanup imediato permanece. Um gate reprovado não publica a base para navegador.
+
+## Resultado PostgreSQL após as correções de origem
+
+O terceiro ensaio, em `migration-value-audit-money-fixed`, passou com a mesma fonte e os mesmos oráculos: 123.866 registros carregados, 50/50 contagens, 188/188 hashes de colunas escalares e 4/4 payloads iguais ao DAO. O smoke HTTP do backend gerado retornou as 7.040 pessoas esperadas, sem escritas. Foram corrigidos o carregamento dos NULLs físicos e o mapeamento Money para NUMERIC(19,4); não foram ajustados valores esperados para obter aprovação.
+
+Evidências privadas em `build/codex-sigasul-goal/migration-value-audit-money-fixed/`, SHA256:
+
+| Artefato | SHA256 |
+| --- | --- |
+| row-count-audit.json | `694d71508ddc4df392afb9e556c019129afac4b1b0a66b8b0360fecc8578bc36` |
+| postgres-value-audit.json | `602b9757070a4041d210912ee89eb39a4c83e973f0c09485fa9f5d1a05cfcebf` |
+| backend-http-audit.json | `cb16ac9a50d6b15dde4cb79d362b6fc377c35476d06b39a8ce9d8490fe960725` |
+
+Este resultado cobre o snapshot de 50 tabelas (45 físicas e cinco coleções de anexos) e o recorte escalar de três tabelas/188 colunas do contrato v1. O inventário posterior do doc35 identificou outras coleções complexas; elas não estão aprovadas por este ensaio. A ampliação dos hashes escalares para todas as 45 tabelas físicas será versionada separadamente. Os ensaios anteriores reprovados permanecem preservados.
