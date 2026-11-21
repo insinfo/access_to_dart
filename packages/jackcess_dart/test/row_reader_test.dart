@@ -9,6 +9,69 @@ import 'package:test/test.dart';
 
 void main() {
   group('RowReader', () {
+    test('ordinary booleans use mask bits even when PK low byte is zero',
+        () async {
+      final env = await _openTestPageChannel();
+      addTearDown(env.dispose);
+      final reader = RowReader(
+          format: env.pageChannel.format,
+          pageChannel: env.pageChannel,
+          columns: [
+            _fixedTestColumn('ID', 0x04, 0, length: 4),
+            _fixedTestColumn('Yes', 0x01, 1),
+            _fixedTestColumn('No', 0x01, 2),
+            _fixedTestColumn('NullableInt', 0x04, 3, offset: 4, length: 4),
+          ]);
+      for (final id in [255, 256, 257]) {
+        for (final mask in [1, 3, 5, 7]) {
+          final data = BytesBuilder(copy: false)
+            ..add(_int16Le(4))
+            ..add((ByteData(4)..setInt32(0, id, Endian.little))
+                .buffer
+                .asUint8List())
+            ..add(Uint8List(4))
+            ..add(_int16Le(0))
+            ..addByte(mask);
+          final row = await reader.readRow(DataPageRow(
+              rowNumber: 0,
+              isDeleted: false,
+              isOverflow: false,
+              rowData: data.takeBytes()));
+          expect(row['ID'], id);
+          expect(row['Yes'], (mask & 2) != 0);
+          expect(row['No'], (mask & 4) != 0);
+          expect(row.containsKey('Yes'), isTrue);
+          expect(row.containsKey('No'), isTrue);
+          expect(row.containsKey('NullableInt'), isFalse);
+        }
+      }
+    });
+
+    test('calculated booleans keep wrapped-byte semantics', () async {
+      final env = await _openTestPageChannel();
+      addTearDown(env.dispose);
+      final reader = RowReader(
+          format: env.pageChannel.format,
+          pageChannel: env.pageChannel,
+          columns: [
+            _fixedTestColumn('Calculated', 0x01, 0,
+                length: 21, calculated: true),
+          ]);
+      for (final payload in [0, 255]) {
+        final data = BytesBuilder(copy: false)
+          ..add(_int16Le(1))
+          ..add(_calculatedPayload(Uint8List.fromList([payload])))
+          ..add(_int16Le(0))
+          ..addByte(1);
+        final row = await reader.readRow(DataPageRow(
+            rowNumber: 0,
+            isDeleted: false,
+            isOverflow: false,
+            rowData: data.takeBytes()));
+        expect(row['Calculated'], payload != 0);
+      }
+    });
+
     test('parses fixed money double and datetime values', () async {
       final env = await _openTestPageChannel();
       addTearDown(env.dispose);
@@ -78,7 +141,8 @@ void main() {
       expect(result['DataAtendimento'], DateTime.utc(2023, 12, 31, 12));
     });
 
-    test('returns null for partial calculated datetime and double payloads', () async {
+    test('returns null for partial calculated datetime and double payloads',
+        () async {
       final env = await _openTestPageChannel();
       addTearDown(env.dispose);
 
@@ -254,7 +318,8 @@ void main() {
 
       final numericBytes = BytesBuilder(copy: false);
       numericBytes.add(_int16Le(1));
-      numericBytes.add(Uint8List.fromList(_numericBytes(BigInt.parse('1234567890')).sublist(0, 8)));
+      numericBytes.add(Uint8List.fromList(
+          _numericBytes(BigInt.parse('1234567890')).sublist(0, 8)));
       numericBytes.add(_int16Le(0));
       numericBytes.addByte(0x01);
 
@@ -288,7 +353,8 @@ void main() {
 
       final fixedBytes = BytesBuilder(copy: false);
       fixedBytes.add(_int16Le(1));
-      fixedBytes.add(Uint8List.fromList(_guidBytes('{00112233-4455-6677-8899-AABBCCDDEEFF}').sublist(0, 8)));
+      fixedBytes.add(Uint8List.fromList(
+          _guidBytes('{00112233-4455-6677-8899-AABBCCDDEEFF}').sublist(0, 8)));
       fixedBytes.add(_int16Le(0));
       fixedBytes.addByte(0x01);
 
@@ -305,7 +371,8 @@ void main() {
       expect(fixedResult['Identificador'], isNull);
     });
 
-    test('sanitiza texto variavel com nulos controles e surrogate quebrado', () async {
+    test('sanitiza texto variavel com nulos controles e surrogate quebrado',
+        () async {
       final env = await _openTestPageChannel();
       addTearDown(env.dispose);
 
@@ -526,3 +593,17 @@ final class _TestPageChannelEnv {
     }
   }
 }
+
+ColumnDef _fixedTestColumn(String name, int type, int number,
+        {int offset = 0, int length = 1, bool calculated = false}) =>
+    ColumnDef(
+        name: name,
+        type: type,
+        columnNumber: number,
+        variableColumnNumber: 0,
+        fixedOffset: offset,
+        length: length,
+        flags: ColumnDef.fixedLengthFlagMask,
+        extFlags: calculated ? ColumnDef.calculatedExtFlagMask : 0,
+        precision: null,
+        scale: null);

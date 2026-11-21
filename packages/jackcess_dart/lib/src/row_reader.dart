@@ -73,6 +73,13 @@ class RowReader {
         bool isNull =
             (nullMask[col.columnNumber ~/ 8] & (1 << (col.columnNumber % 8))) ==
                 0;
+        // Ordinary Access Boolean values live in the mask itself, not in
+        // fixed row bytes. Calculated Booleans instead carry a wrapped value.
+        // See Jackcess ColumnImpl.readFromNullMask and CalcBooleanColImpl.
+        if (col.type == 0x01 && !col.isCalculated) {
+          result[col.name] = !isNull;
+          continue;
+        }
         if (isNull) continue;
 
         if (!col.isVariableLength) {

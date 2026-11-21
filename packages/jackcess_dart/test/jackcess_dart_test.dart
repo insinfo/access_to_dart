@@ -177,7 +177,8 @@ void main() {
       );
       final model = await catalog.read(fixture.path);
 
-      expect(model.tables, hasLength(40));
+      // Verified against the read-only DAO oracle for the checked-in SUL fixture.
+      expect(model.tables, hasLength(45));
       expect(model.relationships.length, greaterThanOrEqualTo(30));
 
       final cadResidencia =
