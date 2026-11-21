@@ -1119,7 +1119,6 @@ class MigrationStatementBuilder {
       case 'numeric':
         return _numericType(column);
       case 'money':
-        return 'NUMERIC(19,2)';
       case 'currency':
       case 'smallmoney':
         return 'NUMERIC(19,4)';

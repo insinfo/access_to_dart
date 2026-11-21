@@ -90,7 +90,7 @@ void main() {
     expect(postgresDdl, contains('CASE WHEN'));
 
     final metricasDdl = metricas['postgres_ddl'] as String;
-    expect(metricasDdl, contains('"preco_unitario" NUMERIC(19,2) NOT NULL DEFAULT 10.5000'));
+    expect(metricasDdl, contains('"preco_unitario" NUMERIC(19,4) NOT NULL DEFAULT 10.5000'));
     expect(metricasDdl, contains('"fator_ajuste" DOUBLE PRECISION DEFAULT 1.333333'));
 
     final numericPrecisao = tables.singleWhere((table) => table['name'] == 'NumericPrecisaoEscala');
