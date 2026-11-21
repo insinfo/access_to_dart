@@ -5,9 +5,11 @@ import '../repositories/{{normalizedName}}_repository.dart';
 class {{className}}Service {
   static const resourcePath = '/api/v1/{{routeName}}';
 
+{{#hasAttachments}}
   static const Map<String, Set<String>> _attachmentBinaryColumns = {
 {{{attachmentBinaryColumns}}}
   };
+{{/hasAttachments}}
 
   final {{className}}Repository repository;
 

@@ -174,6 +174,19 @@ class GeneratedFieldDescriptor {
   bool get isTemporalField => dartType == 'DateTime?';
 }
 
+class GeneratedLookupJoin {
+  final String table;
+  final String leftColumn;
+  final String rightColumn;
+  const GeneratedLookupJoin(this.table, this.leftColumn, this.rightColumn);
+}
+
+class GeneratedLookupFilter {
+  final String column;
+  final String value;
+  const GeneratedLookupFilter(this.column, this.value);
+}
+
 class GeneratedLookupDescriptor {
   final String fieldRuntimeName;
   final String fieldFieldName;
@@ -183,6 +196,8 @@ class GeneratedLookupDescriptor {
   final String labelColumnRuntimeName;
   final String? orderByColumnRuntimeName;
   final String rowSourceSql;
+  final GeneratedLookupJoin? join;
+  final GeneratedLookupFilter? filter;
 
   const GeneratedLookupDescriptor({
     required this.fieldRuntimeName,
@@ -193,6 +208,8 @@ class GeneratedLookupDescriptor {
     required this.labelColumnRuntimeName,
     required this.orderByColumnRuntimeName,
     required this.rowSourceSql,
+    this.join,
+    this.filter,
   });
 }
 
@@ -868,6 +885,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
           ? null
           : columnRuntimeName(resolved.orderByColumn!),
       rowSourceSql: rowSource,
+      join: resolved.join,
+      filter: resolved.filter,
     );
   }
 
@@ -895,7 +914,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       );
     }
 
-    final tokens = const AccessSqlTokenizer().tokenize(trimmed);
+    final tokens = const AccessSqlTokenizer()
+        .tokenize(trimmed, preserveStringLiterals: true);
     final statement = const AccessSqlClauseParser().parse(tokens);
     if (statement == null || statement.isSetOrActionQuery) {
       return null;
@@ -905,11 +925,10 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     // Do not silently discard filters, joins, grouping, or row modifiers.
     final from =
         statement.fromTokens.where((token) => token.lexeme != ';').toList();
-    if (statement.whereTokens.isNotEmpty ||
-        statement.groupByTokens.isNotEmpty ||
+    if (statement.groupByTokens.isNotEmpty ||
         statement.havingTokens.isNotEmpty ||
-        from.length != 1 ||
-        !from.single.isWord ||
+        from.isEmpty ||
+        !from.first.isWord ||
         statement.selectTokens.any((token) =>
             token.isWord &&
             const ['DISTINCT', 'DISTINCTROW', 'TOP', 'INTO']
@@ -926,8 +945,66 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       return null;
     }
 
+    GeneratedLookupJoin? join;
+    final tables = <AnalysisTable>[table];
+    if (from.length > 1) {
+      if (from.length < 6 ||
+          from[1].lexeme != 'INNER' ||
+          from[2].lexeme != 'JOIN' ||
+          !from[3].isWord ||
+          from[4].lexeme != 'ON') {
+        return null;
+      }
+      final joinedTable = _findTableBySqlName(project, from[3].lexeme);
+      if (joinedTable == null || identical(joinedTable, table)) {
+        return null;
+      }
+      tables.add(joinedTable);
+      final condition =
+          const AccessSqlExpressionParser().parse(from.sublist(5));
+      if (condition is! AccessSqlBinaryExpression ||
+          condition.operatorLexeme != '=') {
+        return null;
+      }
+      final left = _lookupQualifiedColumn(condition.left, tables);
+      final right = _lookupQualifiedColumn(condition.right, tables);
+      if (left == null ||
+          right == null ||
+          left.split('.').first == right.split('.').first) {
+        return null;
+      }
+      join = GeneratedLookupJoin(tableRuntimeName(joinedTable), left, right);
+    }
+    GeneratedLookupFilter? filter;
+    if (statement.whereTokens.isNotEmpty) {
+      final condition = const AccessSqlExpressionParser().parse(
+          statement.whereTokens.where((token) => token.lexeme != ';').toList());
+      if (condition is! AccessSqlBinaryExpression ||
+          condition.operatorLexeme != '=') {
+        return null;
+      }
+      final column =
+          _lookupQualifiedColumn(condition.left, tables, requireText: true);
+      final literal = condition.right;
+      if (column == null || literal is! AccessSqlLiteralExpression) {
+        return null;
+      }
+      final raw = literal.value;
+      if (raw.length < 2 ||
+          (raw[0] != "'" && raw[0] != '"') ||
+          raw[raw.length - 1] != raw[0]) {
+        return null;
+      }
+      final value =
+          raw.substring(1, raw.length - 1).replaceAll(raw[0] + raw[0], raw[0]);
+      filter = GeneratedLookupFilter(column, value);
+    }
+
     final selectExpressions = _splitTopLevelExpressions(statement.selectTokens);
-    if (selectExpressions.isEmpty) {
+    if (selectExpressions.isEmpty ||
+        selectExpressions
+            .take(2)
+            .any((tokens) => !_isLookupBaseProjection(tokens, table))) {
       return null;
     }
 
@@ -944,9 +1021,13 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     final labelProjection = selectExpressions.length > 1
         ? _extractProjectedColumnName(selectExpressions[1])
         : valueProjection;
-    if (labelProjection == null) return null;
+    if (labelProjection == null) {
+      return null;
+    }
     final labelColumn = _findColumnBySqlName(table, labelProjection);
-    if (labelColumn == null) return null;
+    if (labelColumn == null) {
+      return null;
+    }
 
     final orderTokens =
         statement.orderByTokens.where((token) => token.lexeme != ';').toList();
@@ -955,6 +1036,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     }
     final orderExpressions = _splitTopLevelExpressions(orderTokens);
     if (orderExpressions.length > 1 ||
+        (orderExpressions.isNotEmpty &&
+            !_isLookupBaseProjection(orderExpressions.first, table)) ||
         orderTokens.any((token) => token.isWord && token.lexeme == 'DESC')) {
       return null;
     }
@@ -965,14 +1048,52 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         ? null
         : _findColumnBySqlName(table, orderProjection);
 
-    if (orderTokens.isNotEmpty && orderByColumn == null) return null;
+    if (orderTokens.isNotEmpty && orderByColumn == null) {
+      return null;
+    }
 
     return _ResolvedLookupSource(
       table: table,
       valueColumn: valueColumn,
       labelColumn: labelColumn,
       orderByColumn: orderByColumn,
+      join: join,
+      filter: filter,
     );
+  }
+
+  String? _lookupQualifiedColumn(
+      AccessSqlExpression expression, List<AnalysisTable> tables,
+      {bool requireText = false}) {
+    if (expression is! AccessSqlIdentifierExpression) {
+      return null;
+    }
+    final parts = expression.parts;
+    if (parts.length != 3 || parts[1] != '.') {
+      return null;
+    }
+    for (final table in tables) {
+      if (_normalizeSqlLookupName(parts.first) !=
+          _normalizeSqlLookupName(table.name)) {
+        continue;
+      }
+      final column = _findColumnBySqlName(table, parts.last);
+      if (column != null && (!requireText || column.dartType == 'String?')) {
+        return '${tableRuntimeName(table)}.${columnRuntimeName(column)}';
+      }
+    }
+    return null;
+  }
+
+  bool _isLookupBaseProjection(
+      List<AccessSqlToken> tokens, AnalysisTable table) {
+    if (tokens.length == 1) return tokens.single.isWord;
+    return tokens.length == 3 &&
+        tokens.first.isWord &&
+        tokens.last.isWord &&
+        tokens[1].lexeme == '.' &&
+        _normalizeSqlLookupName(tokens.first.lexeme) ==
+            _normalizeSqlLookupName(table.name);
   }
 
   AnalysisTable? _findTableBySqlName(AnalysisProject project, String rawName) {
@@ -1298,12 +1419,16 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
 }
 
 class _ResolvedLookupSource {
+  final GeneratedLookupJoin? join;
+  final GeneratedLookupFilter? filter;
   final AnalysisTable table;
   final AnalysisColumn valueColumn;
   final AnalysisColumn labelColumn;
   final AnalysisColumn? orderByColumn;
 
   const _ResolvedLookupSource({
+    this.join,
+    this.filter,
     required this.table,
     required this.valueColumn,
     required this.labelColumn,

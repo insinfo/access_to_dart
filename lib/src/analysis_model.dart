@@ -683,12 +683,18 @@ class AnalysisFormControl {
   final String name;
   final String? controlSource;
   final String? caption;
+  final String? sourceObject;
+  final String? linkMasterFields;
+  final String? linkChildFields;
 
   AnalysisFormControl({
     required this.type,
     required this.name,
     required this.controlSource,
     required this.caption,
+    this.sourceObject,
+    this.linkMasterFields,
+    this.linkChildFields,
   });
 
   factory AnalysisFormControl.fromJson(Map<String, dynamic> json) {
@@ -697,6 +703,9 @@ class AnalysisFormControl {
       name: json['name'] as String? ?? 'control',
       controlSource: json['controlSource'] as String?,
       caption: json['caption'] as String?,
+      sourceObject: json['sourceObject'] as String?,
+      linkMasterFields: json['linkMasterFields'] as String?,
+      linkChildFields: json['linkChildFields'] as String?,
     );
   }
 }

@@ -24,3 +24,13 @@ Current implemented baseline:
 - `migrate` can now read a real `.accdb`, emit `schema.sql` and `seed.sql`, and optionally apply them directly to PostgreSQL;
 - `migrate --identifier-style snake_ascii` removes accents and emits `snake_case`; `migrate --identifier-style original` preserves the original Access table and column names with quoted PostgreSQL identifiers;
 - both commands run only against local inputs, not against `referencias/`.
+
+Generated frontend releases:
+
+```text
+cd <generated-app>/frontend
+dart pub get
+dart run tool/build_release.dart
+```
+
+The generated helper uses a one-shot release build and verifies the complete output manifest plus nonempty HTML/JavaScript entrypoints. Development still uses `dart run webdev serve`. See `doc/28_frontend_release_packaging.md` for the Windows daemon race investigation and cold-build validation.

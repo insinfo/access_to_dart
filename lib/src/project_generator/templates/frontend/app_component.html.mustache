@@ -9,6 +9,7 @@
     </nav>
   </aside>
   <main class="content-area">
+    <p class="alert alert-info" *ngIf="accessNavigationNotice != null">{{ accessNavigationNotice }}</p>
 <%#modules%>
     <<%routeSegment%>-page *ngIf="activeModule == '<%routeSegment%>'"></<%routeSegment%>-page>
 <%/modules%>

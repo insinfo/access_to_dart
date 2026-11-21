@@ -120,10 +120,9 @@ void main() {
     await runCheckedProcess('dart', ['analyze', 'lib'],
         workingDirectory: '$output/frontend',
         description: 'SIGAsul frontend analyze');
-    await runCheckedProcess('dart', ['run', 'webdev', 'build'],
+    await runCheckedProcess('dart', ['run', 'tool/build_release.dart'],
         workingDirectory: '$output/frontend',
-        description: 'SIGAsul frontend webdev build');
-    expect(findGeneratedFrontendArtifact(Directory('$output/frontend')),
-        isNotNull);
+        description: 'SIGAsul frontend verified release build');
+    await expectFrontendDistribution(Directory('$output/frontend'));
   }, timeout: const Timeout(Duration(minutes: 15)));
 }

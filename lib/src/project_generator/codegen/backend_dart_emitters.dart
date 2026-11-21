@@ -36,6 +36,11 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
       case '${lookup.fieldRuntimeName}':
         return repository.lookupOptions(
           sourceTable: ${_dartStringLiteral(lookup.sourceTableRuntimeName)},
+          joinTable: ${lookup.join == null ? 'null' : _dartStringLiteral(lookup.join!.table)},
+          joinLeft: ${lookup.join == null ? 'null' : _dartStringLiteral(lookup.join!.leftColumn)},
+          joinRight: ${lookup.join == null ? 'null' : _dartStringLiteral(lookup.join!.rightColumn)},
+          filterColumn: ${lookup.filter == null ? 'null' : _dartStringLiteral(lookup.filter!.column)},
+          filterValue: ${lookup.filter == null ? 'null' : _dartStringLiteral(lookup.filter!.value)},
           valueColumn: '${lookup.valueColumnRuntimeName}',
           labelColumn: '${lookup.labelColumnRuntimeName}',
           orderByColumn: ${lookup.orderByColumnRuntimeName == null ? 'null' : "'${lookup.orderByColumnRuntimeName}'"},
@@ -103,6 +108,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
       'attachmentCreateCases': attachmentCreateCases,
       'attachmentDeleteCases': attachmentDeleteCases,
       'attachmentBinaryColumns': attachmentBinaryColumns,
+      'hasAttachments': module.attachments.isNotEmpty,
     },
   );
 }

@@ -16,12 +16,14 @@ String _buildConsultarPageHtml({
 String _buildIncluirPageHtml({
   required String namePascal,
   required Iterable<Map<String, Object?>> fields,
+  Iterable<Map<String, Object?>> accessCommands = const [],
 }) {
   return _renderTemplateAsset(
     'frontend/incluir_page.html.mustache',
     <String, Object?>{
       'namePascal': namePascal,
       'fields': fields.toList(growable: false),
+      'accessCommands': accessCommands.toList(growable: false),
     },
   );
 }

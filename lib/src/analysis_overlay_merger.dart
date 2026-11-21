@@ -169,7 +169,8 @@ class AnalysisOverlayMerger {
               : binaryControls[controlIndex];
           if (controlIndex >= 0) consumed.add(controlIndex);
           _copyPresentProperties(control, sourceControl.toJson(),
-              const ['type', 'controlSource', 'caption']);
+              const ['type', 'controlSource', 'caption',
+                'sourceObject', 'linkMasterFields', 'linkChildFields']);
           _mergeBehaviorMaps(control, sourceControl.toJson());
           if (sourceControl.macros.isNotEmpty) {
             control['macros'] = <String, dynamic>{
@@ -199,9 +200,11 @@ class AnalysisOverlayMerger {
 
   void _mergeBehaviorMaps(
       Map<String, dynamic> target, Map<String, Object?> source) {
-    for (final key in const ['macroDefinitions', 'events']) {
+    for (final key in const ['macroDefinitions', 'events', 'properties']) {
       final values = (source[key] as Map?) ?? const {};
-      if (values.isEmpty) continue;
+      if (values.isEmpty && (key != 'properties' || source[key] is! Map)) {
+        continue;
+      }
       target[key] = <String, dynamic>{
         ...((target[key] as Map?)?.cast<String, dynamic>() ?? const {}),
         ...values.cast<String, dynamic>(),

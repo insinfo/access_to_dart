@@ -568,6 +568,7 @@ class AccessSrcReader {
       orElse: () => _BasNode('Form'),
     );
     return AccessSrcForm(
+      properties: Map.unmodifiable(formNode.properties),
       rawVbaCode: rawVbaCode,
       name: name,
       caption: formNode.properties['Caption'],
@@ -592,6 +593,9 @@ class AccessSrcReader {
               name: blockName,
               controlSource: node.properties['ControlSource'],
               caption: node.properties['Caption'],
+              sourceObject: node.properties['SourceObject'],
+              linkMasterFields: node.properties['LinkMasterFields'],
+              linkChildFields: node.properties['LinkChildFields'],
               macros: _collectMacros(node),
               macroDefinitions: _collectMacroDefinitions(node),
               events: _collectEvents(node),

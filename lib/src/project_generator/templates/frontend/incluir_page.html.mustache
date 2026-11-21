@@ -6,6 +6,17 @@
 </div>
 
 <div class="content">
+<%#accessCommands%>
+  <div class="mb-2">
+<%#supported%>
+    <a class="btn btn-outline-primary" href="<%href%>"><%label%></a>
+<%/supported%>
+<%#unsupported%>
+    <button type="button" class="btn btn-outline-secondary" disabled><%label%></button>
+<%/unsupported%>
+    <small class="d-block text-muted"><%notice%></small>
+  </div>
+<%/accessCommands%>
   <div class="alert alert-info border-start border-info border-4 mb-3" *ngIf="validationHints.isNotEmpty">
     <strong>Regras migradas do formulario Access:</strong>
     <ul class="mb-0 mt-2">

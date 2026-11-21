@@ -165,6 +165,7 @@ class AccessSrcQuery {
 }
 
 class AccessSrcForm {
+  final Map<String, String>? properties;
   final String? rawVbaCode;
   final String name;
   final String? caption;
@@ -176,6 +177,7 @@ class AccessSrcForm {
   final Map<String, String> events;
 
   const AccessSrcForm({
+    this.properties,
     this.rawVbaCode,
     required this.name,
     required this.caption,
@@ -191,6 +193,7 @@ class AccessSrcForm {
     return <String, Object?>{
       'name': name,
       'rawVbaCode': rawVbaCode,
+      'properties': properties,
       'caption': caption,
       'recordSource': recordSource,
       'defaultView': defaultView,
@@ -208,6 +211,9 @@ class AccessSrcControl {
   final String name;
   final String? controlSource;
   final String? caption;
+  final String? sourceObject;
+  final String? linkMasterFields;
+  final String? linkChildFields;
   final Map<String, List<String>> macros;
   final Map<String, List<AccessSrcMacroStep>> macroDefinitions;
   final Map<String, String> events;
@@ -217,6 +223,9 @@ class AccessSrcControl {
     required this.name,
     required this.controlSource,
     required this.caption,
+    this.sourceObject,
+    this.linkMasterFields,
+    this.linkChildFields,
     required this.macros,
     this.macroDefinitions = const {},
     this.events = const {},
@@ -228,6 +237,9 @@ class AccessSrcControl {
       'name': name,
       'controlSource': controlSource,
       'caption': caption,
+      'sourceObject': sourceObject,
+      'linkMasterFields': linkMasterFields,
+      'linkChildFields': linkChildFields,
       'macros': macros,
       'macroDefinitions': macroDefinitions.map((name, steps) =>
           MapEntry(name, steps.map((step) => step.toJson()).toList())),

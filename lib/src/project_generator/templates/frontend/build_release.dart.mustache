@@ -1,0 +1,58 @@
+import 'dart:io';
+
+/// One-shot release compilation, followed by verification of the final package.
+/// Development can continue to use webdev serve; release does not use a daemon.
+Future<void> main(List<String> args) async {
+  if (args.isNotEmpty && (args.length != 1 || args.single != '--verify-only')) {
+    stderr.writeln('Usage: dart run tool/build_release.dart [--verify-only]');
+    exitCode = 64;
+    return;
+  }
+  final frontend = File.fromUri(Platform.script).absolute.parent.parent;
+  if (args.isEmpty) {
+    final build = await Process.start(
+      Platform.resolvedExecutable,
+      ['run', 'build_runner', 'build', '--release', '--output=web:build'],
+      workingDirectory: frontend.path,
+      mode: ProcessStartMode.inheritStdio,
+    );
+    final result = await build.exitCode;
+    if (result != 0) {
+      exitCode = result;
+      return;
+    }
+  }
+  final output = Directory('${frontend.path}/build');
+  final manifest = File('${output.path}/.build.manifest');
+  if (!await manifest.exists()) {
+    stderr.writeln('Release incompleto: .build.manifest ausente.');
+    exitCode = 1;
+    return;
+  }
+  final entries = (await manifest.readAsLines()).where((s) => s.isNotEmpty).toList();
+  if (entries.isEmpty || !entries.contains('index.html') || !entries.contains('main.dart.js')) {
+    stderr.writeln('Release incompleto: manifest vazio ou sem entrypoints.');
+    exitCode = 1;
+    return;
+  }
+  final missing = <String>[];
+  for (final entry in entries) {
+    final parts = entry.replaceAll(r'\', '/').split('/');
+    if (parts.contains('..') || entry.startsWith('/') || entry.contains(':') ||
+        !await File('${output.path}/$entry').exists()) {
+      missing.add(entry);
+    }
+  }
+  for (final required in ['index.html', 'main.dart.js']) {
+    final file = File('${output.path}/$required');
+    if (!await file.exists() || await file.length() == 0) {
+      if (!missing.contains(required)) missing.add(required);
+    }
+  }
+  if (missing.isNotEmpty) {
+    stderr.writeln('Release incompleto: arquivos ausentes/vazios: ${missing.join(', ')}');
+    exitCode = 1;
+    return;
+  }
+  stdout.writeln('Release verificado: ${entries.length} arquivos em ${output.path}.');
+}

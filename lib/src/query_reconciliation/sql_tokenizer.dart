@@ -3,7 +3,8 @@ import 'sql_token.dart';
 final class AccessSqlTokenizer {
   const AccessSqlTokenizer();
 
-  List<AccessSqlToken> tokenize(String sql) {
+  List<AccessSqlToken> tokenize(String sql,
+      {bool preserveStringLiterals = false}) {
     final tokens = <AccessSqlToken>[];
     var index = 0;
 
@@ -63,7 +64,9 @@ final class AccessSqlTokenizer {
         }
         tokens.add(AccessSqlToken(
           AccessSqlTokenKind.stringLiteral,
-          buffer.toString().toUpperCase(),
+          (preserveStringLiterals
+              ? buffer.toString()
+              : buffer.toString().toUpperCase()),
         ));
         continue;
       }
@@ -134,6 +137,7 @@ final class AccessSqlTokenizer {
     final code = char.codeUnitAt(0);
     return code >= 48 && code <= 57;
   }
+
   bool _isWordStart(String char) {
     final code = char.codeUnitAt(0);
     return (code >= 65 && code <= 90) ||

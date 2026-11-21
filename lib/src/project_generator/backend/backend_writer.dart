@@ -34,6 +34,7 @@ extension _ProjectGeneratorBackend on ProjectGenerator {
         .writeAsString(_backendWithDbShelf(project));
     await File('${backendDir.path}/lib/src/shared/utils/api_utils.dart')
         .writeAsString(_backendApiUtils(project));
+    await _generateSubformBackend(project, backendDir);
     await File('${backendDir.path}/lib/src/shared/app_config.dart')
         .writeAsString(_backendAppConfig(project));
     await File('${backendDir.path}/lib/src/generated_data.dart')

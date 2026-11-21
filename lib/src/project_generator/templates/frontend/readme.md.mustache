@@ -1,0 +1,25 @@
+# Frontend gerado
+
+Prepare as dependências do core (`dart pub get` em `../core`) e depois deste frontend (`dart pub get`).
+
+Durante o desenvolvimento:
+
+```text
+dart run webdev serve
+```
+
+Para gerar o pacote de distribuição:
+
+```text
+dart run tool/build_release.dart
+```
+
+O comando executa build_runner uma vez, em release, e verifica todos os arquivos do manifest, index.html e main.dart.js. O diretório publicado é `build/`; um cache compilado em `.dart_tool` não substitui esse pacote. Não há retry automático nem cópia de fallback. Uma falha de compilação ou pacote incompleto devolve exit não zero.
+
+Para verificar um pacote já produzido:
+
+```text
+dart run tool/build_release.dart --verify-only
+```
+
+O release usa o processo one-shot porque foi reproduzida exclusão/truncamento de arquivos após o merge no caminho webdev build com daemon no Windows. `webdev serve` continua disponível para desenvolvimento.

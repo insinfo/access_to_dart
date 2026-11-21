@@ -33,21 +33,34 @@ class {{className}}Repository {
 
   Future<List<Map<String, dynamic>>> lookupOptions({
     required String sourceTable,
+    String? joinTable,
+    String? joinLeft,
+    String? joinRight,
+    String? filterColumn,
+    String? filterValue,
     required String valueColumn,
     required String labelColumn,
     String? orderByColumn,
     int limit = 100,
   }) async {
-    final query = db.table(sourceTable).whereNotNull(valueColumn);
+    final query = db.table(sourceTable).whereNotNull('$sourceTable.$valueColumn');
+    if (joinTable != null) {
+      query.join(joinTable, joinLeft!, '=', joinRight!);
+    }
+    if (filterColumn != null) {
+      final quoted = query.getGrammar().wrap(filterColumn);
+      query.whereRaw('LOWER($quoted) = LOWER(?)', [filterValue]);
+    }
+    query.select(['$sourceTable.$valueColumn AS lookup_value', '$sourceTable.$labelColumn AS lookup_label']);
     if (orderByColumn != null && orderByColumn.isNotEmpty) {
-      query.orderBy(orderByColumn);
+      query.orderBy('$sourceTable.$orderByColumn');
     }
     final rows = List<Map<String, dynamic>>.from(await query.limit(limit).get());
     return rows
         .map(
           (row) => <String, dynamic>{
-            'value': row[valueColumn],
-            'label': row[labelColumn] ?? row[valueColumn],
+            'value': row['lookup_value'],
+            'label': row['lookup_label'] ?? row['lookup_value'],
           },
         )
         .toList(growable: false);

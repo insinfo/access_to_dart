@@ -803,6 +803,8 @@ String _buildFrontendShellDartSource({
       .join(', ');
   return _renderTemplate(
     '''
+import 'dart:async';
+import 'dart:html' as html;
 import 'package:ngdart/angular.dart';
 
 {{{importLines}}}
@@ -813,15 +815,46 @@ import 'package:ngdart/angular.dart';
   styleUrls: ['app_component.css'],
   directives: [coreDirectives{{#hasDirectives}}, {{{directives}}}{{/hasDirectives}}],
 )
-class AppComponent {
+class AppComponent implements OnInit, OnDestroy {
+  StreamSubscription<html.Event>? _hashSubscription;
+  String? accessNavigationNotice;
+  static const Set<String> _moduleRoutes = {{{moduleRoutes}}};
   String activeModule = '{{initialModule}}';
 
+  @override
+  void ngOnInit() {
+    _readHash();
+    _hashSubscription = html.window.onHashChange.listen((_) => _readHash());
+  }
+
+  @override
+  void ngOnDestroy() { _hashSubscription?.cancel(); }
+
+  void _readHash() {
+    final hash = html.window.location.hash;
+    final partial = hash.startsWith('#/access-form/');
+    final prefix = partial ? '#/access-form/' : '#/module/';
+    if (!hash.startsWith(prefix)) return;
+    String route;
+    try { route = Uri.decodeComponent(hash.substring(prefix.length)); }
+    on FormatException { return; }
+    if (!_moduleRoutes.contains(route)) return;
+    activeModule = route;
+    accessNavigationNotice = partial
+        ? 'Cadastro gerado: eventos de abertura e janela do formulário original ainda não reproduzidos.'
+        : null;
+  }
+
   void setActiveModule(String value) {
+    if (!_moduleRoutes.contains(value)) return;
     activeModule = value;
+    accessNavigationNotice = null;
+    html.window.location.hash = '/module/' + Uri.encodeComponent(value);
   }
 }
 ''',
     <String, Object?>{
+      'moduleRoutes': '<String>{${modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)).join(', ')}}',
       'initialModule': initialModule.replaceAll("'", "\\'"),
       'importLines': importLines,
       'directives': directives,

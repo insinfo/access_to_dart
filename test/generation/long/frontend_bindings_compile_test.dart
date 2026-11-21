@@ -35,12 +35,9 @@ void main() {
         workingDirectory: frontend, description: 'frontend pub get');
     await runCheckedProcess('dart', ['analyze', 'lib'],
         workingDirectory: frontend, description: 'frontend analyze lib');
-    await runCheckedProcess('dart', ['run', 'webdev', 'build'],
-        workingDirectory: frontend, description: 'frontend webdev build');
-    expect(
-        findGeneratedFrontendArtifact(Directory(frontend)) != null ||
-            File('$frontend/build/main.dart.js').existsSync() ||
-            File('$frontend/build/web/main.dart.js').existsSync(),
-        isTrue);
+    await runCheckedProcess('dart', ['run', 'tool/build_release.dart'],
+        workingDirectory: frontend,
+        description: 'frontend verified release build');
+    await expectFrontendDistribution(Directory(frontend));
   }, timeout: const Timeout(Duration(minutes: 15)));
 }

@@ -167,7 +167,8 @@ Future<RandomAccessFile> _acquireAccessComLock() async {
     }
   }
 
-  throw StateError('Nao foi possivel adquirir o lock de automacao COM do Access.');
+  throw StateError(
+      'Nao foi possivel adquirir o lock de automacao COM do Access.');
 }
 
 bool _requiresAccessComLock(String executable, List<String> arguments) {
@@ -226,7 +227,13 @@ Future<void> compileGeneratedProject(String outputDir) async {
   );
   await runCheckedProcess(
     'dart',
-    ['compile', 'exe', 'bin/public_backend.dart', '-o', 'build/public_backend.exe'],
+    [
+      'compile',
+      'exe',
+      'bin/public_backend.dart',
+      '-o',
+      'build/public_backend.exe'
+    ],
     workingDirectory: backendDir.path,
     description: 'backend compile public backend exe',
   );
@@ -256,56 +263,33 @@ Future<void> compileGeneratedProject(String outputDir) async {
   );
   await runCheckedProcess(
     'dart',
-    ['run', 'webdev', 'build'],
+    ['run', 'tool/build_release.dart'],
     workingDirectory: frontendDir.path,
-    description: 'frontend webdev build',
+    description: 'frontend verified release build',
   );
 
-  final frontendBuildDir =
-      Directory('${frontendDir.path}${Platform.pathSeparator}build');
-  final frontendBuildArtifact = File(
-    '${frontendDir.path}${Platform.pathSeparator}build${Platform.pathSeparator}main.dart.js',
-  );
-  final frontendLegacyArtifact = File(
-    '${frontendDir.path}${Platform.pathSeparator}build${Platform.pathSeparator}web${Platform.pathSeparator}main.dart.js',
-  );
-  final frontendGeneratedArtifact = findGeneratedFrontendArtifact(frontendDir);
-
-  await waitForPath(
-    () => frontendBuildDir.existsSync(),
-    description: 'frontend build directory',
-  );
-  await waitForPath(
-    () =>
-        frontendBuildArtifact.existsSync() ||
-        frontendLegacyArtifact.existsSync() ||
-        frontendGeneratedArtifact?.existsSync() == true,
-    description: 'frontend webdev artifact',
-  );
-
-  expect(frontendBuildDir.existsSync(), isTrue);
-  expect(
-    frontendBuildArtifact.existsSync() ||
-        frontendLegacyArtifact.existsSync() ||
-        frontendGeneratedArtifact?.existsSync() == true,
-    isTrue,
-  );
+  await expectFrontendDistribution(frontendDir);
 }
 
-File? findGeneratedFrontendArtifact(Directory frontendDir) {
-  final generatedDir = Directory(
-    '${frontendDir.path}${Platform.pathSeparator}.dart_tool${Platform.pathSeparator}build${Platform.pathSeparator}generated',
-  );
-  if (!generatedDir.existsSync()) {
-    return null;
+Future<void> expectFrontendDistribution(Directory frontendDir) async {
+  final output = Directory('${frontendDir.path}${Platform.pathSeparator}build');
+  final manifest =
+      File('${output.path}${Platform.pathSeparator}.build.manifest');
+  expect(await manifest.exists(), isTrue, reason: 'Missing release manifest');
+  final entries = (await manifest.readAsLines()).where((s) => s.isNotEmpty).toList();
+  expect(entries, isNotEmpty, reason: 'Empty release manifest');
+  expect(entries, containsAll(['index.html', 'main.dart.js']));
+  for (final entry in entries) {
+    expect(await File('${output.path}${Platform.pathSeparator}$entry').exists(),
+        isTrue,
+        reason: 'Release asset missing: $entry');
   }
-
-  for (final entity in generatedDir.listSync(recursive: true)) {
-    if (entity is File && entity.path.endsWith('main.dart.js')) {
-      return entity;
-    }
+  for (final name in ['index.html', 'main.dart.js']) {
+    final file = File('${output.path}${Platform.pathSeparator}$name');
+    expect(await file.exists(), isTrue, reason: 'Release asset missing: $name');
+    expect(await file.length(), greaterThan(0),
+        reason: 'Release asset empty: $name');
   }
-  return null;
 }
 
 Future<void> waitForPath(
@@ -325,7 +309,8 @@ Future<void> waitForPath(
 }
 
 Future<File> writeMoneyAnalysisFixture(Directory tempDir) async {
-  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis.json');
+  final analysisFile =
+      File('${tempDir.path}${Platform.pathSeparator}analysis.json');
   await analysisFile.writeAsString(
     const JsonEncoder.withIndent('  ').convert({
       'schema_version': '1.0',
@@ -395,7 +380,8 @@ Future<File> writeMoneyAnalysisFixture(Directory tempDir) async {
 }
 
 Future<File> writeDropdownAnalysisFixture(Directory tempDir) async {
-  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_dropdown.json');
+  final analysisFile =
+      File('${tempDir.path}${Platform.pathSeparator}analysis_dropdown.json');
   await analysisFile.writeAsString(
     const JsonEncoder.withIndent('  ').convert({
       'schema_version': '1.0',
@@ -449,7 +435,8 @@ Future<File> writeDropdownAnalysisFixture(Directory tempDir) async {
               'isRequired': false,
               'caption': 'Pessoa selecionada',
               'rowSourceType': 'Table/Query',
-              'rowSource': 'SELECT [Pessoas].[ID], [Pessoas].[Nome] FROM Pessoas ORDER BY [Nome];',
+              'rowSource':
+                  'SELECT [Pessoas].[ID], [Pessoas].[Nome] FROM Pessoas ORDER BY [Nome];',
               'displayControl': 111,
               'precision': null,
               'scale': null,
@@ -513,7 +500,8 @@ Future<File> writeDropdownAnalysisFixture(Directory tempDir) async {
 }
 
 Future<File> writeSemanticDefaultsAnalysisFixture(Directory tempDir) async {
-  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_semantic_defaults.json');
+  final analysisFile = File(
+      '${tempDir.path}${Platform.pathSeparator}analysis_semantic_defaults.json');
   await analysisFile.writeAsString(
     const JsonEncoder.withIndent('  ').convert({
       'schema_version': '1.0',
@@ -617,7 +605,8 @@ Future<File> writeSemanticDefaultsAnalysisFixture(Directory tempDir) async {
 }
 
 Future<File> writeFormControlsAnalysisFixture(Directory tempDir) async {
-  final analysisFile = File('${tempDir.path}${Platform.pathSeparator}analysis_form_controls.json');
+  final analysisFile = File(
+      '${tempDir.path}${Platform.pathSeparator}analysis_form_controls.json');
   await analysisFile.writeAsString(
     const JsonEncoder.withIndent('  ').convert({
       'schema_version': '1.0',

@@ -1,6 +1,88 @@
 part of '../project_generator.dart';
 
 extension _FrontendModuleGenerator on ProjectGenerator {
+  // Only resolve a target to the exact form selected for a generated module.
+  // This is partial internal navigation, not execution of Access lifecycle code.
+  List<Map<String, Object?>> _buildAccessCommands(
+      AnalysisProject project, AnalysisTable table) {
+    final selected = _resolveFrontendForm(project, table);
+    if (selected == null) return const [];
+    final forms = ((project.raw['forms'] as List?) ?? const []).whereType<Map>().toList();
+    Map? rawForm(String name) {
+      final matches = forms.where((f) =>
+          (f['name'] as String? ?? '').toLowerCase() == name.toLowerCase()).toList();
+      return matches.length == 1 ? matches.single : null;
+    }
+    final source = rawForm(selected.name);
+    if (source == null) return const [];
+    final commands = <Map<String, Object?>>[];
+    for (final control in ((source['controls'] as List?) ?? const []).whereType<Map>()) {
+      if (control['type'] != 'CommandButton') continue;
+      final label = (control['caption'] as String? ?? control['name'] as String? ?? 'Ação').trim();
+      String? reason;
+      String? destination;
+      String? href;
+      final steps = ((control['macroDefinitions'] as Map?)?['OnClickEmMacro'] as List?);
+      final actions = <Map>[];
+      if (steps == null) {
+        reason = 'Evento de clique ainda não migrado.';
+      } else {
+        for (final step in steps.whereType<Map>()) {
+          final children = (step['children'] as List?) ?? const [];
+          final condition = step['condition']?.toString() ?? '';
+          final properties = (step['properties'] as Map?) ?? const {};
+          if (children.isNotEmpty || condition.trim().isNotEmpty ||
+              properties.keys.any((key) => key != 'Comment')) {
+            reason = 'Macro com condição ou sequência ainda não migrada.';
+          }
+          if (step['action'] != null) actions.add(step);
+        }
+        if (actions.length != 1 || actions.single['action'] != 'OpenForm') {
+          reason ??= 'Ação do Access ainda não migrada.';
+        }
+      }
+      if (reason == null) {
+        final arguments = ((actions.single['arguments'] as List?) ?? const []).map((v) => v.toString()).toList();
+        if (arguments.length != 6 || arguments[1] != '0' ||
+            arguments[2].isNotEmpty || arguments[3].isNotEmpty ||
+            arguments[4] != '-1' || arguments[5] != '0') {
+          reason = 'Abertura com filtro ou modo especial ainda não migrada.';
+        } else {
+          destination = arguments.first;
+          final target = rawForm(destination);
+          final matchingTables = scaffoldTables(project).where((candidate) =>
+              _resolveFrontendForm(project, candidate)?.name.toLowerCase() == destination!.toLowerCase()).toList();
+          if (target == null || matchingTables.length != 1) {
+            reason = 'Formulário de destino ainda sem cadastro gerado correspondente.';
+          } else {
+            final properties = target['properties'] as Map?;
+            if (properties == null) {
+              reason = 'Propriedades de abertura do destino ainda não disponíveis.';
+            } else if ((properties['Filter']?.toString() ?? '').trim().isNotEmpty ||
+                (properties['OrderBy']?.toString() ?? '').trim().isNotEmpty ||
+                ['DataEntry', 'Modal'].any((key) => properties[key] != null &&
+                    !const ['0', 'False'].contains(properties[key])) ||
+                ['AllowEdits', 'AllowAdditions', 'AllowDeletions'].any((key) => properties[key] != null)) {
+              // Defaults are not synthesized from an incomplete source overlay.
+              reason = 'Destino possui filtro, restrições ou abertura especial ainda não migrados.';
+            } else {
+              href = '#/access-form/${Uri.encodeComponent(tableRouteSegment(matchingTables.single))}';
+            }
+          }
+        }
+      }
+      commands.add({
+        'control': control['name'],
+        'label': label,
+        'destination': destination,
+        'href': href,
+        'status': href == null ? 'unsupported' : 'partial_navigation',
+        'notice': reason ?? 'Abre o cadastro gerado. Eventos de abertura e janela original ainda não reproduzidos.',
+      });
+    }
+    return commands;
+  }
+
   Future<void> _generateService(
     AnalysisProject project,
     AnalysisTable table,
@@ -204,10 +286,22 @@ class Consultar${namePascal}Page implements OnInit {
       module.attachments,
     );
 
+    await File(p.join(moduleDir.path, 'access_subforms.json')).writeAsString(
+        const JsonEncoder.withIndent('  ').convert(_subformDescriptors(project, table)));
+    final accessCommands = _buildAccessCommands(project, table);
+    await File(p.join(moduleDir.path, 'access_commands.json')).writeAsString(
+        const JsonEncoder.withIndent('  ').convert(accessCommands));
     final htmlContent = _buildIncluirPageHtml(
+      accessCommands: accessCommands.map((command) => {
+        'label': _htmlTextLiteral(command['label'] as String),
+        'notice': _htmlTextLiteral(command['notice'] as String),
+        'href': command['href'],
+        'supported': command['href'] != null,
+        'unsupported': command['href'] == null,
+      }).toList(),
       namePascal: namePascal,
       fields: formFields,
-    );
+    ) + _subformPanelHtml(project, table);
 
     final dartContent = '''
   import 'dart:async';
@@ -224,7 +318,7 @@ import '../../services/${nameSnake}_service.dart';
 @Component(
   selector: 'incluir-$moduleNameKebab-page',
   templateUrl: 'incluir_${nameSnake}_page.html',
-  directives: [coreDirectives, formDirectives],
+  directives: [coreDirectives, formDirectives, AccessSubformPanel],
 )
 class Incluir${namePascal}Page implements OnInit {
   final ${namePascal}Service _service =
@@ -259,8 +353,11 @@ $dynamicLookupSource;
   static const Map<String, Map<String, Object?>> _attachmentPresentation =
 $attachmentPresentationSource;
 
+  Object? subformParentId;
+
   @Input('entity')
   set entityInput($namePascal? val) {
+    subformParentId = val?.${module.primaryKeyField};
     _draft
       ..clear()
       ..addAll(val?.toMap() ?? $namePascal.defaultValues());
