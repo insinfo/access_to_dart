@@ -165,30 +165,40 @@ class AccessSrcQuery {
 }
 
 class AccessSrcForm {
+  final String? rawVbaCode;
   final String name;
   final String? caption;
   final String? recordSource;
   final int? defaultView;
   final List<AccessSrcControl> controls;
   final Map<String, List<String>> macros;
+  final Map<String, List<AccessSrcMacroStep>> macroDefinitions;
+  final Map<String, String> events;
 
   const AccessSrcForm({
+    this.rawVbaCode,
     required this.name,
     required this.caption,
     required this.recordSource,
     required this.defaultView,
     required this.controls,
     required this.macros,
+    this.macroDefinitions = const {},
+    this.events = const {},
   });
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'name': name,
+      'rawVbaCode': rawVbaCode,
       'caption': caption,
       'recordSource': recordSource,
       'defaultView': defaultView,
       'controls': controls.map((control) => control.toJson()).toList(),
       'macros': macros,
+      'macroDefinitions': macroDefinitions.map((name, steps) =>
+          MapEntry(name, steps.map((step) => step.toJson()).toList())),
+      'events': events,
     };
   }
 }
@@ -199,6 +209,8 @@ class AccessSrcControl {
   final String? controlSource;
   final String? caption;
   final Map<String, List<String>> macros;
+  final Map<String, List<AccessSrcMacroStep>> macroDefinitions;
+  final Map<String, String> events;
 
   const AccessSrcControl({
     required this.type,
@@ -206,6 +218,8 @@ class AccessSrcControl {
     required this.controlSource,
     required this.caption,
     required this.macros,
+    this.macroDefinitions = const {},
+    this.events = const {},
   });
 
   Map<String, Object?> toJson() {
@@ -215,6 +229,9 @@ class AccessSrcControl {
       'controlSource': controlSource,
       'caption': caption,
       'macros': macros,
+      'macroDefinitions': macroDefinitions.map((name, steps) =>
+          MapEntry(name, steps.map((step) => step.toJson()).toList())),
+      'events': events,
     };
   }
 }
@@ -231,6 +248,8 @@ class AccessSrcReport {
   final List<AccessSrcControl> controls;
   final List<AccessSrcReportSection> sections;
   final Map<String, List<String>> macros;
+  final Map<String, List<AccessSrcMacroStep>> macroDefinitions;
+  final Map<String, String> events;
 
   const AccessSrcReport({
     required this.name,
@@ -243,6 +262,8 @@ class AccessSrcReport {
     required this.controls,
     required this.sections,
     required this.macros,
+    this.macroDefinitions = const {},
+    this.events = const {},
   });
 
   Map<String, Object?> toJson() => {
@@ -256,6 +277,9 @@ class AccessSrcReport {
         'controls': controls.map((control) => control.toJson()).toList(),
         'sections': sections.map((section) => section.toJson()).toList(),
         'macros': macros,
+        'macroDefinitions': macroDefinitions.map((name, steps) =>
+            MapEntry(name, steps.map((step) => step.toJson()).toList())),
+        'events': events,
       };
 }
 
@@ -297,5 +321,34 @@ class AccessSrcReportGroupLevel {
         'groupInterval': properties['GroupInterval'],
         'keepTogether': properties['KeepTogether'],
         'properties': properties,
+      };
+}
+
+/// SaveAsText macro statements. Values are preserved, not executed or inferred.
+/// Repeated Argument properties are positional and may intentionally be empty.
+class AccessSrcMacroStep {
+  final String type;
+  final String? action;
+  final String? condition;
+  final List<String> arguments;
+  final Map<String, String> properties;
+  final List<AccessSrcMacroStep> children;
+
+  const AccessSrcMacroStep({
+    required this.type,
+    required this.action,
+    required this.condition,
+    required this.arguments,
+    required this.properties,
+    required this.children,
+  });
+
+  Map<String, Object?> toJson() => {
+        'type': type,
+        'action': action,
+        'condition': condition,
+        'arguments': arguments,
+        'properties': properties,
+        'children': children.map((step) => step.toJson()).toList(),
       };
 }

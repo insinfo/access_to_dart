@@ -141,7 +141,11 @@ class AccessSrcReader {
     return Future.wait(
       basFiles.map((file) async {
         final text = await file.readAsString();
-        return _parseForm(_basenameWithoutExtension(file.path), text);
+        final codeFile =
+            File('${file.path.substring(0, file.path.length - 4)}.cls');
+        return _parseForm(_basenameWithoutExtension(file.path), text,
+            rawVbaCode:
+                await codeFile.exists() ? await codeFile.readAsString() : null);
       }),
     );
   }
@@ -557,19 +561,22 @@ class AccessSrcReader {
     return true;
   }
 
-  AccessSrcForm _parseForm(String name, String text) {
+  AccessSrcForm _parseForm(String name, String text, {String? rawVbaCode}) {
     final root = _parseBasTree(text);
     final formNode = root.children.firstWhere(
       (child) => child.type == 'Form',
       orElse: () => _BasNode('Form'),
     );
     return AccessSrcForm(
+      rawVbaCode: rawVbaCode,
       name: name,
       caption: formNode.properties['Caption'],
       recordSource: formNode.properties['RecordSource'],
       defaultView: int.tryParse(formNode.properties['DefaultView'] ?? ''),
       controls: _collectControls(formNode),
       macros: _collectMacros(formNode),
+      macroDefinitions: _collectMacroDefinitions(formNode),
+      events: _collectEvents(formNode),
     );
   }
 
@@ -586,6 +593,8 @@ class AccessSrcReader {
               controlSource: node.properties['ControlSource'],
               caption: node.properties['Caption'],
               macros: _collectMacros(node),
+              macroDefinitions: _collectMacroDefinitions(node),
+              events: _collectEvents(node),
             ),
           );
         }
@@ -649,6 +658,8 @@ class AccessSrcReader {
       controls: _collectControls(report),
       sections: sections,
       macros: _collectMacros(report),
+      macroDefinitions: _collectMacroDefinitions(report),
+      events: _collectEvents(report),
     );
   }
 
@@ -1056,11 +1067,43 @@ class AccessSrcReader {
           stack.add(node);
         } else {
           stack.last.properties[propName] = propValue;
+          if (propName == 'Argument') stack.last.arguments.add(propValue);
         }
       }
     }
 
     return root;
+  }
+
+  Map<String, String> _collectEvents(_BasNode node) => {
+        for (final entry in node.properties.entries)
+          if (RegExp(r'^(On[A-Z]|Before[A-Z]|After[A-Z])')
+                  .hasMatch(entry.key) &&
+              !entry.key.endsWith('EmMacro'))
+            entry.key: entry.value,
+      };
+
+  Map<String, List<AccessSrcMacroStep>> _collectMacroDefinitions(
+      _BasNode node) {
+    AccessSrcMacroStep statement(_BasNode node) => AccessSrcMacroStep(
+          type: node.type,
+          action: node.properties['Action'],
+          condition: node.properties['Condition'],
+          arguments: List.unmodifiable(node.arguments),
+          properties: Map.unmodifiable({
+            for (final entry in node.properties.entries)
+              if (!const {'Action', 'Condition', 'Argument'}
+                  .contains(entry.key))
+                entry.key: entry.value,
+          }),
+          children: node.children.map(statement).toList(),
+        );
+    return {
+      for (final child in node.children)
+        if (child.type.startsWith('macro:'))
+          child.type.substring('macro:'.length):
+              child.children.map(statement).toList(),
+    };
   }
 
   Map<String, List<String>> _collectMacros(_BasNode node) {
@@ -1104,6 +1147,7 @@ class AccessSrcReader {
 }
 
 class _BasNode {
+  final List<String> arguments = <String>[];
   final String type;
   final Map<String, String> properties = <String, String>{};
   final List<_BasNode> children = <_BasNode>[];

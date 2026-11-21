@@ -107,7 +107,8 @@ class AnalysisOverlayMerger {
               .toList();
           target[entry.key] = _mergeReportRecords(
               (target[entry.key] as List?) ?? const [], records);
-        } else if (entry.key == 'macros' || entry.key == 'properties') {
+        } else if (entry.key == 'macros' || entry.key == 'properties' ||
+            entry.key == 'macroDefinitions' || entry.key == 'events') {
           target[entry.key] = <String, dynamic>{
             ...((target[entry.key] as Map?)?.cast<String, dynamic>() ??
                 const {}),
@@ -143,7 +144,8 @@ class AnalysisOverlayMerger {
       final form =
           index < 0 ? <String, dynamic>{'name': source.name} : forms[index];
       _copyPresentProperties(form, source.toJson(),
-          const ['caption', 'recordSource', 'defaultView']);
+          const ['caption', 'recordSource', 'defaultView', 'rawVbaCode']);
+      _mergeBehaviorMaps(form, source.toJson());
       if (source.macros.isNotEmpty) {
         form['macros'] = <String, dynamic>{
           ...((form['macros'] as Map?)?.cast<String, dynamic>() ?? const {}),
@@ -168,6 +170,7 @@ class AnalysisOverlayMerger {
           if (controlIndex >= 0) consumed.add(controlIndex);
           _copyPresentProperties(control, sourceControl.toJson(),
               const ['type', 'controlSource', 'caption']);
+          _mergeBehaviorMaps(control, sourceControl.toJson());
           if (sourceControl.macros.isNotEmpty) {
             control['macros'] = <String, dynamic>{
               ...((control['macros'] as Map?)?.cast<String, dynamic>() ??
@@ -190,6 +193,18 @@ class AnalysisOverlayMerger {
       analysis['summary'] = <String, dynamic>{
         ...summary.cast<String, dynamic>(),
         'forms': forms.length,
+      };
+    }
+  }
+
+  void _mergeBehaviorMaps(
+      Map<String, dynamic> target, Map<String, Object?> source) {
+    for (final key in const ['macroDefinitions', 'events']) {
+      final values = (source[key] as Map?) ?? const {};
+      if (values.isEmpty) continue;
+      target[key] = <String, dynamic>{
+        ...((target[key] as Map?)?.cast<String, dynamic>() ?? const {}),
+        ...values.cast<String, dynamic>(),
       };
     }
   }
