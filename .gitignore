@@ -13,3 +13,6 @@ SIGAsul.accdb
 access_siga_struture_end_data.sql
 # Python probe caches
 __pycache__/
+
+# Transient Microsoft Access connection locks
+*.laccdb
