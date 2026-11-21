@@ -143,3 +143,24 @@ um permaneceu no arquivo separado. O manifesto declara essa distinção.
 
 A comparação de todas as 887 colunas escalares está em andamento separadamente
 (doc39). Esse gate de 188 colunas não pode substituí-la.
+
+## Chaves físicas das coleções preservadas
+
+O analyzer deixou de emitir `isAutoNumber=false` e `indexes=[]` artificiais para
+as tabelas filhas. Ele reutiliza `TableReader.readSchema` e os metadados físicos
+na representação JSON e no modelo que produz DDL. As nove coleções mantêm seus
+nomes de chave, flags, índices, ordem das colunas e sinalização de autonumeração.
+Não se deduz uma chave pelo nome e não se cria identificador com `MAX(id)+1`.
+
+`test/generation/long/complex_collection_keys_postgres_test.dart` comparou os
+índices completos e as colunas autonuméricas das nove tabelas sintetizadas com
+os TDEFs originais: cada uma possui uma PK e uma coluna autonumérica. Depois
+migrou o anexo real rma1 para PostgreSQL isolado em modo `sequence`, preservou o
+ID existente, inseriu filho com ID gerado pelo banco, executou rollback e
+confirmou que um insert posterior recebe outro ID sem alterar o registro
+importado. Gate aprovado em 2 min 04 s.
+
+Essa prova é posterior ao gate completo anterior de 54 tabelas, cujo baseline
+registrou 80 índices. A nova preservação das nove PKs foi validada neste banco
+isolado; não se apresenta o gate completo anterior como se já tivesse sido
+reexecutado com os novos metadados.

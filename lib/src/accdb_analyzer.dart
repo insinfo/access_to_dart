@@ -194,44 +194,8 @@ class AccdbAnalyzer {
           complexLinkColumn: kind == 'multivalue' ? linkColumnName : null,
           complexValueColumn:
               kind == 'multivalue' ? typeShape.columns.single.name : null,
-          columns: [
-            for (final flatColumn in flatShape.columns)
-              AnalysisColumn(
-                name: flatColumn.name,
-                typeName: flatColumn.typeName,
-                typeCode: flatColumn.typeCode,
-                isAutoNumber: false,
-                isCalculated: false,
-                isRequired: false,
-                caption: null,
-                defaultValue: null,
-                maxLength: null,
-                calculatedExpression: null,
-                validationRule: null,
-                validationText: null,
-                description: null,
-                decimalPlaces: null,
-                displayControl: null,
-                textFormat: null,
-                imeMode: null,
-                imeSentenceMode: null,
-                resultType: null,
-                propertyGuid: null,
-                allowMultipleValues: null,
-                rowSourceType: null,
-                rowSource: null,
-                wssFieldId: null,
-                formatString: null,
-                inputMask: null,
-                allowZeroLength: null,
-                precision: null,
-                scale: null,
-                complexTypeClassification: null,
-                attachmentTableName: null,
-                attachmentLinkColumn: null,
-              ),
-          ],
-          indexes: const <AnalysisIndex>[],
+          columns: _toAnalysisTable(flatShape.schema).columns,
+          indexes: _toAnalysisTable(flatShape.schema).indexes,
           sampleRows: rows.take(10).toList(growable: false),
         );
         syntheticTables.add({
@@ -251,15 +215,11 @@ class AccdbAnalyzer {
             'complexLinkColumn': linkColumnName,
             'complexValueColumn': typeShape.columns.single.name,
           },
-          'columns': [
-            for (final flatColumn in flatShape.columns)
-              {
-                'name': flatColumn.name,
-                'typeCode': flatColumn.typeCode,
-                'typeName': flatColumn.typeName,
-              },
-          ],
-          'indexes': const <Map<String, dynamic>>[],
+          'columns': flatShape.schema.columns
+              .map((column) => column.toJson())
+              .toList(),
+          'indexes':
+              flatShape.schema.indexes.map((index) => index.toJson()).toList(),
           'sampleRows': rows.take(10).toList(growable: false),
           'postgres_ddl': _ddlBuilder.buildCreateTableStatement(
             syntheticAnalysisTable,
@@ -425,21 +385,21 @@ class AccdbAnalyzer {
     if (cached != null) {
       return cached;
     }
-    final definition = await TableDefReader(
+    final schema = await TableReader(
       format: database.format,
       pageChannel: database.pageChannel,
-      pageNumber: pageNumber,
-    ).readDefinition();
+    ).readSchema(name, pageNumber);
     final shape = _AttachmentTableShape(
       name: name,
       pageNumber: pageNumber,
-      columns: definition.columns
+      schema: schema,
+      columns: schema.columns
           .map(
             (column) => _AttachmentColumnShape(
               name: column.name,
-              typeCode: column.type,
+              typeCode: column.typeCode,
               isAutoNumber: column.isAutoNumber,
-              typeName: AccessColumnSchema.typeCodeToName(column.type),
+              typeName: column.typeName,
             ),
           )
           .toList(growable: false),
@@ -520,11 +480,13 @@ class AccdbAnalyzer {
 }
 
 class _AttachmentTableShape {
+  final AccessTableSchema schema;
   final String name;
   final int pageNumber;
   final List<_AttachmentColumnShape> columns;
 
   const _AttachmentTableShape({
+    required this.schema,
     required this.name,
     required this.pageNumber,
     required this.columns,
