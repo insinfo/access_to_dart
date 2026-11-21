@@ -20,7 +20,9 @@ try {
  });
  await page.goto(base,{waitUntil:'networkidle'});
  await page.locator('main.content-area').waitFor();
+ const familyResponsePromise=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/v1/cad_residencia' && response.request().method()==='GET');
  await page.evaluate(()=>{location.hash='/access-form/cad-residencia';});
+ const familyRows=await (await familyResponsePromise).json();
  const family=page.locator('cad-residencia-page');
  await family.waitFor();
  await family.getByRole('button',{name:'Editar',exact:true}).first().waitFor({timeout:30000});
@@ -30,6 +32,22 @@ try {
  await family.getByRole('button',{name:'Editar',exact:true}).first().click();
  await page.locator('incluir-cad-residencia-page').waitFor();
  await relatedResponses;
+ const editor=page.locator('incluir-cad-residencia-page');
+ const selectedKey=await editor.getByPlaceholder('Código definido ao salvar',{exact:true}).inputValue();
+ const selectedRow=familyRows.find(row=>String(row.cod_fam)===selectedKey);
+ assert.ok(selectedRow,'Selected family must exist in actual API result');
+ let nativeDateInputs=0, nonEmptyNativeDateInputs=0;
+ for(const [field,placeholder] of [['data_cad','DataCad'],['data_deslig_resid','DataDesligResid'],['dataatcad','DATAATCAD']]) {
+   const input=editor.getByPlaceholder(placeholder,{exact:true});
+   assert.equal(await input.getAttribute('type'),'date');
+   const value=selectedRow[field];
+   const expected=value==null?'':String(value).slice(0,10);
+   assert.ok(expected==='' || /^\d{4}-\d{2}-\d{2}$/.test(expected),'API date must have civil ISO components');
+   assert.ok(await input.inputValue()===expected,'Native date differs from API field '+field);
+   nativeDateInputs++;
+   if(expected!=='')nonEmptyNativeDateInputs++;
+ }
+
  await page.waitForFunction(()=>[...document.querySelectorAll('access-subform-panel')].every(panel=>!panel.textContent.includes('Carregando...')));
  assert.equal(await page.locator('access-subform-panel .text-danger').count(),0,'Related data must render without component errors');
  const relatedRows=await page.locator('access-subform-panel tbody tr').count();
@@ -41,5 +59,5 @@ try {
  assert.deepEqual(failures,[],'Unexpected API failures');
  assert.deepEqual(writes,[],'Read-only browser validation must not write');
  assert.deepEqual(errors,[],'Generated runtime errors');
- console.log(JSON.stringify({status:'passed',origin:new URL(base).origin,listedRows,relatedRows,subformPanels:panels,subformResponses:subforms.length,apiResponses:api.length,writes:writes.length,runtimeErrors:errors.length,apiFailures:failures.length},null,2));
+ console.log(JSON.stringify({status:'passed',origin:new URL(base).origin,listedRows,relatedRows,nativeDateInputs,nonEmptyNativeDateInputs,subformPanels:panels,subformResponses:subforms.length,apiResponses:api.length,writes:writes.length,runtimeErrors:errors.length,apiFailures:failures.length},null,2));
 } finally { await browser.close(); }

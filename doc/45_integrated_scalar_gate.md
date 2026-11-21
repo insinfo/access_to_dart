@@ -53,3 +53,58 @@ não são versionados.
 Próxima etapa: separar semântica de armazenamento da apresentação, testar
 DateTime com data/hora/micros, defaults e transporte civil sem deslocamento de
 fuso, e repetir o gate completo. Não enfraquecer o oráculo para aceitar TIME.
+
+
+## Nova execução integrada aprovada
+
+Após a correção temporal do commit `21c986c`, o scaffold foi gerado novamente
+com `analysis-integrated-query/analysis.json`, que acrescenta o contrato DAO de
+CSPRONT1 à mesma análise física. O executável do gate também foi compilado AOT
+nesse commit: alterações posteriores dos agentes não mudaram a execução em curso.
+O backend foi compilado AOT, ambos os analyze passaram e o release frontend
+verificou **471 arquivos**. São 45 cadastros principais, sem CRUD das nove
+coleções internas; elas permanecem nas 54 tabelas migradas. O diretório `api`
+do backend não é um cadastro adicional.
+
+O resultado em `migration-integrated-final/` passou:
+
+- 54/54 contagens DAO, 123.922 registros lógicos, 41 FKs e 98 índices;
+- **887/887 colunas escalares das 45 tabelas**, sem divergências; os dois
+  horários anteriormente rejeitados agora conservam a data em TIMESTAMP;
+- as 188 colunas anteriores e os cinco payloads de anexos, em verificação
+  independente mantida pelo quinto argumento;
+- três coleções multivaloradas, 55 valores lógicos com associação ao pai;
+- um registro órfão preservado exatamente no arquivo de quarentena, com a
+  fonte Access inalterada;
+- HTTP real retornando as 7.040 pessoas esperadas.
+
+No mesmo banco validado, o auditor de anexos confirmou cinco arquivos,
+25 metadados e associação aos pais (doc50). Os três campos de metadados que
+são NULL em todos esses arquivos continuam sem prova de valores não nulos.
+Não se somam esses metadados ao denominador das 887 colunas físicas escalares.
+
+O backend completo serviu o release e a API na mesma origem. A consulta
+CSPRONT1 foi conferida novamente por HTTP, agora com o armazenamento temporal
+corrigido: **sete casos, cinco com linhas, 134 colunas**, nomes/tipos/ordinais e
+hashes de todas as células coincidentes com DAO. O auditor independente
+`audit_http_cspront1.dart` não inicia servidor nem altera o banco.
+
+O navegador verificou 2.869 residências, 16 linhas relacionadas em dois
+subformulários, cinco respostas de API e zero erros/gravações. O probe também
+comparou três inputs nativos de data com o registro da API selecionado pela
+chave, incluindo DataCad com máscara Access; dois tinham valor e um era NULL.
+Isso verifica a apresentação das datas reais após a mudança para ISO completo.
+Não comprova edição de todos os campos nem equivalência dos 97 formulários.
+
+O gate terminou com exit0; o banco temporário foi removido e o servidor/túnel
+foram encerrados. Artefatos privados: `row-count-audit.json`,
+`postgres-value-audit.json`, `postgres-all-scalar-audit.json`,
+`postgres-complex-audit.json`, `quarantine-integrity-audit.json`,
+`backend-http-audit.json` e `backend-browser-audit.json` no diretório da migração.
+A paridade HTTP da consulta está em `query-audit/cspront1-http-integrated.json`;
+os metadados dos anexos em `value-audit/pg-attachment-metadata.json`.
+
+A correção posterior de edição de PK Double (doc46) tem seus próprios testes
+POST/PUT/concorrência; não é apresentada como parte deste snapshot 21c986c.
+Escrita multivalorada, subforms editáveis, demais eventos VBA, consultas e
+renderização dos relatórios continuam abertos na meta principal.
