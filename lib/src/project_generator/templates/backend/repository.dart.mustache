@@ -122,7 +122,7 @@ class {{className}}Repository {
 {{/hasBeforeInsertAllocator}}
   }
 
-  Future<void> update({{primaryKeyParamType}} id, {{className}} item) async {
+  Future<Map<String, dynamic>?> update({{primaryKeyParamType}} id, {{className}} item) async {
     final payload = item.toMap();
 {{#hasComplexPointers}}
     // Only dedicated collection/attachment operations may change these links.
@@ -134,7 +134,23 @@ class {{className}}Repository {
     // Source control is disabled; UPDATE never renumbers an existing family.
     payload.remove({{{allocatorColumnLiteral}}});
 {{/hasBeforeInsertAllocator}}
-    await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).update(payload);
+    return await db.transaction((ctx) async {
+      final affected = await ctx.table('{{tableRuntimeName}}')
+          .where('{{primaryKeyRuntimeName}}', '=', id).update(payload);
+      if (affected == 0) return null;
+      // A normal editable Access primary key may have changed in this update.
+      final savedId = payload.containsKey('{{primaryKeyRuntimeName}}')
+          ? payload['{{primaryKeyRuntimeName}}'] : id;
+      final row = await ctx.table('{{tableRuntimeName}}')
+          .where('{{primaryKeyRuntimeName}}', '=', savedId).first();
+      if (row == null) throw StateError('Failed to reload updated entity');
+{{#hasTemporalFields}}
+      return _normalizeRow(Map<String, dynamic>.from(row));
+{{/hasTemporalFields}}
+{{^hasTemporalFields}}
+      return Map<String, dynamic>.from(row);
+{{/hasTemporalFields}}
+    });
   }
 
   Future<void> delete({{primaryKeyParamType}} id) async {

@@ -78,8 +78,7 @@ class {{className}}Service {
   }
 
   Future<Map<String, dynamic>?> update({{primaryKeyParamType}} id, {{className}} item) async {
-    await repository.update(id, item);
-    return repository.findById(id);
+    return repository.update(id, item);
   }
 
   Future<void> delete({{primaryKeyParamType}} id) {
