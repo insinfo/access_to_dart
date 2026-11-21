@@ -32,23 +32,18 @@ class {{className}}Repository {
   }
 
   Future<List<Map<String, dynamic>>> lookupOptions({
+    required String sourceTable,
     required String valueColumn,
     required String labelColumn,
     String? orderByColumn,
     int limit = 100,
   }) async {
-    final rows = List<Map<String, dynamic>>.from(await db.table('{{tableRuntimeName}}').get());
+    final query = db.table(sourceTable).whereNotNull(valueColumn);
     if (orderByColumn != null && orderByColumn.isNotEmpty) {
-      rows.sort((left, right) {
-        final leftValue = (left[orderByColumn] ?? left[labelColumn] ?? '').toString();
-        final rightValue = (right[orderByColumn] ?? right[labelColumn] ?? '').toString();
-        return leftValue.toLowerCase().compareTo(rightValue.toLowerCase());
-      });
+      query.orderBy(orderByColumn);
     }
-
+    final rows = List<Map<String, dynamic>>.from(await query.limit(limit).get());
     return rows
-        .where((row) => row[valueColumn] != null)
-        .take(limit)
         .map(
           (row) => <String, dynamic>{
             'value': row[valueColumn],

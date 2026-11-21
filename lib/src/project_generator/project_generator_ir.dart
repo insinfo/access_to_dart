@@ -82,13 +82,13 @@ class GeneratedFieldDescriptor {
 
   bool get isReadOnly => isAutoNumber || isCalculated || isAttachmentField;
 
-    bool get hasSemanticDefault => semanticDefaultExpression != null;
+  bool get hasSemanticDefault => semanticDefaultExpression != null;
 
-    String get nonNullableDartType => dartType.endsWith('?')
+  String get nonNullableDartType => dartType.endsWith('?')
       ? dartType.substring(0, dartType.length - 1)
       : dartType;
 
-    bool get isUuidSuggested =>
+  bool get isUuidSuggested =>
       normalizedAccessTypeName == 'guid' ||
       normalizedAccessTypeName == 'uniqueidentifier';
 
@@ -422,10 +422,10 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       primaryKeyRuntimeName: primaryKeyRuntimeName(table),
       primaryKeyFieldName: primaryKeyColumn.fieldName,
       primaryKeyParamType: _routeParameterType(primaryKeyColumn),
-        primaryKeyRouteParseExpression:
+      primaryKeyRouteParseExpression:
           _routeParameterParseExpression(primaryKeyColumn),
       primaryKeyIsAutoNumber: primaryKeyColumn.isAutoNumber,
-          fields: fields,
+      fields: fields,
       attachments: attachments,
       lookups: table.columns
           .map((column) => _resolveLookupDescriptor(project, column))
@@ -452,60 +452,58 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       primaryKeyField: primaryKeyColumn.fieldName,
       primaryKeyParamType: _routeParameterType(primaryKeyColumn),
       attachments: attachments,
-      fields: orderedColumns
-          .map(
-            (column) {
-              final matchedControl = _resolveBoundControl(matchedForm, column);
-              final defaultSemantics =
-                  ProjectGenerator.defaultSemanticTranslator.translate(
-                column,
-                rows: table.sampleRows,
-              );
-              return GeneratedFieldDescriptor(
-              runtimeName: columnRuntimeName(column),
-              columnConstantName: column.columnConstantName,
-              fieldName: column.fieldName,
-              dartType: column.dartType,
-              accessTypeName: column.typeName,
-              label: _frontendFieldLabel(column, matchedControl),
-              isRequired: column.isRequired,
-              allowZeroLength: column.allowZeroLength,
-              maxLength: column.maxLength,
-              validationRule: column.validationRule,
-              validationText: column.validationText,
-              description: column.description,
-              formatString: column.formatString,
-              inputMask: column.inputMask,
-              isAutoNumber: column.isAutoNumber,
-              isCalculated: column.isCalculated,
-              displayControl: column.displayControl,
-              textFormat: column.textFormat,
-              imeMode: column.imeMode,
-              imeSentenceMode: column.imeSentenceMode,
-              allowMultipleValues: column.allowMultipleValues,
-              rowSourceType: column.rowSourceType,
-              rowSource: column.rowSource,
-              accessControlType: matchedControl?.type,
-              wssFieldId: column.wssFieldId,
-              complexTypeClassification: column.complexTypeClassification,
-              attachmentTableName: column.attachmentTableName,
-              attachmentLinkColumn: column.attachmentLinkColumn,
-              temporalSemantic: inferAccessTemporalSemanticWithRows(
-                column,
-                rows: table.sampleRows,
-              ),
-              accessDefaultValue: column.defaultValue,
-              semanticDefaultExpression: defaultSemantics?.dartExpression,
-              semanticDefaultHelpers: defaultSemantics == null
-                  ? const <String>[]
-                  : defaultSemantics.dartHelpers.toList(growable: false),
-              fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
-                toMapExpression: _toMapValue(column, rows: table.sampleRows),
-              lookup: _resolveLookupDescriptor(project, column),
-              );
-            },
-          )
-          .toList(growable: false),
+      fields: orderedColumns.map(
+        (column) {
+          final matchedControl = _resolveBoundControl(matchedForm, column);
+          final defaultSemantics =
+              ProjectGenerator.defaultSemanticTranslator.translate(
+            column,
+            rows: table.sampleRows,
+          );
+          return GeneratedFieldDescriptor(
+            runtimeName: columnRuntimeName(column),
+            columnConstantName: column.columnConstantName,
+            fieldName: column.fieldName,
+            dartType: column.dartType,
+            accessTypeName: column.typeName,
+            label: _frontendFieldLabel(column, matchedControl),
+            isRequired: column.isRequired,
+            allowZeroLength: column.allowZeroLength,
+            maxLength: column.maxLength,
+            validationRule: column.validationRule,
+            validationText: column.validationText,
+            description: column.description,
+            formatString: column.formatString,
+            inputMask: column.inputMask,
+            isAutoNumber: column.isAutoNumber,
+            isCalculated: column.isCalculated,
+            displayControl: column.displayControl,
+            textFormat: column.textFormat,
+            imeMode: column.imeMode,
+            imeSentenceMode: column.imeSentenceMode,
+            allowMultipleValues: column.allowMultipleValues,
+            rowSourceType: column.rowSourceType,
+            rowSource: column.rowSource,
+            accessControlType: matchedControl?.type,
+            wssFieldId: column.wssFieldId,
+            complexTypeClassification: column.complexTypeClassification,
+            attachmentTableName: column.attachmentTableName,
+            attachmentLinkColumn: column.attachmentLinkColumn,
+            temporalSemantic: inferAccessTemporalSemanticWithRows(
+              column,
+              rows: table.sampleRows,
+            ),
+            accessDefaultValue: column.defaultValue,
+            semanticDefaultExpression: defaultSemantics?.dartExpression,
+            semanticDefaultHelpers: defaultSemantics == null
+                ? const <String>[]
+                : defaultSemantics.dartHelpers.toList(growable: false),
+            fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
+            toMapExpression: _toMapValue(column, rows: table.sampleRows),
+            lookup: _resolveLookupDescriptor(project, column),
+          );
+        },
+      ).toList(growable: false),
     );
   }
 
@@ -579,8 +577,9 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     final candidates = project.forms.where((form) {
       final recordSource = form.recordSource;
       return recordSource != null &&
-          AnalysisProject.lookupKey(recordSource) ==
-              AnalysisProject.lookupKey(table.name);
+          (AnalysisProject.lookupKey(recordSource) ==
+                  AnalysisProject.lookupKey(table.name) ||
+              _isDirectTableProjection(recordSource, table));
     }).toList(growable: false);
 
     if (candidates.isEmpty) {
@@ -602,6 +601,48 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       }
     }
     return bestForm ?? candidates.first;
+  }
+
+  // Only reuse control metadata when SELECT has no filtering, ordering,
+  // aliases, expressions, joins or aggregation. This does not execute a query
+  // or turn a subform into a master/detail relationship.
+  bool _isDirectTableProjection(String sql, AnalysisTable table) {
+    const identifier =
+        r'(?:\[(?:[^\]]|\]\])+\]|[a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)';
+    final qualified = '$identifier(?:\\s*\\.\\s*(?:$identifier|\\*))?';
+    final projection = '(?:\\*|$qualified)(?:\\s*,\\s*$qualified)*';
+    final match = RegExp(
+      '^\\s*SELECT\\s+($projection)\\s+FROM\\s+($identifier)\\s*;?\\s*' r'$',
+      caseSensitive: false,
+    ).firstMatch(sql);
+    if (match == null) return false;
+    String decode(String token) => token.startsWith('[')
+        ? token.substring(1, token.length - 1).replaceAll(']]', ']')
+        : token;
+    final tableKey = AnalysisProject.lookupKey(table.name);
+    if (AnalysisProject.lookupKey(decode(match.group(2)!)) != tableKey) {
+      return false;
+    }
+    final fields = match.group(1)!;
+    if (fields == '*') return true;
+    final columnKeys = table.columns
+        .map((column) => AnalysisProject.lookupKey(column.name))
+        .toSet();
+    final tokens = RegExp('($identifier)(?:\\s*\\.\\s*($identifier|\\*))?')
+        .allMatches(fields);
+    for (final token in tokens) {
+      final qualifier = token.group(2) == null ? null : decode(token.group(1)!);
+      final column = decode(token.group(2) ?? token.group(1)!);
+      if (qualifier != null &&
+          AnalysisProject.lookupKey(qualifier) != tableKey) {
+        return false;
+      }
+      if (column != '*' &&
+          !columnKeys.contains(AnalysisProject.lookupKey(column))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   List<AnalysisColumn> _orderFrontendColumns(
@@ -639,7 +680,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisFormControl control,
   ) {
     final candidates = <String>{
-      if (control.controlSource != null && control.controlSource!.trim().isNotEmpty)
+      if (control.controlSource != null &&
+          control.controlSource!.trim().isNotEmpty)
         AnalysisProject.lookupKey(control.controlSource!),
       AnalysisProject.lookupKey(control.name),
     }..removeWhere((value) => value.isEmpty);
@@ -701,67 +743,65 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
 
   GeneratedCoreModelDescriptor _buildCoreModelIr(AnalysisTable table) {
     final helperNames = <String>{};
-    final fields = table.columns
-        .map(
-          (column) {
-            final defaultSemantics =
-                ProjectGenerator.defaultSemanticTranslator.translate(
-              column,
-              rows: table.sampleRows,
-            );
-            if (defaultSemantics != null) {
-              helperNames.addAll(defaultSemantics.dartHelpers);
-            }
-            if (column.dartType == 'DateTime?') {
-              helperNames
-                ..add('temporalParse')
-                ..add('temporalFormat');
-            }
-            return GeneratedFieldDescriptor(
-              runtimeName: columnRuntimeName(column),
-              columnConstantName: column.columnConstantName,
-              fieldName: column.fieldName,
-              dartType: column.dartType,
-              accessTypeName: column.typeName,
-              label: column.label,
-              isRequired: column.isRequired,
-              allowZeroLength: column.allowZeroLength,
-              maxLength: column.maxLength,
-              validationRule: column.validationRule,
-              validationText: column.validationText,
-              description: column.description,
-              formatString: column.formatString,
-              inputMask: column.inputMask,
-              isAutoNumber: column.isAutoNumber,
-              isCalculated: column.isCalculated,
-              displayControl: column.displayControl,
-              textFormat: column.textFormat,
-              imeMode: column.imeMode,
-              imeSentenceMode: column.imeSentenceMode,
-              allowMultipleValues: column.allowMultipleValues,
-              rowSourceType: column.rowSourceType,
-              rowSource: column.rowSource,
-              accessControlType: null,
-              wssFieldId: column.wssFieldId,
-              complexTypeClassification: column.complexTypeClassification,
-              attachmentTableName: column.attachmentTableName,
-              attachmentLinkColumn: column.attachmentLinkColumn,
-              temporalSemantic: inferAccessTemporalSemanticWithRows(
-                column,
-                rows: table.sampleRows,
-              ),
-              accessDefaultValue: column.defaultValue,
-              semanticDefaultExpression: defaultSemantics?.dartExpression,
-              semanticDefaultHelpers: defaultSemantics == null
-                  ? const <String>[]
-                  : defaultSemantics.dartHelpers.toList(growable: false),
-              fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
-              toMapExpression: _toMapValue(column, rows: table.sampleRows),
-              lookup: null,
-            );
-          },
-        )
-        .toList(growable: false);
+    final fields = table.columns.map(
+      (column) {
+        final defaultSemantics =
+            ProjectGenerator.defaultSemanticTranslator.translate(
+          column,
+          rows: table.sampleRows,
+        );
+        if (defaultSemantics != null) {
+          helperNames.addAll(defaultSemantics.dartHelpers);
+        }
+        if (column.dartType == 'DateTime?') {
+          helperNames
+            ..add('temporalParse')
+            ..add('temporalFormat');
+        }
+        return GeneratedFieldDescriptor(
+          runtimeName: columnRuntimeName(column),
+          columnConstantName: column.columnConstantName,
+          fieldName: column.fieldName,
+          dartType: column.dartType,
+          accessTypeName: column.typeName,
+          label: column.label,
+          isRequired: column.isRequired,
+          allowZeroLength: column.allowZeroLength,
+          maxLength: column.maxLength,
+          validationRule: column.validationRule,
+          validationText: column.validationText,
+          description: column.description,
+          formatString: column.formatString,
+          inputMask: column.inputMask,
+          isAutoNumber: column.isAutoNumber,
+          isCalculated: column.isCalculated,
+          displayControl: column.displayControl,
+          textFormat: column.textFormat,
+          imeMode: column.imeMode,
+          imeSentenceMode: column.imeSentenceMode,
+          allowMultipleValues: column.allowMultipleValues,
+          rowSourceType: column.rowSourceType,
+          rowSource: column.rowSource,
+          accessControlType: null,
+          wssFieldId: column.wssFieldId,
+          complexTypeClassification: column.complexTypeClassification,
+          attachmentTableName: column.attachmentTableName,
+          attachmentLinkColumn: column.attachmentLinkColumn,
+          temporalSemantic: inferAccessTemporalSemanticWithRows(
+            column,
+            rows: table.sampleRows,
+          ),
+          accessDefaultValue: column.defaultValue,
+          semanticDefaultExpression: defaultSemantics?.dartExpression,
+          semanticDefaultHelpers: defaultSemantics == null
+              ? const <String>[]
+              : defaultSemantics.dartHelpers.toList(growable: false),
+          fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
+          toMapExpression: _toMapValue(column, rows: table.sampleRows),
+          lookup: null,
+        );
+      },
+    ).toList(growable: false);
 
     return GeneratedCoreModelDescriptor(
       className: table.className,
@@ -801,9 +841,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisProject project,
     AnalysisColumn column,
   ) {
-    final normalizedType = foldToAscii(column.rowSourceType ?? '')
-        .toLowerCase()
-        .trim();
+    final normalizedType =
+        foldToAscii(column.rowSourceType ?? '').toLowerCase().trim();
     if (normalizedType != 'table/query') {
       return null;
     }
@@ -862,6 +901,22 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       return null;
     }
 
+    // A lookup is only safe when its complete query semantics are supported.
+    // Do not silently discard filters, joins, grouping, or row modifiers.
+    final from =
+        statement.fromTokens.where((token) => token.lexeme != ';').toList();
+    if (statement.whereTokens.isNotEmpty ||
+        statement.groupByTokens.isNotEmpty ||
+        statement.havingTokens.isNotEmpty ||
+        from.length != 1 ||
+        !from.single.isWord ||
+        statement.selectTokens.any((token) =>
+            token.isWord &&
+            const ['DISTINCT', 'DISTINCTROW', 'TOP', 'INTO']
+                .contains(token.lexeme))) {
+      return null;
+    }
+
     final sourceTableName = _extractPrimaryFromTableName(statement.fromTokens);
     if (sourceTableName == null) {
       return null;
@@ -876,7 +931,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       return null;
     }
 
-    final valueProjection = _extractProjectedColumnName(selectExpressions.first);
+    final valueProjection =
+        _extractProjectedColumnName(selectExpressions.first);
     if (valueProjection == null) {
       return null;
     }
@@ -887,20 +943,29 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
 
     final labelProjection = selectExpressions.length > 1
         ? _extractProjectedColumnName(selectExpressions[1])
-        : null;
-    final labelColumn = labelProjection == null
-        ? (_findPreferredLabelColumn(table) ?? valueColumn)
-        : (_findColumnBySqlName(table, labelProjection) ??
-            _findPreferredLabelColumn(table) ??
-            valueColumn);
+        : valueProjection;
+    if (labelProjection == null) return null;
+    final labelColumn = _findColumnBySqlName(table, labelProjection);
+    if (labelColumn == null) return null;
 
-    final orderExpressions = _splitTopLevelExpressions(statement.orderByTokens);
+    final orderTokens =
+        statement.orderByTokens.where((token) => token.lexeme != ';').toList();
+    if (orderTokens.isNotEmpty && orderTokens.last.lexeme == 'ASC') {
+      orderTokens.removeLast();
+    }
+    final orderExpressions = _splitTopLevelExpressions(orderTokens);
+    if (orderExpressions.length > 1 ||
+        orderTokens.any((token) => token.isWord && token.lexeme == 'DESC')) {
+      return null;
+    }
     final orderProjection = orderExpressions.isEmpty
         ? null
         : _extractProjectedColumnName(orderExpressions.first);
     final orderByColumn = orderProjection == null
         ? null
         : _findColumnBySqlName(table, orderProjection);
+
+    if (orderTokens.isNotEmpty && orderByColumn == null) return null;
 
     return _ResolvedLookupSource(
       table: table,
@@ -995,7 +1060,8 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     return _extractProjectedColumnName(current, takeFirstOnly: true);
   }
 
-  List<List<AccessSqlToken>> _splitTopLevelExpressions(List<AccessSqlToken> tokens) {
+  List<List<AccessSqlToken>> _splitTopLevelExpressions(
+      List<AccessSqlToken> tokens) {
     final expressions = <List<AccessSqlToken>>[];
     final current = <AccessSqlToken>[];
     var depth = 0;
@@ -1165,7 +1231,8 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
   }''');
     }
   }
-  if (helperNames.contains('temporalParse') || helperNames.contains('temporalFormat')) {
+  if (helperNames.contains('temporalParse') ||
+      helperNames.contains('temporalFormat')) {
     methods.add('''
   static DateTime? _accessParseTemporalValue(
     Object? value, {

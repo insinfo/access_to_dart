@@ -35,6 +35,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
         (lookup) => '''
       case '${lookup.fieldRuntimeName}':
         return repository.lookupOptions(
+          sourceTable: ${_dartStringLiteral(lookup.sourceTableRuntimeName)},
           valueColumn: '${lookup.valueColumnRuntimeName}',
           labelColumn: '${lookup.labelColumnRuntimeName}',
           orderByColumn: ${lookup.orderByColumnRuntimeName == null ? 'null' : "'${lookup.orderByColumnRuntimeName}'"},

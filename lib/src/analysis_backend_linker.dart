@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'analysis_model.dart';
 
 class AnalysisBackendLinker {
@@ -40,7 +42,17 @@ class AnalysisBackendLinker {
 
     final resolvedBackendTables = <Map<String, dynamic>>[];
     final seenResolvedKeys = <String>{};
-    for (final sourceName in frontendProject.effectiveRecordSources) {
+    // Linked tables are dependencies of queries, reports, macros and subforms,
+    // even when no form uses their name directly as RecordSource.
+    final requiredSources = <String>{
+      ...frontendProject.effectiveRecordSources,
+      ...frontendProject.sourceOverlayLinkedTables.map((table) => table.name),
+      ...((frontendAnalysis['linkedTables'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((table) => table['name'])
+          .whereType<String>(),
+    };
+    for (final sourceName in requiredSources) {
       final sourceKey = _lookupKey(sourceName);
       if (sourceKey.isEmpty || localTableKeys.contains(sourceKey)) {
         continue;
@@ -49,7 +61,9 @@ class AnalysisBackendLinker {
       final backendName = linkedSourceByAlias[sourceKey] ?? sourceName;
       final backendKey = _lookupKey(backendName);
       final backendTable = backendTableByKey[backendKey];
-      if (backendTable == null || !seenResolvedKeys.add(backendKey)) {
+      if (backendTable == null ||
+          localTableKeys.contains(backendKey) ||
+          !seenResolvedKeys.add(backendKey)) {
         continue;
       }
       resolvedBackendTables.add(Map<String, dynamic>.from(backendTable));
@@ -64,6 +78,18 @@ class AnalysisBackendLinker {
       }
     }
 
+    // Attachment child tables are synthesized by analysis rather than present
+    // in the linked-table catalog, but are required by their materialized parent.
+    for (final table in backendTables) {
+      if (table['syntheticKind'] != 'attachment') continue;
+      final parentKey = _lookupKey(table['attachmentParentTable'] as String? ?? '');
+      final key = _lookupKey(table['name'] as String? ?? '');
+      if ((localTableKeys.contains(parentKey) || seenResolvedKeys.contains(parentKey)) &&
+          !localTableKeys.contains(key) && seenResolvedKeys.add(key)) {
+        resolvedBackendTables.add(Map<String, dynamic>.from(table));
+      }
+    }
+
     final effectiveTables = <Map<String, dynamic>>[
       ...localTables,
       ...resolvedBackendTables,
@@ -72,11 +98,25 @@ class AnalysisBackendLinker {
       for (final table in effectiveTables) table['name'] as String? ?? '',
     }..remove('');
 
-    final filteredRelationships = backendRelationships.where((relationship) {
+    final relationshipKeys = <String>{};
+    final allRelationships = <Map<String, dynamic>>[
+      ...((frontendAnalysis['relationships'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((relationship) => Map<String, dynamic>.from(relationship)),
+      ...backendRelationships,
+    ];
+    final filteredRelationships = allRelationships.where((relationship) {
       final fromTable = relationship['fromTable'] as String? ?? '';
       final toTable = relationship['toTable'] as String? ?? '';
+      // Distinct Access relationship names/flags remain distinct metadata.
+      // Only an identical record present in both inputs is redundant.
+      final keys = relationship.keys.toList()..sort();
+      final identity = jsonEncode({
+        for (final key in keys) key: relationship[key],
+      });
       return effectiveTableNames.contains(fromTable) &&
-          effectiveTableNames.contains(toTable);
+          effectiveTableNames.contains(toTable) &&
+          relationshipKeys.add(identity);
     }).toList(growable: false);
 
     merged['tables'] = effectiveTables;
