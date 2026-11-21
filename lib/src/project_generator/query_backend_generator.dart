@@ -21,8 +21,9 @@ extension _CompiledQueryBackend on ProjectGenerator {
             questionMarkParameters: true,
             ordinalOutputAliases: true);
         final key = toSnakeCaseIdentifier(name);
-        if (specifications.containsKey(key))
+        if (specifications.containsKey(key)) {
           throw FormatException('Query route collision');
+        }
         specifications[key] = {
           'name': name,
           'sql': plan.sql,
