@@ -98,14 +98,16 @@ class AnalysisOverlayMerger {
         final value = entry.value;
         if (value == null) continue;
         if (entry.key == 'name' && target['name'] != null) continue;
-        if (entry.key == 'controls' || entry.key == 'sections') {
+        if (entry.key == 'controls' ||
+            entry.key == 'sections' ||
+            entry.key == 'groupLevels') {
           final records = (value as List)
               .whereType<Map>()
               .map((record) => record.cast<String, Object?>())
               .toList();
           target[entry.key] = _mergeReportRecords(
               (target[entry.key] as List?) ?? const [], records);
-        } else if (entry.key == 'macros') {
+        } else if (entry.key == 'macros' || entry.key == 'properties') {
           target[entry.key] = <String, dynamic>{
             ...((target[entry.key] as Map?)?.cast<String, dynamic>() ??
                 const {}),

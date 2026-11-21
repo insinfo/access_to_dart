@@ -224,6 +224,10 @@ class AccessSrcReport {
   final String name;
   final String? caption;
   final String? recordSource;
+  final String? orderBy;
+  final String? orderByOn;
+  final String? orderByOnLoad;
+  final List<AccessSrcReportGroupLevel> groupLevels;
   final List<AccessSrcControl> controls;
   final List<AccessSrcReportSection> sections;
   final Map<String, List<String>> macros;
@@ -232,6 +236,10 @@ class AccessSrcReport {
     required this.name,
     required this.caption,
     required this.recordSource,
+    this.orderBy,
+    this.orderByOn,
+    this.orderByOnLoad,
+    this.groupLevels = const [],
     required this.controls,
     required this.sections,
     required this.macros,
@@ -241,6 +249,10 @@ class AccessSrcReport {
         'name': name,
         'caption': caption,
         'recordSource': recordSource,
+        'orderBy': orderBy,
+        'orderByOn': orderByOn,
+        'orderByOnLoad': orderByOnLoad,
+        'groupLevels': groupLevels.map((level) => level.toJson()).toList(),
         'controls': controls.map((control) => control.toJson()).toList(),
         'sections': sections.map((section) => section.toJson()).toList(),
         'macros': macros,
@@ -265,5 +277,25 @@ class AccessSrcReportSection {
         'name': name,
         'height': height,
         'controls': controls.map((control) => control.toJson()).toList(),
+      };
+}
+
+/// Um BreakLevel do SaveAsText, na ordem do export. Valores ausentes não
+/// recebem defaults: NotDefault e enums numéricos permanecem como exportados.
+class AccessSrcReportGroupLevel {
+  final Map<String, String> properties;
+
+  AccessSrcReportGroupLevel(Map<String, String> properties)
+      : properties = Map.unmodifiable(properties);
+
+  Map<String, Object?> toJson() => {
+        'controlSource': properties['ControlSource'],
+        'sortOrder': properties['SortOrder'],
+        'groupHeader': properties['GroupHeader'],
+        'groupFooter': properties['GroupFooter'],
+        'groupOn': properties['GroupOn'],
+        'groupInterval': properties['GroupInterval'],
+        'keepTogether': properties['KeepTogether'],
+        'properties': properties,
       };
 }

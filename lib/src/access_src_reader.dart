@@ -606,7 +606,12 @@ class AccessSrcReader {
       orElse: () => _BasNode('Report'),
     );
     final sections = <AccessSrcReportSection>[];
+    final groupLevels = <AccessSrcReportGroupLevel>[];
     void visit(_BasNode node) {
+      if (node.type == 'BreakLevel') {
+        groupLevels.add(AccessSrcReportGroupLevel(node.properties));
+        return;
+      }
       const sectionTypes = {
         'FormHeader',
         'FormFooter',
@@ -637,6 +642,10 @@ class AccessSrcReader {
       name: name,
       caption: report.properties['Caption'],
       recordSource: report.properties['RecordSource'],
+      orderBy: report.properties['OrderBy'],
+      orderByOn: report.properties['OrderByOn'],
+      orderByOnLoad: report.properties['OrderByOnLoad'],
+      groupLevels: groupLevels,
       controls: _collectControls(report),
       sections: sections,
       macros: _collectMacros(report),

@@ -30,6 +30,11 @@ void main() {
     expect(report['id'], isA<int>());
     expect(report['caption'], 'Contact List');
     expect(report['recordSource'], 'Contatos');
+    final levels = (report['groupLevels'] as List).cast<Map>();
+    expect(levels.map((level) => level['controlSource']),
+        ['=Left([Sobrenome],1)', 'Sobrenome', 'Nome']);
+    expect(levels.first['groupHeader'], 'NotDefault');
+    expect(levels.last['sortOrder'], isNull);
     final sections = (report['sections'] as List).cast<Map>();
     expect(sections.map((s) => s['type']), [
       'FormHeader',
@@ -65,6 +70,20 @@ void main() {
         .toList();
     expect(generated, hasLength(1));
     expect(await generated.single.readAsString(), contains('ListaDeContatos'));
+    final inventories = await Directory('${dir.path}/generated')
+        .list(recursive: true)
+        .where((f) => f is File && f.path.endsWith('access-reports.json'))
+        .cast<File>()
+        .toList();
+    expect(inventories, hasLength(1));
+    final inventory =
+        jsonDecode(await inventories.single.readAsString()) as Map;
+    final generatedReport = (inventory['reports'] as List)
+        .cast<Map>()
+        .singleWhere((r) => r['name'] == 'ListaDeContatos');
+    expect(generatedReport['groupLevels'], levels);
+    expect(generatedReport['sections'], sections);
+    expect(inventory['renderer_generated'], isFalse);
   });
 
   test('overlay reports preserva metadados e ordem sem tabelas', () async {

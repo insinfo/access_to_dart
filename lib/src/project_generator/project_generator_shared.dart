@@ -2,6 +2,7 @@ part of 'project_generator.dart';
 
 extension _ProjectGeneratorShared on ProjectGenerator {
   Future<void> _writeReport(AnalysisProject project, Directory root) async {
+    final inventory = await _writeAccessReportInventory(project, root);
     final doctorReport = AnalysisDoctor().inspect(project);
     final summary = doctorReport.summary;
     final reconciliationSummary =
@@ -43,6 +44,32 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     buffer.writeln();
     buffer.writeln('## Report Inventory');
     buffer.writeln();
+    buffer.writeln(
+      '- Inventário completo: [access-reports.json](access-reports.json).',
+    );
+    buffer.writeln(
+      '- Reports principais: `${(inventory['reports'] as List).length}`; '
+      'overlay: `${(inventory['source_overlay_reports'] as List).length}`; '
+      'canônicos: `${(inventory['canonical_reports'] as List).length}`.',
+    );
+    final reportSummary = inventory['summary'] as Map<String, Object?>;
+    for (final entry in const {
+      'sections': 'Seções',
+      'controls': 'Controles',
+      'groupLevels': 'Níveis de agrupamento',
+    }.entries) {
+      final counts = reportSummary[entry.key] as Map<String, int>;
+      if (counts['available_reports'] == 0) {
+        buffer.writeln(
+            '- ${entry.value}: não informados nos reports principais.');
+      } else {
+        buffer.writeln(
+          '- ${entry.value}: `${counts['total']}` em '
+          '`${counts['available_reports']}` reports com esse metadado.',
+        );
+      }
+    }
+    buffer.writeln();
     if (project.reportCatalogNames.isEmpty) {
       buffer.writeln('- Nenhum report catalogado no analysis atual.');
     } else {
@@ -54,11 +81,11 @@ extension _ProjectGeneratorShared on ProjectGenerator {
           '- ... e mais `${project.reportCatalogNames.length - 25}` reports no catalogo.',
         );
       }
-      buffer.writeln();
-      buffer.writeln(
-        '> Observacao: a trilha de reports foi aberta com inventario de catalogo. A extração estruturada de controles e secoes ainda precisa ser promovida para o modelo tipado.',
-      );
     }
+    buffer.writeln();
+    buffer.writeln(
+      '> Este artefato preserva o inventário e os metadados disponíveis; não gera um renderer de reports, layout paginado ou PDF. Campos ausentes não significam ausência de seções, controles ou agrupamentos.',
+    );
     buffer.writeln();
     buffer.writeln('## Findings');
     buffer.writeln();
@@ -73,6 +100,52 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     }
     await File('${root.path}${Platform.pathSeparator}conversion-report.md')
         .writeAsString(buffer.toString());
+  }
+
+  Future<Map<String, Object?>> _writeAccessReportInventory(
+    AnalysisProject project,
+    Directory root,
+  ) async {
+    // Preserve os objetos completos, inclusive propriedades ainda não tipadas.
+    // As fontes ficam separadas para não duplicar controles nas contagens.
+    final reports = (project.raw['reports'] as List?) ?? const [];
+    final overlayReports =
+        ((project.raw['source_overlay'] as Map?)?['reports'] as List?) ??
+            const [];
+    final canonicalReports =
+        ((project.raw['canonical_analysis'] as Map?)?['reports'] as List?) ??
+            const [];
+    final summary = <String, Object?>{};
+    for (final key in ['sections', 'controls', 'groupLevels']) {
+      var available = 0;
+      var total = 0;
+      for (final report in reports.whereType<Map>()) {
+        final entries = report[key];
+        if (entries is List) {
+          available++;
+          total += entries.length;
+        }
+      }
+      summary[key] = <String, int>{
+        'available_reports': available,
+        'total': total,
+      };
+    }
+    final inventory = <String, Object?>{
+      'schema_version': '1.0',
+      'artifact': 'access_report_inventory',
+      'analysis_schema_version': project.schemaVersion,
+      'source': project.source,
+      'status': 'inventory_only',
+      'renderer_generated': false,
+      'reports': reports,
+      'source_overlay_reports': overlayReports,
+      'canonical_reports': canonicalReports,
+      'summary': summary,
+    };
+    await File('${root.path}${Platform.pathSeparator}access-reports.json')
+        .writeAsString(const JsonEncoder.withIndent('  ').convert(inventory));
+    return inventory;
   }
 
   List<String> _recommendedNextSteps(
