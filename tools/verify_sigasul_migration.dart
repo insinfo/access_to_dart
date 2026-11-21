@@ -5,16 +5,19 @@ import 'package:access_to_dart/access_to_dart.dart';
 import 'package:access_to_dart/src/migration_identifier_style.dart';
 import 'package:dpgsql/dpgsql.dart';
 import 'audit_postgres_value_hashes.dart';
+import 'audit_postgres_complex_values.dart';
 
 // Full-data acceptance probe. Credentials are session environment only.
 Future<void> main(List<String> args) async {
-  if (args.length < 2 || args.length > 5) {
+  if (args.length < 2 || args.length > 6) {
     throw ArgumentError(
-        'analysis.json output-directory [dao-oracle.json] [backend.exe] [dao-value-oracle.json]');
+        'analysis.json output-directory [dao-oracle.json] [backend.exe] [dao-value-oracle.json] [dao-complex-oracle.json]');
   }
   final analysis = jsonDecode(await File(args[0]).readAsString()) as Map;
   Map? oracle;
   Map? valueOracle;
+  Map? complexOracle;
+  Map<String, Object?>? complexReport;
   Map<String, Object?>? valueReport;
   String? sourceSha256;
   final daoCounts = <String, int>{};
@@ -38,12 +41,19 @@ Future<void> main(List<String> args) async {
       throw StateError('DAO oracle must cover exactly the migration table set');
     }
   }
-  if (args.length == 5) {
+  if (args.length >= 5) {
     valueOracle = jsonDecode(await File(args[4]).readAsString()) as Map;
     if (valueOracle['sourceSha256'] != sourceSha256 ||
-        valueOracle['contract'] != 'typed-column-pk-v1') {
+        !['typed-column-pk-v1', 'typed-column-pk-v2']
+            .contains(valueOracle['contract'])) {
       throw StateError(
           'Value oracle does not match the current source/contract');
+    }
+  }
+  if (args.length == 6) {
+    complexOracle = jsonDecode(await File(args[5]).readAsString()) as Map;
+    if (complexOracle['sourceSha256'] != sourceSha256) {
+      throw StateError('Complex oracle does not match current source');
     }
   }
   final env = Platform.environment;
@@ -126,6 +136,15 @@ Future<void> main(List<String> args) async {
             identifiers: policy,
             sourceSha256: sourceSha256!);
       }
+      if (complexOracle != null) {
+        complexReport = await auditPostgresComplexValues(
+          connection: pg,
+          analysis: analysis,
+          oracle: complexOracle,
+          identifiers: policy,
+          sourceSha256: sourceSha256!,
+        );
+      }
     } finally {
       await pg.close();
     }
@@ -146,6 +165,15 @@ Future<void> main(List<String> args) async {
           const JsonEncoder.withIndent('  ').convert(valueReport));
       stdout.writeln(
           'PostgreSQL values match DAO: ${valueReport['allValuesMatch']}');
+    }
+    if (complexReport != null) {
+      await File('${args[1]}/postgres-complex-audit.json').writeAsString(
+          const JsonEncoder.withIndent('  ').convert(complexReport));
+      stdout.writeln(
+          'PostgreSQL complex values match DAO: ${complexReport['allValuesMatch']}');
+      if (complexReport['allValuesMatch'] != true) {
+        throw StateError('Complex value hash audit mismatch');
+      }
     }
     if (report['allCountsMatch'] != true) {
       throw StateError('Row count audit mismatch');

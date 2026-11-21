@@ -22,11 +22,15 @@ try {
     $count = 0
     $recordCount = $null
     $snapshotCount = $null
-    if ($table.syntheticKind -eq 'attachment') {
-      if (-not $table.attachmentParentTable -or -not $table.attachmentParentColumn) {
-        throw 'Attachment mapping is incomplete'
+    $parentTable = $table.complexParentTable
+    $parentColumn = $table.complexParentColumn
+    if (-not $parentTable) { $parentTable = $table.attachmentParentTable }
+    if (-not $parentColumn) { $parentColumn = $table.attachmentParentColumn }
+    if ($table.syntheticKind -in @('attachment', 'multivalue')) {
+      if (-not $parentTable -or -not $parentColumn) {
+        throw 'Complex collection mapping is incomplete'
       }
-      $parent = $db.OpenRecordset(('SELECT ' + (Quote-Identifier $table.attachmentParentColumn) + ' FROM ' + (Quote-Identifier $table.attachmentParentTable)), 4)
+      $parent = $db.OpenRecordset(('SELECT ' + (Quote-Identifier $parentColumn) + ' FROM ' + (Quote-Identifier $parentTable)), 4)
       try {
         while (-not $parent.EOF) {
           $children = $parent.Fields.Item(0).Value
@@ -58,8 +62,8 @@ try {
       daoTableDefRecordCount = $recordCount
       daoSnapshotMoveLastCount = $snapshotCount
       method = $method
-      parentTable = $table.attachmentParentTable
-      parentColumn = $table.attachmentParentColumn
+      parentTable = $parentTable
+      parentColumn = $parentColumn
     }
   }
 } finally {
@@ -69,7 +73,7 @@ try {
 $afterHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($afterHash -ne $sourceHash) { throw 'Source hash changed during read-only audit; oracle rejected' }
 $oracle = [pscustomobject]@{
-  scope = 'dao_count_star_and_attachment_recordsets'
+  scope = 'dao_count_star_and_complex_recordsets'
   source = [pscustomobject]@{
     path = $sourcePath
     sha256 = $sourceHash

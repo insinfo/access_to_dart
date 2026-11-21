@@ -22,12 +22,12 @@ fluxos e dados. Compilar, gerar CRUD ou preservar um inventário não encerra a 
 
 | Área | Evidência necessária | Estado atual |
 |---|---|---|
-| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 50/50 contagens DAO conferidas em migração estrita. Leitor corrigido: 188 colunas (1.116.997 células) e quatro payloads iguais ao DAO; comparação integral desses valores após migração PostgreSQL em andamento |
+| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 54/54 contagens DAO conferidas: 123.922 registros lógicos. PostgreSQL: 188 colunas, cinco anexos e 55 valores multivalorados iguais ao DAO; um órfão físico preservado em arquivo separado. Auditoria das 887 colunas escalares ainda em andamento |
 | Consultas | Dependências e parâmetros resolvidos; resultados comparados com Access, incluindo filtros, JOIN, agregações e ações | Reconciliação textual sem divergências não prova execução PostgreSQL; executor geral pendente |
 | Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; não são 97 telas equivalentes |
 | Regras | Eventos, macros e VBA executados em Dart com efeitos comparados ao Access | Preservação estrutural melhorada; tradução/execução integral pendente |
 | Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário e estrutura disponíveis; renderer pendente |
-| Operação | Aplicação completa compilada e fluxos reais de cadastro, atendimento, benefícios, encaminhamento e relatórios testados com PostgreSQL | Backend completo compilado; GET real de 7.040 pessoas aprovado. Demais fluxos completos ainda não comprovados |
+| Operação | Aplicação completa compilada e fluxos reais de cadastro, atendimento, benefícios, encaminhamento e relatórios testados com PostgreSQL | Backend/release compilados; GET de 7.040 pessoas e navegador com 2.869 residências e 16 linhas em dois subforms aprovados, sem writes. Cadastro completo e regras VBA ainda não comprovados |
 
 Não há percentual global de conclusão calculado a partir de testes isolados.
 
@@ -96,3 +96,8 @@ Essas evidências estão em `29_sigasul_value_fidelity_audit.md`,
 `30_attachment_payload_decode.md` e `31_same_origin_and_request_scope.md`.
 Não substituem a validação dos fluxos completos nem comprovam os demais campos
 fora das três tabelas auditadas.
+
+Atualização de dados complexos e quarentena em `35_complex_source_coverage.md`.
+Navegação de registros e sequências restritas de erro em `36_record_navigation.md`;
+correção da precisão Money em `37_currency_storage_scale.md`. A numeração VBA de
+novas famílias e a edição de coleções ainda estão em implementação.

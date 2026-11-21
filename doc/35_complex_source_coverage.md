@@ -42,12 +42,12 @@ escolher qualquer coluna Long. Ambiguidade deve permanecer explícita.
 
 ## Pendências de aceitação
 
-- Recuperar o anexo renomeado e comparar seu payload com DAO SaveToFile.
-- Representar e migrar as três coleções multivaloradas, inclusive a vazia, com
+- [x] Recuperar o anexo renomeado e comparar seu payload com DAO SaveToFile.
+- [x] Representar e migrar as três coleções multivaloradas, inclusive a vazia, com
   vínculo ao registro pai e comparação dos valores completos com DAO.
-- Ampliar os oráculos de contagem e anexos após a nova análise. A contagem anterior
+- [x] Ampliar os oráculos de contagem e anexos após a nova análise. A contagem anterior
   123.866 não inclui os 56 registros filhos descobertos nesta auditoria.
-- Validar leitura e edição dessas coleções no app gerado. Migrar a tabela filha
+- [ ] Validar leitura e edição dessas coleções no app gerado. Migrar a tabela filha
   não comprova a funcionalidade do controle Access correspondente.
 
 Não há conclusão de fidelidade integral baseada somente nas 50 tabelas anteriores.
@@ -110,5 +110,36 @@ Validação: teste real de análise confirmou 54 tabelas (45 físicas, seis cole
 de anexos e três multivaloradas), os hashes DAO dos 55 valores e o órfão; passou em
 2m18. Cinco testes adicionais passaram, incluindo preservação dos dados da
 quarentena, recusa de vínculo ambíguo e regressão PostgreSQL de NULL/default nos
-dois formatos de seed. A migração completa das novas coleções e seus controles
-no navegador continuam pendentes até validação própria.
+dois formatos de seed. A análise isolada não comprova os controles no navegador. A migração foi
+validada posteriormente conforme a seção seguinte; seus controles continuam pendentes.
+
+## Migração PostgreSQL ampliada aprovada
+
+`analysis-complex-complete/analysis.json` foi gerado novamente pelo CLI a partir
+dos arquivos originais e do export `.src`: 54 tabelas, 45 vínculos, 32 relações
+públicas, 97 forms e 165 reports. O oráculo de contagens foi ampliado com
+`audit_dao_row_counts.ps1`, agora capaz de percorrer Recordset2 multivalorados.
+
+O gate em `build/codex-sigasul-goal/migration-complex-complete` passou:
+
+- 54/54 contagens DAO: **123.922 registros lógicos**; 41 FKs e 80 índices.
+- 188/188 colunas das três tabelas previamente auditadas iguais ao DAO.
+- Cinco payloads originais de anexos iguais ao DAO.
+- Três coleções textuais, totalizando 55 valores com os pais corretos, iguais ao DAO.
+- HTTP do backend gerado retornou 7.040 pessoas, sem gravações. Esse smoke não
+  comprova endpoints ou controles de edição das novas coleções.
+
+`verify_sigasul_migration.dart` aceita o sexto argumento opcional
+`dao-complex-oracle.json` e falha se houver valores alterados, dono incorreto,
+órfão nas tabelas lógicas ou perda de duplicatas. Dois testes PostgreSQL validam
+esses erros nos dois estilos de identificadores. O banco do gate foi removido
+em finally; os artefatos permanecem privados em `build/`.
+
+`verify_complex_quarantine.dart` releu as tabelas físicas e comparou o arquivo de
+quarentena com os mapas originais (inclusive campos NULL materializados). Resultado:
+**um registro órfão preservado exatamente**, com SHA da fonte inalterado. Foram
+lidos 123.923 registros físicos, dos quais 123.922 entraram nas tabelas lógicas e
+um permaneceu no arquivo separado. O manifesto declara essa distinção.
+
+A comparação de todas as 887 colunas escalares está em andamento separadamente
+(doc39). Esse gate de 188 colunas não pode substituí-la.
