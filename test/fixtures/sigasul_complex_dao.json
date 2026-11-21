@@ -1,0 +1,281 @@
+{
+    "sourceSha256":  "49da020eb4f0aa40118cff541a0365a03b9d6a7f05c84f68268ed16531a7c1f3",
+    "readOnly":  true,
+    "hashUnchangedAfterAudit":  true,
+    "scope":  "DAO complex counts, schema and exact text multiset hashes; no row values",
+    "columns":  [
+                    {
+                        "table":  "TbAcaoComun",
+                        "column":  "ListagemAnexa",
+                        "parentRows":  4,
+                        "parentsWithChildren":  0,
+                        "childRows":  0,
+                        "nullFieldValues":  0,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodAcao",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbDemandaReprimida",
+                        "column":  "Demanda SCFV-CRAS",
+                        "parentRows":  1416,
+                        "parentsWithChildren":  0,
+                        "childRows":  0,
+                        "nullFieldValues":  0,
+                        "childSchema":  [
+                                            {
+                                                "name":  "Value",
+                                                "daoType":  10
+                                            }
+                                        ],
+                        "primaryKey":  "CodDemanda",
+                        "valueSha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbDemandaReprimida",
+                        "column":  "Outra demanda",
+                        "parentRows":  1416,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  0,
+                        "childSchema":  [
+                                            {
+                                                "name":  "Value",
+                                                "daoType":  10
+                                            }
+                                        ],
+                        "primaryKey":  "CodDemanda",
+                        "valueSha256":  "d22be26f2d374a6edd3cfaa677aaf0412bbc7efa8b5cce0375cd0a1f48f12233",
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbEncaminhamento",
+                        "column":  "MotivoNão",
+                        "parentRows":  307,
+                        "parentsWithChildren":  52,
+                        "childRows":  54,
+                        "nullFieldValues":  0,
+                        "childSchema":  [
+                                            {
+                                                "name":  "Value",
+                                                "daoType":  10
+                                            }
+                                        ],
+                        "primaryKey":  "CODENC",
+                        "valueSha256":  "1df105bfcb3af90994bf29ec51966b1c6d5834a010bc040a61056d4be454114f",
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbUnidade",
+                        "column":  "LOGO",
+                        "parentRows":  1,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  3,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodUnidade",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbUnidade",
+                        "column":  "RODAPE",
+                        "parentRows":  1,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  3,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodUnidade",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbUnidade",
+                        "column":  "imgCartaoSuas",
+                        "parentRows":  1,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  3,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodUnidade",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbUnidade",
+                        "column":  "rma1",
+                        "parentRows":  1,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  3,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodUnidade",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    },
+                    {
+                        "table":  "TbReuniao",
+                        "column":  "Ata",
+                        "parentRows":  45,
+                        "parentsWithChildren":  1,
+                        "childRows":  1,
+                        "nullFieldValues":  3,
+                        "childSchema":  [
+                                            {
+                                                "name":  "FileData",
+                                                "daoType":  11
+                                            },
+                                            {
+                                                "name":  "FileFlags",
+                                                "daoType":  4
+                                            },
+                                            {
+                                                "name":  "FileName",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileTimeStamp",
+                                                "daoType":  8
+                                            },
+                                            {
+                                                "name":  "FileType",
+                                                "daoType":  10
+                                            },
+                                            {
+                                                "name":  "FileURL",
+                                                "daoType":  12
+                                            }
+                                        ],
+                        "primaryKey":  "CodReuniao",
+                        "valueSha256":  null,
+                        "valueContract":  "sorted-parent-pk-text-v1"
+                    }
+                ]
+}

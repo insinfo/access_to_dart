@@ -5,6 +5,7 @@ import 'package:args/args.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'src/accdb_analyzer.dart';
+import 'src/complex_collection_rows.dart';
 import 'src/access_table_rows_reader.dart';
 import 'src/analysis_backend_linker.dart';
 import 'src/access_src_reader.dart';
@@ -644,11 +645,15 @@ Future<int> _runMigrate(
       seedFormat: seedFormat,
       exportMode: exportMode,
       tableRowsByName: migrationRows?.rowsByTable,
+      quarantinedRowsByName: migrationRows?.quarantinedRowsByTable ?? const {},
     );
     out.writeln('Migration assets written to: $outputDir');
     out.writeln('  Schema : ${artifacts.schemaFile.path}');
     out.writeln('  Seed   : ${artifacts.seedFile.path}');
     out.writeln('  Manifest: ${artifacts.manifestFile.path}');
+    if (artifacts.quarantineFile != null) {
+      out.writeln('  Unreachable collection rows preserved separately: ${artifacts.quarantineFile!.path}');
+    }
     if (pg != null && pg.isNotEmpty) {
       final connectionOptions = PostgresConnectionOptions.parse(pg);
       final dpgsqlExecution = DpgsqlMigrationExecutor(
@@ -818,7 +823,27 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
     return null;
   }
 
-  final snapshot = AccessTableRowsSnapshot(rowsByTable: mergedRows);
+  final quarantined = <String, List<Map<String, dynamic>>>{};
+  for (final table in project.tables.where((table) => table.isSyntheticMultiValueTable)) {
+    final parentRows = mergedRows[table.collectionParentTable];
+    final childRows = mergedRows[table.name];
+    final parentColumn = table.collectionParentColumn;
+    final linkColumn = table.collectionLinkColumn;
+    if (parentRows == null || childRows == null || parentColumn == null || linkColumn == null) {
+      throw StateError('Complete multivalue collection mapping/source required');
+    }
+    final partition = partitionComplexCollectionRows(
+      parentRows: parentRows, childRows: childRows,
+      parentColumn: parentColumn, linkColumn: linkColumn,
+    );
+    mergedRows[table.name] = partition.linkedRows;
+    if (partition.orphanRows.isNotEmpty) {
+      quarantined[table.name] = partition.orphanRows;
+    }
+  }
+  final snapshot = AccessTableRowsSnapshot(
+    rowsByTable: mergedRows, quarantinedRowsByTable: quarantined,
+  );
   out.writeln(
     'Loaded ${snapshot.rowCount} Access rows from ${snapshot.tableCount} effective tables for migration.',
   );

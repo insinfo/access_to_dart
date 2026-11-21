@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'identifier_utils.dart';
+import 'complex_collection_rows.dart';
 import 'attachment_link_resolver.dart';
 import 'access_analysis/access_analysis.dart';
 import 'analysis_model.dart';
@@ -32,7 +33,7 @@ class AccdbAnalyzer {
 
     final syntheticTables = db == null
         ? const <Map<String, dynamic>>[]
-        : await _buildSyntheticAttachmentTables();
+        : await _buildSyntheticComplexTables();
 
     final stableQueries = model.queries
         .where((query) => !_isTemporaryAccessObjectName(query.name))
@@ -43,7 +44,7 @@ class AccdbAnalyzer {
       'source': model.path,
       'format': model.formatName,
       'summary': {
-        'tables': model.tables.length,
+        'tables': model.tables.length + syntheticTables.length,
         'linkedTables': model.linkedTables.length,
         'relationships': model.relationships.length,
         'queries': stableQueries.length,
@@ -75,7 +76,7 @@ class AccdbAnalyzer {
     };
   }
 
-  Future<List<Map<String, dynamic>>> _buildSyntheticAttachmentTables() async {
+  Future<List<Map<String, dynamic>>> _buildSyntheticComplexTables() async {
     final database = db;
     if (database == null) {
       return const <Map<String, dynamic>>[];
@@ -105,6 +106,7 @@ class AccdbAnalyzer {
     final syntheticTables = <Map<String, dynamic>>[];
 
     for (final table in model.tables) {
+      List<Map<String, dynamic>>? parentRows;
       final complexTypeIds = await _readComplexTypeIds(
         database,
         table.tdefPageNumber,
@@ -140,7 +142,8 @@ class AccdbAnalyzer {
                 entryById[typeObjectPage]?.name ?? 'typeObj#$typeObjectPage',
                 shapeCache,
               );
-        if (_classifyComplexType(typeShape) != 'attachment') {
+        final kind = _classifyComplexType(typeShape);
+        if (kind != 'attachment' && kind != 'multivalue') {
           continue;
         }
 
@@ -150,7 +153,7 @@ class AccdbAnalyzer {
           entryById[flatTablePage]?.name ?? 'flat#$flatTablePage',
           shapeCache,
         );
-        final syntheticTableName = '${table.name}_${column.name}_attachment';
+        final syntheticTableName = '${table.name}_${column.name}_$kind';
         final linkColumnName = _inferAttachmentLinkColumnName(
           flatShape,
           typeShape!,
@@ -158,19 +161,39 @@ class AccdbAnalyzer {
         if (linkColumnName == null) {
           continue;
         }
-        final rows = (await _readRowsByPage(database, flatTablePage))
-            .map(decodeAttachmentRow)
+        final physicalRows = (await _readRowsByPage(database, flatTablePage))
+            .map((row) => kind == 'attachment'
+                ? decodeAttachmentRow(row)
+                : Map<String, dynamic>.from(row))
             .toList(growable: false);
+        var rows = physicalRows;
+        var orphanRowCount = 0;
+        if (kind == 'multivalue') {
+          parentRows ??= await _readRowsByPage(database, table.tdefPageNumber);
+          final partition = partitionComplexCollectionRows(
+            parentRows: parentRows,
+            childRows: physicalRows,
+            parentColumn: column.name,
+            linkColumn: linkColumnName,
+          );
+          rows = partition.linkedRows;
+          orphanRowCount = partition.orphanRows.length;
+        }
         final syntheticAnalysisTable = AnalysisTable(
           name: syntheticTableName,
           tdefPageNumber: flatTablePage,
           rowCount: rows.length,
           postgresDdl: null,
           dartClassName: _toDartClassName(syntheticTableName),
-          syntheticKind: 'attachment',
-          attachmentParentTable: table.name,
-          attachmentParentColumn: column.name,
-          attachmentLinkColumn: linkColumnName,
+          syntheticKind: kind,
+          attachmentParentTable: kind == 'attachment' ? table.name : null,
+          attachmentParentColumn: kind == 'attachment' ? column.name : null,
+          attachmentLinkColumn: kind == 'attachment' ? linkColumnName : null,
+          complexParentTable: kind == 'multivalue' ? table.name : null,
+          complexParentColumn: kind == 'multivalue' ? column.name : null,
+          complexLinkColumn: kind == 'multivalue' ? linkColumnName : null,
+          complexValueColumn:
+              kind == 'multivalue' ? typeShape.columns.single.name : null,
           columns: [
             for (final flatColumn in flatShape.columns)
               AnalysisColumn(
@@ -215,10 +238,19 @@ class AccdbAnalyzer {
           'name': syntheticTableName,
           'tdefPage': flatTablePage,
           'rowCount': rows.length,
-          'syntheticKind': 'attachment',
-          'attachmentParentTable': table.name,
-          'attachmentParentColumn': column.name,
-          'attachmentLinkColumn': linkColumnName,
+          'physicalRowCount': physicalRows.length,
+          'orphanRowCount': orphanRowCount,
+          'syntheticKind': kind,
+          if (kind == 'attachment') ...{
+            'attachmentParentTable': table.name,
+            'attachmentParentColumn': column.name,
+            'attachmentLinkColumn': linkColumnName,
+          } else ...{
+            'complexParentTable': table.name,
+            'complexParentColumn': column.name,
+            'complexLinkColumn': linkColumnName,
+            'complexValueColumn': typeShape.columns.single.name,
+          },
           'columns': [
             for (final flatColumn in flatShape.columns)
               {
@@ -436,6 +468,11 @@ class AccdbAnalyzer {
         oleCount >= 1 &&
         longCount >= 1) {
       return 'attachment';
+    }
+    if (columns.length == 1 &&
+        _normalizedName(columns.single.name) == 'value' &&
+        columns.single.typeName == 'Text') {
+      return 'multivalue';
     }
     return 'complex-unsupported';
   }

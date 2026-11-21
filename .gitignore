@@ -11,3 +11,5 @@ SIGAsul.accdb
 #SIGAsul.accdb.src/
 
 access_siga_struture_end_data.sql
+# Python probe caches
+__pycache__/

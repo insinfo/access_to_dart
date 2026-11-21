@@ -75,3 +75,40 @@ ausência de vínculo, fixture pequena e os cinco hashes DAO (2 min 31 s).
 
 Isso conclui a recuperação e prova do payload rma1. As pendências de multivalue,
 recontagem/migração completa e edição dos controles acima continuam abertas.
+
+## Multivalores: correspondência lógica e armazenamento órfão
+
+O analisador agora materializa os três campos `Value/Text` como coleções
+`syntheticKind=multivalue`, com metadados explícitos de pai, coluna do pai,
+vínculo e valor. O linker promove as coleções mesmo quando vazias; o gerador SQL
+emite a relação pelo identificador complexo físico, sem confundi-lo com a PK do
+registro pai. Coleções de outros tipos ainda não foram validadas nesta etapa.
+
+A auditoria DAO ganhou `sorted-parent-pk-text-v1`: cada valor é enquadrado por
+comprimento, associado à PK do pai e ordenado ordinalmente antes do SHA-256.
+Duplicatas são mantidas, texto não é aparado e NULL difere de string vazia. Os
+hashes das três coleções, incluindo a vazia, coincidem com os 55 valores lógicos
+lidos do arquivo real. Fixture de evidência contém apenas esquema, contagens e
+hashes, sem valores.
+
+A tabela física de `TbEncaminhamento.MotivoNão` contém **55** registros, mas um
+não possui pai e não aparece nos Recordset2 do DAO. O conjunto lógico tem 54;
+somado ao outro campo, são 55 valores visíveis no Access. Esse registro físico
+adicional não é associado a um pai por suposição nem descartado silenciosamente.
+
+- A análise separa `physicalRowCount`, `rowCount` lógico e `orphanRowCount`.
+- A leitura para migração aplica o mesmo vínculo aos dados completos.
+- Linhas órfãs são preservadas sem alterar seus valores em
+  `orphaned_complex_rows.json`, dentro da saída privada da migração.
+- O manifesto informa `quarantinedRowCount`, o arquivo separado,
+  `logicalDataIncluded=true` e `fullDataIncluded=false` quando há linhas em
+  quarentena. Não se afirma que todo armazenamento físico entrou nas tabelas
+  lógicas PostgreSQL.
+- Donos ambíguos ou chaves físicas inválidas falham explicitamente.
+
+Validação: teste real de análise confirmou 54 tabelas (45 físicas, seis coleções
+de anexos e três multivaloradas), os hashes DAO dos 55 valores e o órfão; passou em
+2m18. Cinco testes adicionais passaram, incluindo preservação dos dados da
+quarentena, recusa de vínculo ambíguo e regressão PostgreSQL de NULL/default nos
+dois formatos de seed. A migração completa das novas coleções e seus controles
+no navegador continuam pendentes até validação própria.

@@ -3,7 +3,12 @@ import 'package:jackcess_dart/jackcess_dart.dart';
 class AccessTableRowsSnapshot {
   final Map<String, List<Map<String, dynamic>>> rowsByTable;
 
-  const AccessTableRowsSnapshot({required this.rowsByTable});
+  final Map<String, List<Map<String, dynamic>>> quarantinedRowsByTable;
+
+  const AccessTableRowsSnapshot({
+    required this.rowsByTable,
+    this.quarantinedRowsByTable = const {},
+  });
 
   int get tableCount => rowsByTable.length;
 
