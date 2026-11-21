@@ -51,3 +51,27 @@ escolher qualquer coluna Long. Ambiguidade deve permanecer explícita.
   não comprova a funcionalidade do controle Access correspondente.
 
 Não há conclusão de fidelidade integral baseada somente nas 50 tabelas anteriores.
+
+## Correção confirmada: anexo renomeado rma1
+
+O analisador agora usa o shape de payload e o sinalizador `isAutoNumber` físico:
+remove os campos pertencentes ao tipo Attachment (inclusive `FileFlags`) e a
+chave autonumérica da tabela filha; aceita somente um candidato Long restante.
+O vínculo `_imgRma` é preservado mesmo que o campo pai seja `rma1`. Zero ou dois
+candidatos não são resolvidos por posição ou semelhança do nome.
+
+O teste real confirmou `TbUnidade_rma1_attachment`, TDEF 11125, vínculo `_imgRma`,
+um registro e o payload decodificado correto. O oráculo independente
+`tools/audit_single_dao_attachment.ps1` abriu DAO em modo somente leitura,
+executou `FileData.SaveToFile`, calculou hash e removeu o arquivo temporário,
+conferindo o SHA-256 da fonte antes/depois. O quinto payload tem 1.895.077 bytes e
+SHA-256 `152a7834868c930fed9b386f50d1567f580a90bf352f5acef38431a9bbb1fbc9`.
+O envelope físico tem 1.895.105 bytes; seu hash também está no manifest de teste.
+
+`test/fixtures/sigasul_attachment_dao_hashes.json` agora cobre os cinco arquivos.
+Os testes `sigasul_attachment_payload_test`, `attachment_link_resolver_test` e
+`accdb_analyzer_attachment_test` passaram: dez casos, incluindo ambiguidade,
+ausência de vínculo, fixture pequena e os cinco hashes DAO (2 min 31 s).
+
+Isso conclui a recuperação e prova do payload rma1. As pendências de multivalue,
+recontagem/migração completa e edição dos controles acima continuam abertas.

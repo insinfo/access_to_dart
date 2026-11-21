@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'identifier_utils.dart';
+import 'attachment_link_resolver.dart';
 import 'access_analysis/access_analysis.dart';
 import 'analysis_model.dart';
 import 'migration_identifier_style.dart';
@@ -149,11 +150,10 @@ class AccdbAnalyzer {
           entryById[flatTablePage]?.name ?? 'flat#$flatTablePage',
           shapeCache,
         );
-        final syntheticTableName =
-            '${table.name}_${column.name}_attachment';
+        final syntheticTableName = '${table.name}_${column.name}_attachment';
         final linkColumnName = _inferAttachmentLinkColumnName(
           flatShape,
-          column.name,
+          typeShape!,
         );
         if (linkColumnName == null) {
           continue;
@@ -354,7 +354,8 @@ class AccdbAnalyzer {
     ).readTableDefinitionData();
     final data = ByteData.sublistView(bytes);
     final indexCount = data.getInt32(offsetNumIndexes, Endian.little);
-    final columnStart = offsetIndexDefBlock + (indexCount * sizeIndexDefinition);
+    final columnStart =
+        offsetIndexDefBlock + (indexCount * sizeIndexDefinition);
     final complexTypeIds = <int, int>{};
     for (var offset = columnStart;
         offset + sizeColumnDefBlock <= bytes.length;
@@ -405,6 +406,7 @@ class AccdbAnalyzer {
             (column) => _AttachmentColumnShape(
               name: column.name,
               typeCode: column.type,
+              isAutoNumber: column.isAutoNumber,
               typeName: AccessColumnSchema.typeCodeToName(column.type),
             ),
           )
@@ -419,12 +421,15 @@ class AccdbAnalyzer {
       return 'complex-unknown';
     }
     final columns = shape.columns;
-    final memoCount = columns.where((column) => column.typeName == 'Memo').length;
-    final textCount = columns.where((column) => column.typeName == 'Text').length;
+    final memoCount =
+        columns.where((column) => column.typeName == 'Memo').length;
+    final textCount =
+        columns.where((column) => column.typeName == 'Text').length;
     final dateCount =
         columns.where((column) => column.typeName == 'DateTime').length;
     final oleCount = columns.where((column) => column.typeName == 'OLE').length;
-    final longCount = columns.where((column) => column.typeName == 'Long').length;
+    final longCount =
+        columns.where((column) => column.typeName == 'Long').length;
     if (memoCount >= 1 &&
         textCount >= 2 &&
         dateCount >= 1 &&
@@ -437,20 +442,16 @@ class AccdbAnalyzer {
 
   String? _inferAttachmentLinkColumnName(
     _AttachmentTableShape shape,
-    String columnName,
-  ) {
-    final exact = shape.columns.where((column) => column.name == '_$columnName');
-    if (exact.isNotEmpty) {
-      return exact.first.name;
-    }
-    final normalizedTarget = _normalizedName('_$columnName');
-    for (final column in shape.columns) {
-      if (_normalizedName(column.name) == normalizedTarget) {
-        return column.name;
-      }
-    }
-    return null;
-  }
+    _AttachmentTableShape payloadShape,
+  ) =>
+      inferAttachmentLinkColumn(
+        flatColumns: shape.columns.map((column) => (
+              name: column.name,
+              typeCode: column.typeCode,
+              isAutoNumber: column.isAutoNumber,
+            )),
+        payloadColumnNames: payloadShape.columns.map((column) => column.name),
+      );
 
   int? _rowInt(Map<String, dynamic> row, String key) {
     for (final entry in row.entries) {
@@ -494,11 +495,13 @@ class _AttachmentTableShape {
 }
 
 class _AttachmentColumnShape {
+  final bool isAutoNumber;
   final String name;
   final int typeCode;
   final String typeName;
 
   const _AttachmentColumnShape({
+    required this.isAutoNumber,
     required this.name,
     required this.typeCode,
     required this.typeName,

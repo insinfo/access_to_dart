@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:access_to_dart/src/accdb_analyzer.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 import 'package:test/test.dart';
 
@@ -23,6 +24,25 @@ void main() {
   tearDownAll(() async {
     await database.close();
   });
+  test('renamed rma1 materializes its original physical parent link', () async {
+    final model = await AccessCatalog(
+            format: database.format, pageChannel: database.pageChannel)
+        .read('fixtures/SIGA2021-SUL_be_senha_4462.accdb');
+    final analysis = await AccdbAnalyzer(model: model, db: database).analyze();
+    final table = (analysis['tables'] as List)
+        .cast<Map>()
+        .singleWhere((table) => table['name'] == 'TbUnidade_rma1_attachment');
+    expect(table['syntheticKind'], 'attachment');
+    expect(table['attachmentParentColumn'], 'rma1');
+    expect(table['attachmentLinkColumn'], '_imgRma');
+    expect(table['tdefPage'], 11125);
+    expect(table['rowCount'], 1);
+    final payload =
+        ((table['sampleRows'] as List).single as Map)['FileData'] as List<int>;
+    final oracle = entries
+        .singleWhere((entry) => entry['table'] == 'TbUnidade_rma1_attachment');
+    expect(sha256.convert(payload).toString(), oracle['payloadSha256']);
+  }, timeout: const Timeout(Duration(minutes: 3)));
   for (final entry in entries) {
     test(
         'original attachment payload matches independent DAO file: ${entry['table']}',
