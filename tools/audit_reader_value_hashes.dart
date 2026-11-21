@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
@@ -19,6 +20,23 @@ String canonical(dynamic value, String type) {
     case 'Boolean':
       if (value is! bool) throw StateError('Unexpected boolean representation');
       return value ? 'B1' : 'B0';
+    case 'Integer':
+      if (value is! int || value < -32768 || value > 32767) {
+        throw StateError('Unexpected Int16 representation');
+      }
+      return 'I$value';
+    case 'Double':
+      if (value is! double) {
+        throw StateError('Unexpected IEEE64 representation');
+      }
+      final bytes =
+          (ByteData(8)..setFloat64(0, value, Endian.big)).buffer.asUint8List();
+      return 'D${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+    case 'OLE':
+      if (value is! List<int> || value.any((b) => b < 0 || b > 255)) {
+        throw StateError('Unexpected OLE bytes');
+      }
+      return 'X${value.length}:${sha256.convert(value)}';
     case 'Long':
       if (value is! int) throw StateError('Unexpected integer representation');
       return 'I$value';
@@ -49,17 +67,30 @@ Future<void> main(List<String> args) async {
   final oracle =
       jsonDecode(await File(args[2]).readAsString()) as Map<String, dynamic>;
   if (oracle['sourceSha256'] != hash ||
-      oracle['contract'] != 'typed-column-pk-v1') {
+      !['typed-column-pk-v1', 'typed-column-pk-v2']
+          .contains(oracle['contract'])) {
     throw StateError('Oracle source/contract mismatch');
   }
   final tables = (model['tables'] as List).cast<Map<String, dynamic>>();
+  final v2 = oracle['contract'] == 'typed-column-pk-v2';
+  final physical = tables
+      .where((t) => t['syntheticKind'] == null || t['syntheticKind'] == '')
+      .toList();
+  final expectedTables =
+      (oracle['tables'] as List).cast<Map<String, dynamic>>();
+  if (v2 &&
+      (physical.length != expectedTables.length ||
+          !physical.every(
+              (t) => expectedTables.any((e) => e['table'] == t['name'])))) {
+    throw StateError('V2 must cover every physical table');
+  }
   final db = await AccessDatabase.openPath(source.path,
       password: Platform.environment['ACCESS_DAO_PASSWORD']);
   final reports = <Map<String, dynamic>>[];
   final attachments = <Map<String, dynamic>>[];
   try {
     final reader = TableReader(format: db.format, pageChannel: db.pageChannel);
-    for (final name in ['TbPessoa', 'CadResidencia', 'TbAtend']) {
+    for (final name in expectedTables.map((t) => t['table'])) {
       final table = tables.firstWhere((t) => t['name'] == name);
       final pk = pkName(table);
       final rows = await reader.readAllRows(table['tdefPage'] as int);
@@ -70,9 +101,18 @@ Future<void> main(List<String> args) async {
       final expected = (oracle['tables'] as List)
           .cast<Map<String, dynamic>>()
           .firstWhere((t) => t['table'] == name);
+      final schemaCols = (table['columns'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((c) => !v2 || c['typeName'] != 'ComplexType')
+          .toList();
+      final expectedCols = (expected['columns'] as List).cast<Map>();
+      if (schemaCols.length != expectedCols.length ||
+          !schemaCols.every((c) => expectedCols.any(
+              (e) => e['name'] == c['name'] && e['type'] == c['typeName']))) {
+        throw StateError('Oracle must cover every audited scalar column');
+      }
       final columns = <Map<String, dynamic>>[];
-      for (final col
-          in (table['columns'] as List).cast<Map<String, dynamic>>()) {
+      for (final col in schemaCols) {
         final buffer = StringBuffer();
         var nulls = 0;
         var nonScale4 = 0;
@@ -127,7 +167,7 @@ Future<void> main(List<String> args) async {
           'HASHED_TABLE=$name ROWS=${rows.length} MISMATCH_COLUMNS=${columns.where((c) => c['match'] != true).length}');
     }
     for (final table
-        in tables.where((t) => t['syntheticKind'] == 'attachment')) {
+        in tables.where((t) => !v2 && t['syntheticKind'] == 'attachment')) {
       final parent =
           tables.firstWhere((t) => t['name'] == table['attachmentParentTable']);
       final parentRows = await reader.readAllRows(parent['tdefPage'] as int);
@@ -190,7 +230,11 @@ Future<void> main(List<String> args) async {
           attachments.every((a) => a['decodedMatchesDaoPayload'] == true);
   final result = {
     'sourceSha256': hash,
-    'contract': 'typed-column-pk-v1',
+    'contract': oracle['contract'],
+    'scope': v2
+        ? 'all_physical_scalar_columns_excluding_complex'
+        : 'v1_three_tables_and_attachments',
+    'attachmentsAudited': !v2,
     'allScalarColumnsMatch': scalarMatch,
     'allDecodedAttachmentPayloadsMatch': payloadMatch,
     'allRawAttachmentPayloadsMatch':

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:access_to_dart/src/migration_identifier_style.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dpgsql/dpgsql.dart';
-import 'audit_reader_value_hashes.dart' show digest;
+import 'audit_reader_value_hashes.dart' show digest, canonical;
 
 // SQL ::text avoids lossy numeric driver conversions. No Access display Format
 // is used here: timestamp components must still match the original DAO values.
@@ -13,6 +13,22 @@ String canonicalPostgresText(String? value, String accessType, String pgType) {
     case 'Text':
     case 'Memo':
       return 'S$value';
+    case 'Integer':
+      return canonical(int.parse(value), 'Integer');
+    case 'Double':
+      if (pgType != 'double precision' ||
+          !RegExp(r'^[0-9a-f]{16}$').hasMatch(value)) {
+        throw StateError('IEEE64 audit requires float8send bytes');
+      }
+      return 'D$value';
+    case 'OLE':
+      if (pgType != 'bytea' || !RegExp(r'^(?:[0-9a-f]{2})*$').hasMatch(value)) {
+        throw StateError('OLE audit requires exact bytea bytes');
+      }
+      return canonical([
+        for (var i = 0; i < value.length; i += 2)
+          int.parse(value.substring(i, i + 2), radix: 16)
+      ], 'OLE');
     case 'Long':
       return 'I${BigInt.parse(value)}';
     case 'Boolean':
@@ -68,20 +84,36 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
   required String sourceSha256,
 }) async {
   if (oracle['sourceSha256'] != sourceSha256 ||
-      oracle['contract'] != 'typed-column-pk-v1') {
+      !['typed-column-pk-v1', 'typed-column-pk-v2']
+          .contains(oracle['contract'])) {
     throw StateError('Value oracle source/contract mismatch');
   }
   await connection
       .createCommand("SET DateStyle = 'ISO, YMD'")
       .executeNonQuery();
   final tables = (analysis['tables'] as List).cast<Map>();
+  final v2 = oracle['contract'] == 'typed-column-pk-v2';
+  final expectedTables = (oracle['tables'] as List).cast<Map>();
+  final physical = tables
+      .where((t) => t['syntheticKind'] == null || t['syntheticKind'] == '')
+      .toList();
+  if (v2 &&
+      (physical.length != expectedTables.length ||
+          !physical.every(
+              (t) => expectedTables.any((e) => e['table'] == t['name'])))) {
+    throw StateError('V2 must cover every physical table');
+  }
   final reports = <Map<String, Object?>>[];
   final payloads = <Map<String, Object?>>[];
   for (final expected in (oracle['tables'] as List).cast<Map>()) {
     final table = tables.singleWhere((t) => t['name'] == expected['table']);
     final cols = (expected['columns'] as List).cast<Map>();
-    final schemaCols = (table['columns'] as List).cast<Map>();
+    final schemaCols = (table['columns'] as List)
+        .cast<Map>()
+        .where((c) => !v2 || c['typeName'] != 'ComplexType')
+        .toList();
     if (cols.length != schemaCols.length ||
+        cols.map((c) => c['name']).toSet().length != cols.length ||
         !cols.every((c) => schemaCols.any(
             (s) => s['name'] == c['name'] && s['typeName'] == c['type']))) {
       throw StateError(
@@ -113,8 +145,17 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
     final keyIndex = cols.indexWhere((c) => c['name'] == pk);
     var count = 0;
     final keys = <String>{};
+    final projections = [
+      for (var i = 0; i < cols.length; i++)
+        if (cols[i]['type'] == 'Double')
+          "encode(float8send(${columnsSql[i]}), 'hex')"
+        else if (cols[i]['type'] == 'OLE')
+          "encode(${columnsSql[i]}, 'hex')"
+        else
+          '${columnsSql[i]}::text'
+    ];
     final reader = await connection.executeReader(
-        'SELECT ${columnsSql.map((c) => '$c::text').join(',')} FROM $tableSql AS audit_rows ORDER BY audit_rows.${identifiers.quotedColumnName(pk)}');
+        'SELECT ${projections.join(',')} FROM $tableSql AS audit_rows ORDER BY audit_rows.${identifiers.quotedColumnName(pk)}');
     try {
       while (await reader.read()) {
         final key = canonicalPostgresText(
@@ -170,7 +211,8 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
       'columns': resultCols
     });
   }
-  for (final table in tables.where((t) => t['syntheticKind'] == 'attachment')) {
+  for (final table
+      in tables.where((t) => !v2 && t['syntheticKind'] == 'attachment')) {
     final parent =
         tables.singleWhere((t) => t['name'] == table['attachmentParentTable']);
     final pk = _primaryKey(parent);
@@ -230,8 +272,11 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
       payloads.length == (oracle['attachments'] as List).length &&
           payloads.every((p) => p['match'] == true);
   return {
-    'scope': 'dao_postgres_full_values_for_oracle_tables_and_attachments',
-    'contract': 'typed-column-pk-v1',
+    'scope': v2
+        ? 'all_physical_scalar_columns_excluding_complex'
+        : 'dao_postgres_full_values_for_oracle_tables_and_attachments',
+    'attachmentsAudited': !v2,
+    'contract': oracle['contract'],
     'sourceSha256': sourceSha256,
     'sqlRepresentation':
         'PostgreSQL ::text with ISO DateStyle; no Access display Format; no timezone conversion; exact decimal scale4',
