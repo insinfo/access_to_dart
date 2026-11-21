@@ -54,7 +54,7 @@ Os testes sintéticos do contrato cobrem distinção de tipos, fração de micro
 ausência de conversão de timezone e multiplicidade; não substituem um oráculo DAO
 com esses valores preenchidos. Nenhuma afirmação de precisão submicrossegundo é feita.
 
-## Comparador PostgreSQL preparado
+## Resultado PostgreSQL no banco integrado
 
 `audit_postgres_attachment_metadata.dart` aceita o banco temporário já migrado do
 gate integrado. Abre transação READ ONLY e faz rollback no finally; não cria,
@@ -62,9 +62,18 @@ migra nem remove banco. Usa aliases ASCII e consulta os metadados/payloads junto
 com a PK pai, mantendo o mesmo contrato de hashes. O payload BYTEA migrado já é o
 conteúdo decodificado; não é decodificado novamente.
 
-A execução PostgreSQL fica pendente do handoff do gate integrado. A prova concluída
-nesta etapa é DAO → TableReader. Um resultado PostgreSQL será registrado
-separadamente após a execução real; analyze não equivale a essa validação.
+A comparação PostgreSQL foi executada no banco temporário do gate integrado do
+backend AOT `21c986c`, após o gate de 54 tabelas/887 colunas/5 payloads/55 valores
+multivalorados ter passado. Usou o mesmo banco do handoff, sem nova migração.
+Resultado: exit0, `ALL_MATCH=true`, seis coleções, cinco anexos, 25 metadados,
+associação ao pai e payload/tamanho iguais ao DAO. A transação READ ONLY foi
+revertida e a conexão fechada; o auditor não liberou nem removeu o banco, reservado
+para as provas HTTP/browser subsequentes do coordenador.
+
+O artefato local é `build/codex-sigasul-goal/value-audit/pg-attachment-metadata.json`.
+A cobertura de valores reais continua a da tabela acima: timestamps, flags e URLs
+são NULL em todos os cinco registros. Esta prova adicional permanece separada dos
+números do gate escalar; não aumenta 887 nem declara fidelidade universal de anexos.
 
 ## Reprodução
 
