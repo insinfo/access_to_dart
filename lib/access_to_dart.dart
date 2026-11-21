@@ -867,12 +867,22 @@ Future<void> _mergeMigrationRowsFromSource({
         if (pageNumber == null) {
         continue;
         }
+        final schema = await tableReader.readSchema(tableName, pageNumber);
         final rows = await tableReader.readAllRows(pageNumber);
-        mergedRows[tableName] = rows
-            .map((row) => attachmentTableNames.contains(tableName)
-                ? decodeAttachmentRow(row)
-                : Map<String, dynamic>.from(row))
-            .toList(growable: false);
+        mergedRows[tableName] = rows.map((row) {
+          // Physical Access rows are sparse: an absent column represents NULL,
+          // not a request to evaluate the destination column's DEFAULT. Expand
+          // only at this source boundary; synthetic sample maps keep omission
+          // semantics, and the statement builder still handles calculated and
+          // autonumber columns according to their existing metadata.
+          final physicalRow = <String, dynamic>{
+            for (final column in schema.columns) column.name: row[column.name],
+            ...row,
+          };
+          return attachmentTableNames.contains(tableName)
+              ? decodeAttachmentRow(physicalRow)
+              : physicalRow;
+        }).toList(growable: false);
         loadedTableCount++;
         loadedRowCount += rows.length;
       }
