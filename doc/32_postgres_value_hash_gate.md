@@ -28,3 +28,15 @@ Resultado: três testes passaram (os dois casos de banco cobrem ambos os estilos
 ## Gate do leitor após os dois decoders
 
 `reader-value-comparison-after-decoders.json` preserva raw hash e decoded hash lado a lado: 188/188 colunas escalares e 4/4 payloads decodificados coincidem com DAO. Os quatro hashes brutos continuam diferentes, pois incluem envelopes/compressão Access; não foram substituídos nem apagados. O comando do leitor retorna sucesso pelo hash do payload decodificado e preserva `allRawAttachmentPayloadsMatch=false` como evidência do envelope.
+
+## Correção do auditor após o primeiro ensaio integral
+
+O primeiro ensaio completo confirmou 50/50 contagens e quatro payloads, mas não passou no gate escalar. Havia um defeito no próprio auditor: `SELECT pk::text ... ORDER BY pk` podia ordenar pelo alias textual da projeção. Foi substituído por `ORDER BY audit_rows.pk`, qualificado pela tabela de origem, preservando a ordenação numérica usada no DAO. Os hashes esperados e valores não foram alterados.
+
+A regressão agora usa PKs 2, 10 e 256 inseridas fora de ordem. Falhou nos dois estilos antes da correção e passou nos dois depois; os testes de perda temporal e corrupção BYTEA continuam passando. O relatório inicial permanece em `migration-value-audit/postgres-value-audit.json`, sem ser apresentado como prova válida para as colunas afetadas pela ordem.
+
+O mesmo ensaio identificou três divergências independentes de NULL em CadResidencia: `Nº Comodos` (2), `Nº Dormitorios` (1) e `Nº pessoas/Dormitorio` (5) tinham NULL no DAO e zero NULL no PostgreSQL. Elas exigem correção no carregamento dos dados; não se deve alterar o oráculo nem converter NULL para default no auditor. A validação integral deve ser repetida após corrigir essa origem.
+
+## Handoff opcional para navegador
+
+Com `ACCESS_TO_DART_TEST_PG_HANDOFF_FILE` definido, o verificador só disponibiliza a base depois de contagens, valores e smoke HTTP aprovados. Grava um JSON privado com nome da base, host, porta e prazo (sem credenciais), espera o arquivo `.release` por no máximo 15 minutos e executa o cleanup no finally. Sem a variável, o comportamento anterior de cleanup imediato permanece. Um gate reprovado não publica a base para navegador.

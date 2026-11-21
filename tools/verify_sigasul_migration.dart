@@ -158,6 +158,32 @@ Future<void> main(List<String> args) async {
       await _smokeBackend(args[3], name, host, port, user, password,
           daoCounts['TbPessoa'] ?? -1, args[1]);
     }
+    final handoffPath = env['ACCESS_TO_DART_TEST_PG_HANDOFF_FILE'];
+    if (handoffPath != null && valueReport?['allValuesMatch'] == true) {
+      final handoff = File(handoffPath);
+      final release = File('$handoffPath.release');
+      if (await release.exists()) await release.delete();
+      await handoff.parent.create(recursive: true);
+      final deadline = DateTime.now().toUtc().add(const Duration(minutes: 15));
+      await handoff.writeAsString(jsonEncode({
+        'database': name,
+        'host': host,
+        'port': port,
+        'expiresUtc': deadline.toIso8601String(),
+        'readOnlyBrowser': true,
+        'releaseFile': release.absolute.path,
+      }));
+      stdout.writeln('Validated database ready for read-only browser handoff');
+      try {
+        while (!await release.exists() &&
+            DateTime.now().toUtc().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+      } finally {
+        if (await handoff.exists()) await handoff.delete();
+        if (await release.exists()) await release.delete();
+      }
+    }
   } finally {
     try {
       if (created) {

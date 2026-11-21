@@ -48,10 +48,12 @@ void main() {
             .createCommand(
                 'CREATE TABLE $table (${q('ID')} integer PRIMARY KEY, ${q('Money Amount')} numeric(20,4), ${q('When')} timestamp, ${q('Flag')} boolean, ${q('Label')} text)')
             .executeNonQuery();
-        await pg
-            .createCommand(
-                "INSERT INTO $table VALUES (256,12345678901234.1234,'2020-02-03 04:05:06.007008',false,'O''Brien é ')")
-            .executeNonQuery();
+        for (final id in [256, 2, 10]) {
+          await pg
+              .createCommand(
+                  "INSERT INTO $table VALUES ($id,12345678901234.1234,'2020-02-03 04:05:06.007008',false,'O''Brien é ')")
+              .executeNonQuery();
+        }
         final columns = [
           {'name': 'ID', 'typeName': 'Long'},
           {'name': 'Money Amount', 'typeName': 'Money'},
@@ -90,13 +92,17 @@ void main() {
             {
               'table': 'Audit Samples',
               'primaryKey': 'ID',
-              'rows': 1,
+              'rows': 3,
               'columns': [
                 for (var i = 0; i < columns.length; i++)
                   {
                     'name': columns[i]['name'],
                     'type': columns[i]['typeName'],
-                    'sha256': digest('4:I256${values[i].length}:${values[i]}'),
+                    'sha256': digest([2, 10, 256].map((id) {
+                      final key = 'I$id';
+                      final cell = i == 0 ? key : values[i];
+                      return '${key.length}:$key${cell.length}:$cell';
+                    }).join()),
                     'nullCount': 0,
                     'submicrosecondCount': 0
                   }

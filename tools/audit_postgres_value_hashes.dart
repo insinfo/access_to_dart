@@ -114,7 +114,7 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
     var count = 0;
     final keys = <String>{};
     final reader = await connection.executeReader(
-        'SELECT ${columnsSql.map((c) => '$c::text').join(',')} FROM $tableSql ORDER BY ${identifiers.quotedColumnName(pk)}');
+        'SELECT ${columnsSql.map((c) => '$c::text').join(',')} FROM $tableSql AS audit_rows ORDER BY audit_rows.${identifiers.quotedColumnName(pk)}');
     try {
       while (await reader.read()) {
         final key = canonicalPostgresText(
