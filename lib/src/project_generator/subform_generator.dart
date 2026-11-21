@@ -174,7 +174,7 @@ extension _SubformGenerator on ProjectGenerator {
     return descriptors.map((descriptor) => '''
 <access-subform-panel
   [parentId]="subformParentId"
-  module="${_htmlTextLiteral(tableRouteSegment(parent))}"
+  module="${_htmlTextLiteral(tableRouteName(parent))}"
   subformKey="${_htmlTextLiteral(descriptor['key'] as String)}"
   title="${_htmlTextLiteral(descriptor['title'] as String)}"
   unsupportedReason="${_htmlTextLiteral(descriptor['unsupportedReason'] as String? ?? '')}">
@@ -187,7 +187,7 @@ extension _SubformGenerator on ProjectGenerator {
     final specifications = <String, Object?>{};
     for (final table in scaffoldTables(project)) {
       final descriptors = _subformDescriptors(project, table);
-      specifications[tableRouteSegment(table)] = {
+      specifications[tableRouteName(table)] = {
         for (final descriptor in descriptors)
           if (descriptor['unsupportedReason'] == null)
             descriptor['key'] as String: descriptor,

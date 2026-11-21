@@ -643,7 +643,7 @@ String _buildFrontendModuleServiceSource({
               )
               ..body = Code('''
 return getDataFrame<${module.className}>(
-  '/${module.moduleNameKebab}',
+  '/${module.nameSnake}',
   builder: (map) => ${module.className}.fromMap(map),
   filtros: filtros,
 );
@@ -657,7 +657,7 @@ return getDataFrame<${module.className}>(
               )
               ..body = Code('''
 return getEntity<${module.className}>(
-  '/${module.moduleNameKebab}/\$id',
+  '/${module.nameSnake}/\$id',
   builder: (map) => ${module.className}.fromMap(map),
 );
 ''')),
@@ -669,7 +669,7 @@ return getEntity<${module.className}>(
                 Parameter((param) => param..name = 'entity'..type = refer(module.className)),
               )
               ..body = Code('''
-final map = await insertEntity(entity.toMap(), '/${module.moduleNameKebab}');
+final map = await insertEntity(entity.toMap(), '/${module.nameSnake}');
 return ${module.className}.fromMap(map);
 ''')),
             Method((method) => method
@@ -682,7 +682,7 @@ return ${module.className}.fromMap(map);
               ..body = Code('''
 final map = await updateEntity(
   entity.toMap(),
-  '/${module.moduleNameKebab}/\${entity.${module.primaryKeyField}}',
+  '/${module.nameSnake}/\${entity.${module.primaryKeyField}}',
 );
 return ${module.className}.fromMap(map);
 ''')),
@@ -693,7 +693,7 @@ return ${module.className}.fromMap(map);
               ..requiredParameters.add(
                 Parameter((param) => param..name = 'id'..type = refer(module.primaryKeyParamType)),
               )
-              ..body = Code("await deleteEntity('/${module.moduleNameKebab}/\$id');")),
+              ..body = Code("await deleteEntity('/${module.nameSnake}/\$id');")),
             Method((method) => method
               ..name = 'lookupOptions'
               ..modifier = MethodModifier.async
@@ -710,7 +710,7 @@ return ${module.className}.fromMap(map);
               )
               ..body = Code('''
 return getLookupOptions(
-  '/${module.moduleNameKebab}/lookups/\$fieldKey',
+  '/${module.nameSnake}/lookups/\$fieldKey',
   limit: limit,
 );
 ''')),
@@ -724,7 +724,7 @@ return getLookupOptions(
               ])
               ..body = Code('''
 return getJsonList(
-  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey',
+  '/${module.nameSnake}/\$id/attachments/\$fieldKey',
 );
 ''')),
             Method((method) => method
@@ -738,7 +738,7 @@ return getJsonList(
               ])
               ..body = Code('''
 return postJsonMap(
-  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey',
+  '/${module.nameSnake}/\$id/attachments/\$fieldKey',
   payload,
 );
 ''')),
@@ -753,7 +753,7 @@ return postJsonMap(
               ])
               ..body = Code('''
 await deletePath(
-  '/${module.moduleNameKebab}/\$id/attachments/\$fieldKey/\$ordinal',
+  '/${module.nameSnake}/\$id/attachments/\$fieldKey/\$ordinal',
 );
 ''')),
           ]),
