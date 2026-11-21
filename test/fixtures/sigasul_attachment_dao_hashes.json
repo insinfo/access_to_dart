@@ -1,0 +1,42 @@
+{
+  "sourceSha256": "49da020eb4f0aa40118cff541a0365a03b9d6a7f05c84f68268ed16531a7c1f3",
+  "oracle": "DAO Attachment.FileData.SaveToFile, 2026-11-21",
+  "attachments": [
+    {
+      "table": "TbReuniao_Ata_attachment",
+      "tdefPage": 10872,
+      "storageType": 1,
+      "rawLength": 1016648,
+      "rawSha256": "60483f2611c2da6de1a0895572c570cee4633e10c1ac8e0fc2829de23a1fee6e",
+      "payloadLength": 1190422,
+      "payloadSha256": "2fb1ac79effa4b1b0110201bdc7d255d17df2081676c62d2bf794dd27c9e46ca"
+    },
+    {
+      "table": "TbUnidade_LOGO_attachment",
+      "tdefPage": 11597,
+      "storageType": 0,
+      "rawLength": 91202,
+      "rawSha256": "e194cef46e4c41c7ff93b75adc838db9cdaa8fd9f79f99851f45b132063ccc6c",
+      "payloadLength": 91174,
+      "payloadSha256": "e417561c0fc0a9b0c46137083eb6f61eed6907840c823a4efe9b466d162d3be6"
+    },
+    {
+      "table": "TbUnidade_RODAPE_attachment",
+      "tdefPage": 11626,
+      "storageType": 0,
+      "rawLength": 15908,
+      "rawSha256": "98925df6bd181b7a92406f79c6afaae988a4325a388cada5b9715573440bc817",
+      "payloadLength": 15880,
+      "payloadSha256": "8263b0540d355f05410dde3a079d27cb534a6c76330c4ee03ff687c91f42386e"
+    },
+    {
+      "table": "TbUnidade_imgCartaoSuas_attachment",
+      "tdefPage": 11650,
+      "storageType": 0,
+      "rawLength": 599228,
+      "rawSha256": "bb23156ce25e40347aa2b99de7420a4bf9007cec4a714ec9ab1e6a8f53e653dc",
+      "payloadLength": 599200,
+      "payloadSha256": "dcc58eef5b8911544c22e9db08bb24d63c707197d2083f2c3a883d29eb282f35"
+    }
+  ]
+}

@@ -158,7 +158,9 @@ class AccdbAnalyzer {
         if (linkColumnName == null) {
           continue;
         }
-        final rows = await _readRowsByPage(database, flatTablePage);
+        final rows = (await _readRowsByPage(database, flatTablePage))
+            .map(decodeAttachmentRow)
+            .toList(growable: false);
         final syntheticAnalysisTable = AnalysisTable(
           name: syntheticTableName,
           tdefPageNumber: flatTablePage,

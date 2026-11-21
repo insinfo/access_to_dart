@@ -765,6 +765,10 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
     return null;
   }
 
+  final attachmentTableNames = <String>{
+    for (final table in project.tables)
+      if (table.isSyntheticAttachmentTable) table.name,
+  };
   final mergedRows = <String, List<Map<String, dynamic>>>{};
   final primaryPath = explicitAccdbPath != null && explicitAccdbPath.isNotEmpty
       ? explicitAccdbPath
@@ -774,6 +778,7 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
     password: password,
     targetTableNames: primaryTargetTableNames,
     tablePagesByName: localTablePagesByName,
+    attachmentTableNames: attachmentTableNames,
     mergedRows: mergedRows,
     out: out,
     err: err,
@@ -789,6 +794,7 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
       password: explicitBackendPassword,
       targetTableNames: backendTargetTableNames,
       tablePagesByName: backendTablePagesByName,
+      attachmentTableNames: attachmentTableNames,
       mergedRows: mergedRows,
       out: out,
       err: err,
@@ -832,6 +838,7 @@ Future<void> _mergeMigrationRowsFromSource({
   required String? password,
   required Set<String> targetTableNames,
   required Map<String, int> tablePagesByName,
+  required Set<String> attachmentTableNames,
   required Map<String, List<Map<String, dynamic>>> mergedRows,
   required StringSink out,
   required StringSink err,
@@ -862,7 +869,9 @@ Future<void> _mergeMigrationRowsFromSource({
         }
         final rows = await tableReader.readAllRows(pageNumber);
         mergedRows[tableName] = rows
-            .map((row) => Map<String, dynamic>.from(row))
+            .map((row) => attachmentTableNames.contains(tableName)
+                ? decodeAttachmentRow(row)
+                : Map<String, dynamic>.from(row))
             .toList(growable: false);
         loadedTableCount++;
         loadedRowCount += rows.length;

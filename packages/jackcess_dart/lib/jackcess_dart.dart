@@ -13,3 +13,4 @@ export 'src/table_reader.dart';
 export 'src/usage_map.dart';
 export 'src/ole/compound_file_reader.dart';
 export 'src/ole/vba_project_reader.dart';
+export 'src/attachment_decoder.dart';
