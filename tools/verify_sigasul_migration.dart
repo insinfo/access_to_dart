@@ -9,14 +9,16 @@ import 'audit_postgres_complex_values.dart';
 
 // Full-data acceptance probe. Credentials are session environment only.
 Future<void> main(List<String> args) async {
-  if (args.length < 2 || args.length > 6) {
+  if (args.length < 2 || args.length > 7) {
     throw ArgumentError(
-        'analysis.json output-directory [dao-oracle.json] [backend.exe] [dao-value-oracle.json] [dao-complex-oracle.json]');
+        'analysis.json output-directory [dao-oracle.json] [backend.exe] [dao-value-oracle.json] [dao-complex-oracle.json] [dao-all-scalar-oracle.json]');
   }
   final analysis = jsonDecode(await File(args[0]).readAsString()) as Map;
   Map? oracle;
   Map? valueOracle;
   Map? complexOracle;
+  Map? allScalarOracle;
+  Map<String, Object?>? allScalarReport;
   Map<String, Object?>? complexReport;
   Map<String, Object?>? valueReport;
   String? sourceSha256;
@@ -50,10 +52,17 @@ Future<void> main(List<String> args) async {
           'Value oracle does not match the current source/contract');
     }
   }
-  if (args.length == 6) {
+  if (args.length >= 6) {
     complexOracle = jsonDecode(await File(args[5]).readAsString()) as Map;
     if (complexOracle['sourceSha256'] != sourceSha256) {
       throw StateError('Complex oracle does not match current source');
+    }
+  }
+  if (args.length >= 7) {
+    allScalarOracle = jsonDecode(await File(args[6]).readAsString()) as Map;
+    if (allScalarOracle['sourceSha256'] != sourceSha256 ||
+        allScalarOracle['contract'] != 'typed-column-pk-v2') {
+      throw StateError('All-scalar oracle does not match source/v2 contract');
     }
   }
   final env = Platform.environment;
@@ -136,6 +145,14 @@ Future<void> main(List<String> args) async {
             identifiers: policy,
             sourceSha256: sourceSha256!);
       }
+      if (allScalarOracle != null) {
+        allScalarReport = await auditPostgresValueHashes(
+            connection: pg,
+            analysis: analysis,
+            oracle: allScalarOracle,
+            identifiers: policy,
+            sourceSha256: sourceSha256!);
+      }
       if (complexOracle != null) {
         complexReport = await auditPostgresComplexValues(
           connection: pg,
@@ -165,6 +182,15 @@ Future<void> main(List<String> args) async {
           const JsonEncoder.withIndent('  ').convert(valueReport));
       stdout.writeln(
           'PostgreSQL values match DAO: ${valueReport['allValuesMatch']}');
+    }
+    if (allScalarReport != null) {
+      await File('${args[1]}/postgres-all-scalar-audit.json').writeAsString(
+          const JsonEncoder.withIndent('  ').convert(allScalarReport));
+      stdout.writeln(
+          'PostgreSQL all scalar values match DAO: ${allScalarReport['allValuesMatch']}');
+      if (allScalarReport['allValuesMatch'] != true) {
+        throw StateError('All-scalar v2 value hash audit mismatch');
+      }
     }
     if (complexReport != null) {
       await File('${args[1]}/postgres-complex-audit.json').writeAsString(
