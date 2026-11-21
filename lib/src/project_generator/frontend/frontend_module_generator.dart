@@ -261,6 +261,11 @@ class Consultar${namePascal}Page implements OnInit {
     final moduleNameKebab = module.moduleNameKebab;
     final formLogicClassName = module.formLogicClassName;
 
+    final beforeInsertAllocator = _resolveBeforeInsertAllocator(project, table);
+    final allocatorInsertValidation = beforeInsertAllocator == null ? '' :
+        '      if (!modoAlterar) validationErrors.remove(${_dartStringLiteral(beforeInsertAllocator.columnRuntimeName)});';
+    final allocatorPendingRead = beforeInsertAllocator == null ? '' :
+        '    if (!modoAlterar && key == ${_dartStringLiteral(beforeInsertAllocator.columnRuntimeName)}) return ${_dartStringLiteral('')};';
     final formFields = module.fields
         .where((field) => field.isAutoNumber == false)
         .map(
@@ -272,7 +277,8 @@ class Consultar${namePascal}Page implements OnInit {
             'inputType': field.inputType,
             'inputMode': field.inputMode,
             'selectSize': field.selectSize,
-            'isReadOnly': field.isReadOnly,
+            'isReadOnly': field.isReadOnly || beforeInsertAllocator?.columnRuntimeName == field.runtimeName,
+            'placeholder': beforeInsertAllocator?.columnRuntimeName == field.runtimeName ? 'Código definido ao salvar' : _htmlTextLiteral(field.label),
             'isRequired': field.isRequired,
             'maxLength': field.maxLength,
             'title': _buildFieldHint(field) == null
@@ -334,6 +340,11 @@ class Consultar${namePascal}Page implements OnInit {
 
     await File(p.join(moduleDir.path, 'access_subforms.json')).writeAsString(
         const JsonEncoder.withIndent('  ').convert(_subformDescriptors(project, table)));
+    await File(p.join(moduleDir.path, 'access_behaviors.json')).writeAsString(
+        const JsonEncoder.withIndent('  ').convert({
+          'beforeInsertAllocator': beforeInsertAllocator?.toJson(),
+          'otherVbaEventsImplemented': false,
+        }));
     final accessCommands = _buildAccessCommands(project, table);
     await File(p.join(moduleDir.path, 'access_commands.json')).writeAsString(
         const JsonEncoder.withIndent('  ').convert(accessCommands));
@@ -518,6 +529,7 @@ $attachmentPresentationSource;
   List<String> get validationHints => $formLogicClassName.validationHints;
 
   String readField(String key) {
+$allocatorPendingRead
     final value = _draft[key];
     return _presentFieldValue(key, value);
   }
@@ -1139,6 +1151,7 @@ $attachmentPresentationSource;
       validationErrors
         ..clear()
         ..addAll($formLogicClassName.validateDraft(_draft));
+$allocatorInsertValidation
       if (validationErrors.isNotEmpty) {
         SimpleDialogComponent.showAlert(validationErrors.values.first);
         return;

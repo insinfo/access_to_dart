@@ -84,6 +84,19 @@ class {{className}}Repository {
 
   Future<{{primaryKeyParamType}}?> insert({{className}} item) async {
     final payload = item.toMap();
+{{#hasBeforeInsertAllocator}}
+    // Recognized complete BeforeInsert procedure: SHA-256 {{allocatorSourceSha256}}.
+    return await db.transaction((ctx) async {
+      await ctx.statement({{{allocatorLockStatement}}});
+      final rows = await ctx.select({{{allocatorNextQuery}}});
+      final nextId = rows.single['next_id'];
+      if (nextId is! int) throw StateError('Código familiar calculado inválido.');
+      payload[{{{allocatorColumnLiteral}}}] = nextId;
+      await ctx.table('{{tableRuntimeName}}').insert(payload);
+      return nextId;
+    });
+{{/hasBeforeInsertAllocator}}
+{{^hasBeforeInsertAllocator}}
 {{#primaryKeyIsAutoNumber}}
     // Deixe o banco gerar a chave quando ela não foi informada.
     if (payload['{{primaryKeyRuntimeName}}'] == null) {
@@ -97,10 +110,16 @@ class {{className}}Repository {
     await db.table('{{tableRuntimeName}}').insert(payload);
     return payload['{{primaryKeyRuntimeName}}'] as {{primaryKeyParamType}}?;
 {{/primaryKeyIsAutoNumber}}
+{{/hasBeforeInsertAllocator}}
   }
 
   Future<void> update({{primaryKeyParamType}} id, {{className}} item) async {
-    await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).update(item.toMap());
+    final payload = item.toMap();
+{{#hasBeforeInsertAllocator}}
+    // Source control is disabled; UPDATE never renumbers an existing family.
+    payload.remove({{{allocatorColumnLiteral}}});
+{{/hasBeforeInsertAllocator}}
+    await db.table('{{tableRuntimeName}}').where('{{primaryKeyRuntimeName}}', '=', id).update(payload);
   }
 
   Future<void> delete({{primaryKeyParamType}} id) async {

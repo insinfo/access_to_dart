@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:code_builder/code_builder.dart';
+import 'package:crypto/crypto.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:mustache_template/mustache_template.dart';
 import 'package:path/path.dart' as p;
@@ -22,6 +23,7 @@ import '../vba_parser/form_rule_extractor.dart';
 part 'project_generator_form_rules.dart';
 part 'subform_generator.dart';
 part 'multivalue_generator.dart';
+part 'before_insert_allocator.dart';
 part 'project_generator_ir.dart';
 part 'project_generator_shared.dart';
 part 'codegen/backend_template_emitters.dart';

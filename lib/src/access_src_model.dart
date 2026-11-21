@@ -207,6 +207,7 @@ class AccessSrcForm {
 }
 
 class AccessSrcControl {
+  final Map<String, String>? properties;
   final String type;
   final String name;
   final String? controlSource;
@@ -219,6 +220,7 @@ class AccessSrcControl {
   final Map<String, String> events;
 
   const AccessSrcControl({
+    this.properties,
     required this.type,
     required this.name,
     required this.controlSource,
@@ -234,6 +236,7 @@ class AccessSrcControl {
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'type': type,
+      'properties': properties,
       'name': name,
       'controlSource': controlSource,
       'caption': caption,

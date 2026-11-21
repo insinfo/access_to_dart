@@ -589,6 +589,7 @@ class AccessSrcReader {
         if (blockName != null && !_isNoiseControl(blockName)) {
           controls.add(
             AccessSrcControl(
+              properties: Map.unmodifiable(node.properties),
               type: node.type,
               name: blockName,
               controlSource: node.properties['ControlSource'],

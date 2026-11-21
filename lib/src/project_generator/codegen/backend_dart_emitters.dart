@@ -14,6 +14,7 @@ String _buildBackendRepositorySource(GeneratedBackendModule module) {
   return _renderTemplateAsset(
     'backend/repository.dart.mustache',
     <String, Object?>{
+      ..._beforeInsertTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'tableRuntimeName': module.tableRuntimeName,
@@ -102,6 +103,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
   return _renderTemplateAsset(
     'backend/service.dart.mustache',
     <String, Object?>{
+      ..._beforeInsertTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,
@@ -121,6 +123,7 @@ String _buildBackendControllerSource(GeneratedBackendModule module) {
   return _renderTemplateAsset(
     'backend/controller.dart.mustache',
     <String, Object?>{
+      ..._beforeInsertTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,

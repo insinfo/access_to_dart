@@ -290,6 +290,7 @@ List<String> _parseAccessValueList(String? source) {
 }
 
 class GeneratedBackendModule {
+  final GeneratedBeforeInsertAllocator? beforeInsertAllocator;
   final String packageName;
   final String className;
   final String normalizedName;
@@ -305,6 +306,7 @@ class GeneratedBackendModule {
   final List<GeneratedAttachmentSubresource> attachments;
 
   const GeneratedBackendModule({
+    this.beforeInsertAllocator,
     required this.packageName,
     required this.className,
     required this.normalizedName,
@@ -431,6 +433,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         )
         .toList(growable: false);
     return GeneratedBackendModule(
+      beforeInsertAllocator: _resolveBeforeInsertAllocator(project, table),
       packageName: project.dartPackageName,
       className: table.className,
       normalizedName: table.normalizedName,

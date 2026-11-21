@@ -98,6 +98,10 @@ class {{className}}Controller {
         ...{{className}}.defaultValues(),
         ...await req.bodyAsMap(),
       };
+{{#hasBeforeInsertAllocator}}
+      // Client cannot set the disabled source field; final ID is allocated atomically.
+      body[{{{allocatorColumnLiteral}}}] = 0;
+{{/hasBeforeInsertAllocator}}
       final validation = {{className}}ValidationContract.validateDraft(body);
       if (!validation.isValid) {
         return responseValidationError(validation);
@@ -118,6 +122,9 @@ class {{className}}Controller {
     try {
       final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final body = await req.bodyAsMap();
+{{#hasBeforeInsertAllocator}}
+      body[{{{allocatorColumnLiteral}}}] = id;
+{{/hasBeforeInsertAllocator}}
       final validation = {{className}}ValidationContract.validateDraft(body);
       if (!validation.isValid) {
         return responseValidationError(validation);
