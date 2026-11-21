@@ -12,6 +12,8 @@ void setup{{className}}Routes(Router app, String basePath) {
         AccessSubformController.list(request, '{{routeName}}', id, key))
     ..get('/<id>/collections/<fieldKey>', (request, id, fieldKey) =>
         AccessMultivalueController.list(request, '{{routeName}}', id, fieldKey))
+    ..put('/<id>/collections/<fieldKey>', (request, id, fieldKey) =>
+        AccessMultivalueController.replace(request, '{{routeName}}', id, fieldKey))
     ..get('/<id>/attachments/<fieldKey>', {{className}}Controller.attachments)
     ..post('/<id>/attachments/<fieldKey>', {{className}}Controller.createAttachment)
     ..delete('/<id>/attachments/<fieldKey>/<ordinal>', {{className}}Controller.deleteAttachment)

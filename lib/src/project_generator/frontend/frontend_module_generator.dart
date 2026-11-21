@@ -433,6 +433,17 @@ $attachmentPresentationSource;
   @Input()
   bool navigationReady = false;
   bool navigationSaving = false;
+  final Set<String> _collectionPendingFields = <String>{};
+  final Set<String> _collectionSavingFields = <String>{};
+  int collectionResetVersion = 0;
+  void collectionPendingChanged(Map<String, Object> state) {
+    final key = state['fieldKey'] as String;
+    if (state['pending'] == true) { _collectionPendingFields.add(key); }
+    else { _collectionPendingFields.remove(key); }
+    if (state['saving'] == true) { _collectionSavingFields.add(key); }
+    else { _collectionSavingFields.remove(key); }
+  }
+
   String? _navigationBaseline;
   String? navigationError;
   String? pendingRecordNavigation;
@@ -458,6 +469,7 @@ $attachmentPresentationSource;
       previousKey = key;
     }
     if (_navigationBaseline == null || _draftFingerprint() != _navigationBaseline ||
+        _collectionPendingFields.isNotEmpty ||
         _attachmentLoadingFields.isNotEmpty ||
         _attachmentDraftsByField.values.any((draft) => draft.values.any((value) => value.isNotEmpty)) ||
         _attachmentSelectedFilesByField.values.any((files) => files.isNotEmpty)) {
@@ -500,7 +512,7 @@ $attachmentPresentationSource;
   void discardAndNavigate() {
     final operation = pendingRecordNavigation;
     if (operation == null || navigationSaving || !navigationReady ||
-        _attachmentLoadingFields.isNotEmpty) return;
+        _attachmentLoadingFields.isNotEmpty || _collectionSavingFields.isNotEmpty) return;
     if (!SimpleDialogComponent.showConfirm(
         'Descartar as alterações não salvas e continuar a navegação?')) return;
     final saved = _navigationSavedEntity;
@@ -511,6 +523,8 @@ $attachmentPresentationSource;
     _navigationBaseline = _draftFingerprint();
     _attachmentDraftsByField.clear();
     _attachmentSelectedFilesByField.clear();
+    _collectionPendingFields.clear();
+    collectionResetVersion++;
     validationErrors.clear();
     navigateRecord(operation, alertMacroError: _pendingMacroErrorAlert);
   }

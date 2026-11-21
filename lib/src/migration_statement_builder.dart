@@ -5,6 +5,7 @@ import 'package:jackcess_dart/jackcess_dart.dart';
 import 'access_default_semantics.dart';
 import 'access_temporal_semantics.dart';
 import 'analysis_model.dart';
+import 'complex_collection_sequence.dart';
 import 'identifier_utils.dart';
 import 'migration_auto_number_mode.dart';
 import 'migration_export_mode.dart';
@@ -70,6 +71,7 @@ class MigrationStatementBuilder {
     if (_requiresPgcryptoExtension(project)) {
       statements.add('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
     }
+    statements.addAll(buildComplexPointerSequenceStatements(project));
     if (_usesSequences) {
       statements.addAll(buildSequenceStatements(project));
     }
@@ -81,6 +83,7 @@ class MigrationStatementBuilder {
         ),
       );
     }
+    statements.addAll(buildComplexPointerSequenceOwnershipStatements(project));
     if (_usesSequences) {
       statements.addAll(buildSequenceOwnershipStatements(project));
     }
@@ -92,6 +95,7 @@ class MigrationStatementBuilder {
     Map<String, List<Map<String, dynamic>>>? tableRowsByName,
   }) {
     final statements = <String>[];
+    statements.addAll(buildComplexPointerSequenceSyncStatements(project));
     if (_usesSequences) {
       statements.addAll(buildSequenceSyncStatements(project));
     }
@@ -229,6 +233,41 @@ class MigrationStatementBuilder {
     }
 
     return 'CREATE TABLE ${identifierPolicy.quotedTableName(table.name)} (\n${lines.join(',\n')}\n);';
+  }
+
+  List<String> buildComplexPointerSequenceStatements(AnalysisProject project) =>
+      [
+        for (final binding in multivalueSequenceBindings(project))
+          'CREATE SEQUENCE IF NOT EXISTS ${_quotedDbObjectName(complexCollectionSequenceName(binding.parent.name, binding.column.name))} AS INTEGER NO CYCLE;',
+      ];
+
+  List<String> buildComplexPointerSequenceOwnershipStatements(
+          AnalysisProject project) =>
+      [
+        for (final binding in multivalueSequenceBindings(project))
+          'ALTER SEQUENCE ${_quotedDbObjectName(complexCollectionSequenceName(binding.parent.name, binding.column.name))} OWNED BY ${identifierPolicy.quotedTableName(binding.parent.name)}.${identifierPolicy.quotedColumnName(binding.column.name)};',
+      ];
+
+  /// Migration-only high-water synchronization. Runtime writes use nextval,
+  /// never MAX+1. Include orphan child links so an allocated pointer cannot
+  /// accidentally adopt legacy rows; repeated synchronization never rewinds.
+  List<String> buildComplexPointerSequenceSyncStatements(
+          AnalysisProject project) =>
+      [
+        for (final binding in multivalueSequenceBindings(project))
+          _complexPointerSequenceSync(
+              binding.parent, binding.column, binding.child),
+      ];
+
+  String _complexPointerSequenceSync(
+      AnalysisTable parent, AnalysisColumn column, AnalysisTable child) {
+    final name = complexCollectionSequenceName(parent.name, column.name);
+    final sequence = _quotedDbObjectName(name);
+    return 'SELECT setval(${_regclassReference(name)}, '
+        'GREATEST(COALESCE(MAX(pointer_value), 1), (SELECT last_value FROM $sequence)), '
+        'COALESCE(MAX(pointer_value) >= (SELECT last_value FROM $sequence), FALSE) OR (SELECT is_called FROM $sequence)) '
+        'FROM (SELECT ${identifierPolicy.quotedColumnName(column.name)} AS pointer_value FROM ${identifierPolicy.quotedTableName(parent.name)} '
+        'UNION ALL SELECT ${identifierPolicy.quotedColumnName(child.collectionLinkColumn!)} AS pointer_value FROM ${identifierPolicy.quotedTableName(child.name)}) AS existing_pointers;';
   }
 
   List<String> buildSequenceStatements(AnalysisProject project) {

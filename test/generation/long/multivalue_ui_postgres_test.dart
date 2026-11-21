@@ -97,8 +97,12 @@ void main() {
         ['FALTA DE RECURSO FINANCEIRO', 'OUTROS', null]);
     expect(first['truncated'], false);
     for (final id in [2, 3]) {
-      expect(await get('tb_encaminhamento/$id/collections/motivo_nao'),
-          {'values': [], 'truncated': false});
+      final empty = await get('tb_encaminhamento/$id/collections/motivo_nao');
+      expect(empty['values'], isEmpty);
+      expect(empty['truncated'], false);
+      expect(empty['editable'], false);
+      expect(empty['readOnlyReason'], contains('--auto-number-mode sequence'));
+      expect(empty['revision'], isA<String>());
     }
     final truncated = await get('tb_encaminhamento/4/collections/motivo_nao');
     expect(truncated['values'].length, 100);

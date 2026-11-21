@@ -14,6 +14,7 @@ import '../access_form_capabilities.dart';
 import '../access_temporal_semantics.dart';
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
+import '../complex_collection_sequence.dart';
 import '../identifier_utils.dart';
 import '../migration_identifier_style.dart';
 import '../query_reconciliation/sql_clause_parser.dart';
