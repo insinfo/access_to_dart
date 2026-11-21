@@ -22,7 +22,7 @@ fluxos e dados. Compilar, gerar CRUD ou preservar um inventário não encerra a 
 
 | Área | Evidência necessária | Estado atual |
 |---|---|---|
-| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 50/50 contagens DAO conferidas em migração estrita; valores e conteúdo de anexos ainda precisam de comparação |
+| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 50/50 contagens DAO conferidas em migração estrita. Leitor corrigido: 188 colunas (1.116.997 células) e quatro payloads iguais ao DAO; comparação integral desses valores após migração PostgreSQL em andamento |
 | Consultas | Dependências e parâmetros resolvidos; resultados comparados com Access, incluindo filtros, JOIN, agregações e ações | Reconciliação textual sem divergências não prova execução PostgreSQL; executor geral pendente |
 | Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; não são 97 telas equivalentes |
 | Regras | Eventos, macros e VBA executados em Dart com efeitos comparados ao Access | Preservação estrutural melhorada; tradução/execução integral pendente |
@@ -63,9 +63,12 @@ sido adicionados). Logs em `build/codex-goal-fast.log`; análise estática em
   referenciadas sem vínculo declarado e projeções com colunas ausentes. Esses
   casos precisam de comparação com o Access em execução, não de criação arbitrária
   de colunas ou descarte silencioso das referências.
-- Promover dados suficientes ao scaffold não implementa vínculo pai/filho,
-  lifecycle VBA, formulários sem RecordSource nem múltiplas telas por tabela.
-- Completar lookups com JOIN/WHERE, parâmetros de forms e exibição multicoluna.
+- Subforms agora têm painéis de leitura com vínculo pai/filho baseado no registro
+  salvo. Escrita de filhos, lifecycle VBA, formulários sem RecordSource e múltiplas
+  telas por tabela permanecem pendentes.
+- Lookups com JOIN/WHERE delimitados foram implementados e testados; completar
+  parâmetros de forms, exibição multicoluna e comparação de resultados de todas
+  as consultas com o Access.
 - Consumir macros/eventos e traduzir regras sem substituir lógica real por
   mensagens ou validadores heurísticos.
 - Implementar relatórios e verificar o sistema completo em navegador com banco
@@ -75,3 +78,21 @@ Relatórios específicos: `20_sigasul_behavior_preservation.md`,
 `21_dependencias_e_forms_sql_sigasul.md` e `22_sigasul_backend_lookup_sources.md`.
 
 Migração estrita e leitura HTTP integral detalhadas em `27_sigasul_migracao_integral.md`.
+
+## Evidência adicional de fidelidade e operação
+
+- O Boolean nativo do Access usa o bit da máscara como valor. A correção evita
+  transformar false em null e foi comparada ao DAO nas três tabelas auditadas.
+- O FileData dos anexos contém um wrapper; agora a migração remove esse wrapper
+  e descomprime quando necessário, com validação de limites e Adler32. Quatro
+  arquivos migrados isoladamente para BYTEA têm os hashes dos originais DAO.
+- O release gerado usa uma compilação one-shot e verifica todos os arquivos do
+  manifest. A validação de três módulos confirmou 297/297 arquivos.
+- O backend serve o release e a API na mesma origem. Conexões de requisições
+  usam Zone; inicialização concorrente reutiliza um único pool. Os testes com
+  PostgreSQL incluem concorrência, erros e assets com banco indisponível.
+
+Essas evidências estão em `29_sigasul_value_fidelity_audit.md`,
+`30_attachment_payload_decode.md` e `31_same_origin_and_request_scope.md`.
+Não substituem a validação dos fluxos completos nem comprovam os demais campos
+fora das três tabelas auditadas.
