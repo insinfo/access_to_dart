@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:xml/xml.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'access_src_model.dart';
 
 class AccessSrcReader {
@@ -111,14 +112,15 @@ class AccessSrcReader {
       queryNames.map((name) async {
         final sqlFile = sqlByName[name];
         final basFile = basByName[name];
-        final sql = sqlFile == null ? '' : (await sqlFile.readAsString()).trim();
+        final sql =
+            sqlFile == null ? '' : (await sqlFile.readAsString()).trim();
         final basText = basFile == null ? null : await basFile.readAsString();
         return AccessSrcQuery(
           name: name,
           sql: sql,
           basText: basText,
-          semanticSql:
-              _reconstructQuerySqlFromBas(basText) ?? (sql.isEmpty ? null : sql),
+          semanticSql: _reconstructQuerySqlFromBas(basText) ??
+              (sql.isEmpty ? null : sql),
         );
       }),
     );
@@ -160,8 +162,60 @@ class AccessSrcReader {
         .cast<File>()
         .toList();
     files.sort((a, b) => a.path.compareTo(b.path));
-    return Future.wait(files.map((file) async => _parseReport(
-        _basenameWithoutExtension(file.path), await file.readAsString())));
+    final gallery = <String, List<Map<String, dynamic>>>{};
+    final imageDir = Directory('${directory.path}/images');
+    if (await imageDir.exists()) {
+      final metadataFiles = await imageDir
+          .list()
+          .where((e) => e is File && e.path.endsWith('.json'))
+          .cast<File>()
+          .toList();
+      metadataFiles.sort((a, b) => a.path.compareTo(b.path));
+      for (final metadataFile in metadataFiles) {
+        final raw = jsonDecode(
+                (await metadataFile.readAsString()).replaceFirst('\ufeff', ''))
+            as Map;
+        final items = (raw['Items'] as Map?)?.cast<String, dynamic>();
+        if (items == null || items['Name'] is! String) continue;
+        final extension = items['Extension'] as String? ?? '';
+        final stem = _basenameWithoutExtension(metadataFile.path);
+        final resource = <String, dynamic>{
+          'metadataPath': 'images/$stem.json',
+          'metadataSha256':
+              (await crypto.sha256.bind(metadataFile.openRead()).first)
+                  .toString()
+        };
+        if (RegExp(r'^[A-Za-z0-9]+$').hasMatch(extension)) {
+          final asset = File('${imageDir.path}/$stem.$extension');
+          if (await asset.exists()) {
+            resource['sourcePath'] = 'images/$stem.$extension';
+            resource['sha256'] =
+                (await crypto.sha256.bind(asset.openRead()).first).toString();
+          }
+        }
+        (gallery[(items['Name'] as String).toLowerCase()] ??= []).add(resource);
+      }
+    }
+    return Future.wait(files.map((file) async {
+      final name = _basenameWithoutExtension(file.path);
+      final companion = File('${reportsDir.path}/$name.json');
+      Map<String, dynamic>? settings;
+      String? settingsHash;
+      if (await companion.exists()) {
+        settings = (jsonDecode(
+                    (await companion.readAsString()).replaceFirst('\ufeff', ''))
+                as Map)
+            .cast<String, dynamic>();
+        settingsHash =
+            (await crypto.sha256.bind(companion.openRead()).first).toString();
+      }
+      return _parseReport(name, await file.readAsString(),
+          sourceSha256:
+              (await crypto.sha256.bind(file.openRead()).first).toString(),
+          printSettings: settings,
+          printSettingsSha256: settingsHash,
+          gallery: gallery);
+    }));
   }
 
   AccessSrcTable _parseTable(String fallbackName, String sql, String? xml) {
@@ -553,7 +607,8 @@ class AccessSrcReader {
     }
     if (index > 0) {
       final previous = source.codeUnitAt(index - 1);
-      final previousIsLetter = previous >= 65 && previous <= 90 || previous >= 97 && previous <= 122;
+      final previousIsLetter =
+          previous >= 65 && previous <= 90 || previous >= 97 && previous <= 122;
       if (previousIsLetter) {
         return false;
       }
@@ -581,10 +636,14 @@ class AccessSrcReader {
     );
   }
 
-  List<AccessSrcControl> _collectControls(_BasNode root) {
+  List<AccessSrcControl> _collectControls(_BasNode root,
+      {bool reportGraphics = false}) {
     final controls = <AccessSrcControl>[];
     void collectControls(_BasNode node) {
-      if (_isRelevantControlType(node.type)) {
+      if (_isRelevantControlType(node.type) ||
+          (reportGraphics &&
+              const {'Image', 'Rectangle', 'Line', 'PageBreak'}
+                  .contains(node.type))) {
         final blockName = node.properties['Name'];
         if (blockName != null && !_isNoiseControl(blockName)) {
           controls.add(
@@ -613,7 +672,14 @@ class AccessSrcReader {
     return controls;
   }
 
-  AccessSrcReport _parseReport(String name, String text) {
+  AccessSrcReport _parseReport(
+    String name,
+    String text, {
+    String? sourceSha256,
+    Map<String, dynamic>? printSettings,
+    String? printSettingsSha256,
+    Map<String, List<Map<String, dynamic>>> gallery = const {},
+  }) {
     final tree = _parseBasTree(text);
     final report = tree.children.firstWhere(
       (child) => child.type == 'Report',
@@ -642,7 +708,8 @@ class AccessSrcReader {
           type: node.type,
           name: node.properties['Name'],
           height: int.tryParse(node.properties['Height'] ?? ''),
-          controls: _collectControls(node),
+          controls: _collectControls(node, reportGraphics: true),
+          properties: Map.unmodifiable(node.properties),
         ));
         return;
       }
@@ -652,15 +719,60 @@ class AccessSrcReader {
     }
 
     visit(report);
+    final controls = _collectControls(report, reportGraphics: true);
+    final defaults = <String, Map<String, String>>{};
+    void collectDefaults(_BasNode node) {
+      if (node.properties['Name'] != null) return;
+      if (_isRelevantControlType(node.type) ||
+          const {'Image', 'Rectangle', 'Line', 'PageBreak'}
+              .contains(node.type)) {
+        defaults[node.type] = Map.unmodifiable(node.properties);
+      }
+      for (final child in node.children) {
+        collectDefaults(child);
+      }
+    }
+
+    collectDefaults(report);
+    final images = <AccessSrcReportImage>[];
+    for (final control in controls.where((c) => c.type == 'Image')) {
+      final picture = control.properties?['Picture'];
+      final type = control.properties?['PictureType'] ??
+          defaults['Image']?['PictureType'];
+      final matches = gallery[picture?.toLowerCase()] ?? const [];
+      final resource =
+          type == '2' && matches.length == 1 ? matches.single : null;
+      images.add(AccessSrcReportImage(
+          controlName: control.name,
+          picture: picture,
+          pictureType: type,
+          status: type != '2'
+              ? 'unsupported-picture-storage'
+              : matches.length != 1
+                  ? 'missing-or-ambiguous-gallery-item'
+                  : resource?['sourcePath'] == null
+                      ? 'missing-gallery-file'
+                      : 'resolved',
+          sourcePath: resource?['sourcePath'] as String?,
+          sha256: resource?['sha256'] as String?,
+          metadataPath: resource?['metadataPath'] as String?,
+          metadataSha256: resource?['metadataSha256'] as String?));
+    }
     return AccessSrcReport(
       name: name,
+      sourceSha256: sourceSha256,
+      properties: Map.unmodifiable(report.properties),
+      controlDefaults: Map.unmodifiable(defaults),
+      printSettings: printSettings,
+      printSettingsSha256: printSettingsSha256,
+      images: images,
       caption: report.properties['Caption'],
       recordSource: report.properties['RecordSource'],
       orderBy: report.properties['OrderBy'],
       orderByOn: report.properties['OrderByOn'],
       orderByOnLoad: report.properties['OrderByOnLoad'],
       groupLevels: groupLevels,
-      controls: _collectControls(report),
+      controls: controls,
       sections: sections,
       macros: _collectMacros(report),
       macroDefinitions: _collectMacroDefinitions(report),
@@ -767,7 +879,8 @@ class AccessSrcReader {
           if (key == 'Alias') {
             pendingAlias = value;
           } else if (key == 'Expression' && value.isNotEmpty) {
-            columns.add(_BasQueryColumn(expression: value, alias: pendingAlias));
+            columns
+                .add(_BasQueryColumn(expression: value, alias: pendingAlias));
             pendingAlias = null;
           }
           break;
@@ -802,9 +915,10 @@ class AccessSrcReader {
             );
             pendingAlias = null;
           } else if (key == 'Flag') {
-            pendingAlias = (value.trim() == '1' || value.trim().toUpperCase() == 'D')
-                ? 'D'
-                : null;
+            pendingAlias =
+                (value.trim() == '1' || value.trim().toUpperCase() == 'D')
+                    ? 'D'
+                    : null;
           }
           break;
         default:
@@ -860,9 +974,8 @@ class AccessSrcReader {
       sql.writeln('  ${having.trim()}');
     }
 
-    final effectiveOrderBy = orderByExpressions.isNotEmpty
-        ? orderByExpressions.join(', ')
-        : orderBy;
+    final effectiveOrderBy =
+        orderByExpressions.isNotEmpty ? orderByExpressions.join(', ') : orderBy;
     if (effectiveOrderBy != null && effectiveOrderBy.trim().isNotEmpty) {
       sql.writeln('ORDER BY');
       sql.writeln('  ${effectiveOrderBy.trim()}');

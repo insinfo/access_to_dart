@@ -254,6 +254,12 @@ class AccessSrcControl {
 /// Inventário do export de relatório; não implica suporte à sua renderização.
 class AccessSrcReport {
   final String name;
+  final String? sourceSha256;
+  final Map<String, String> properties;
+  final Map<String, Map<String, String>> controlDefaults;
+  final Map<String, dynamic>? printSettings;
+  final String? printSettingsSha256;
+  final List<AccessSrcReportImage> images;
   final String? caption;
   final String? recordSource;
   final String? orderBy;
@@ -268,6 +274,12 @@ class AccessSrcReport {
 
   const AccessSrcReport({
     required this.name,
+    this.sourceSha256,
+    this.properties = const {},
+    this.controlDefaults = const {},
+    this.printSettings,
+    this.printSettingsSha256,
+    this.images = const [],
     required this.caption,
     required this.recordSource,
     this.orderBy,
@@ -283,6 +295,12 @@ class AccessSrcReport {
 
   Map<String, Object?> toJson() => {
         'name': name,
+        'sourceSha256': sourceSha256,
+        'properties': properties,
+        'controlDefaults': controlDefaults,
+        'printSettings': printSettings,
+        'printSettingsSha256': printSettingsSha256,
+        'images': images.map((image) => image.toJson()).toList(),
         'caption': caption,
         'recordSource': recordSource,
         'orderBy': orderBy,
@@ -300,12 +318,14 @@ class AccessSrcReport {
 
 class AccessSrcReportSection {
   final String type;
+  final Map<String, String> properties;
   final String? name;
   final int? height;
   final List<AccessSrcControl> controls;
 
   const AccessSrcReportSection({
     required this.type,
+    this.properties = const {},
     required this.name,
     required this.height,
     required this.controls,
@@ -313,6 +333,7 @@ class AccessSrcReportSection {
 
   Map<String, Object?> toJson() => {
         'type': type,
+        'properties': properties,
         'name': name,
         'height': height,
         'controls': controls.map((control) => control.toJson()).toList(),
@@ -365,5 +386,36 @@ class AccessSrcMacroStep {
         'arguments': arguments,
         'properties': properties,
         'children': children.map((step) => step.toJson()).toList(),
+      };
+}
+
+/// Shared image dependency observed in report source; unresolved assets remain explicit.
+class AccessSrcReportImage {
+  final String controlName;
+  final String? picture;
+  final String? pictureType;
+  final String status;
+  final String? sourcePath;
+  final String? sha256;
+  final String? metadataPath;
+  final String? metadataSha256;
+  const AccessSrcReportImage(
+      {required this.controlName,
+      required this.picture,
+      required this.pictureType,
+      required this.status,
+      this.sourcePath,
+      this.sha256,
+      this.metadataPath,
+      this.metadataSha256});
+  Map<String, Object?> toJson() => {
+        'controlName': controlName,
+        'picture': picture,
+        'pictureType': pictureType,
+        'status': status,
+        'sourcePath': sourcePath,
+        'sha256': sha256,
+        'metadataPath': metadataPath,
+        'metadataSha256': metadataSha256
       };
 }

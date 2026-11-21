@@ -22,11 +22,11 @@ fluxos e dados. Compilar, gerar CRUD ou preservar um inventário não encerra a 
 
 | Área | Evidência necessária | Estado atual |
 |---|---|---|
-| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 54/54 contagens DAO conferidas: 123.922 registros lógicos. PostgreSQL: 887/887 colunas escalares, cinco anexos com 25 metadados e 55 valores multivalorados iguais ao DAO; um órfão físico preservado exatamente em arquivo separado. CRUD completo de todos os fluxos ainda pendente |
+| Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 54/54 contagens DAO conferidas: 123.922 registros lógicos. PostgreSQL: 887/887 colunas escalares, cinco anexos com 25 metadados e 55 valores multivalorados iguais ao DAO; um órfão físico preservado exatamente em arquivo separado. Escrita explícita de `MotivoNão` e CLI padrão com `sequence` para AutoNumber validados separadamente (docs 51/54). CRUD completo de todos os fluxos ainda pendente |
 | Consultas | Dependências e parâmetros resolvidos; resultados comparados com Access, incluindo filtros, JOIN, agregações e ações | CSPRONT1 executada pela API gerada: sete casos e 134 colunas iguais ao DAO, mediante contrato validado. Demais consultas, dependências e recursos fora do subconjunto ainda pendentes |
-| Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; não são 97 telas equivalentes |
+| Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; contrato de capacidades por formulário exportado em `access-form-capabilities.json` (doc53). Não são 97 telas equivalentes |
 | Regras | Eventos, macros e VBA executados em Dart com efeitos comparados ao Access | Numeração familiar, atribuições de colunas do combo e navegação restrita têm provas específicas. Os demais eventos e a equivalência integral do lifecycle permanecem pendentes |
-| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário e estrutura disponíveis; renderer pendente |
+| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário completo, apresentação de `prontuario16` (38 controles, layout, `printSettings`, imagem compartilhada) e oráculo PDF nativo em sessão interativa validados (doc52); renderer web ainda pendente |
 | Operação | Aplicação completa compilada e fluxos reais de cadastro, atendimento, benefícios, encaminhamento e relatórios testados com PostgreSQL | Snapshot 21c986c: backend AOT/release de 471 arquivos, GET de 7.040 pessoas, navegador com 2.869 residências/16 linhas relacionadas e datas nativas conferidas, sem writes. Cadastro completo, relatórios e demais regras VBA ainda não comprovados |
 
 Não há percentual global de conclusão calculado a partir de testes isolados.
@@ -133,7 +133,16 @@ validação integrada foram encerrados, com remoção do banco conferida.
   recarga transacional, conflitos e rollback foram testados separadamente.
 - Doc50: metadados e associação dos cinco anexos também passaram no mesmo banco.
   FileTimeStamp/FileFlags/FileURL são NULL em todos os arquivos desta prova.
+- Doc51: escrita explícita e transacional da coleção `FrmEncaminhamento.MotivoNão`
+  validada via `PUT /api/v1/<modulo>/<id>/collections/<campo>` com controle
+  otimista por revisão e sequências de ponteiro e PK filho.
+- Doc52: parser `.src` e overlay preservam os 38 controles de `prontuario16`
+  (incluindo `Image` e `Rectangle`), `controlDefaults`, `printSettings` e imagem
+  compartilhada `logo-SUAS-ICON.png`, confrontados com oráculo nativo PDF em sessão interativa.
+- Doc53: capacidades por formulário exportadas em `access-form-capabilities.json`
+  conferidas com oráculo COM sintético; não altera a política somente leitura dos painéis familiares.
+- Doc54: `migrate` passa a adotar `--auto-number-mode sequence` como padrão,
+  validado em PostgreSQL + HTTP para inserts sem ID explícito.
 
-Escrita multivalorada está em desenvolvimento separadamente. Nenhuma dessas
-provas encerra a meta de reproduzir os 97 formulários, 165 relatórios e todos
-os fluxos/regras do sistema.
+Nenhuma dessas provas encerra a meta de reproduzir os 97 formulários, 165
+relatórios e todos os fluxos/regras do sistema.
