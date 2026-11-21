@@ -16,8 +16,11 @@ class AccessSelectCompiler {
     Map<String, int> parameterTypes = const {},
     List<String>? outputNames,
     bool asciiCaseInsensitiveText = false,
+    bool questionMarkParameters = false,
+    bool ordinalOutputAliases = false,
   }) =>
-      _Compiler(tables, identifiers, parameterTypes, asciiCaseInsensitiveText)
+      _Compiler(tables, identifiers, parameterTypes, asciiCaseInsensitiveText,
+              questionMarkParameters, ordinalOutputAliases)
           .compile(source, outputNames);
 }
 
@@ -38,6 +41,15 @@ class CompiledAccessSelect {
       : outputs = List.unmodifiable(outputs),
         _bindings = List.unmodifiable(bindings),
         _parameters = Set.unmodifiable(parameters);
+
+  List<Map<String, Object?>> get bindingDescriptors => List.unmodifiable([
+        for (final binding in _bindings)
+          Map<String, Object?>.unmodifiable({
+            'parameter': binding.parameter,
+            'literal': binding.literal,
+            'typeCode': binding.type,
+          }),
+      ]);
 
   /// Positional values for PostgreSQL $1, $2... Never interpolate these values.
   List<Object?> bind(Map<String, Object?> parameters) {
@@ -100,12 +112,15 @@ class _Compiler {
   final MigrationIdentifierPolicy ids;
   final Map<String, int> parameterTypes;
   final bool asciiText;
+  final bool questionMarks;
+  final bool ordinalAliases;
   final Map<String, AnalysisTable> used = {};
   final List<_Binding> bindings = [];
   final Set<String> referencedParameters = {};
   late List<_Token> tokens;
   int pos = 0;
-  _Compiler(this.schema, this.ids, this.parameterTypes, this.asciiText);
+  _Compiler(this.schema, this.ids, this.parameterTypes, this.asciiText,
+      this.questionMarks, this.ordinalAliases);
   Never fail(String message) =>
       throw FormatException('Unsupported Access SELECT: $message');
   _Token get current => tokens[pos];
@@ -178,7 +193,7 @@ class _Compiler {
     }
     final selected = [
       for (var i = 0; i < columns.length; i++)
-        '${columnSql(columns[i])} AS ${quote(outputs[i].name)}'
+        '${columnSql(columns[i])} AS ${quote(ordinalAliases ? 'c$i' : outputs[i].name)}'
     ].join(', ');
     return CompiledAccessSelect._('SELECT $selected FROM $from$whereSql',
         outputs, bindings, referencedParameters);
@@ -330,7 +345,7 @@ class _Compiler {
     }
     bindings.add(_Binding(right.kind == 'parameter' ? right.value : null,
         right.kind == 'literal' ? right.value : null, type));
-    final parameter = '\$${bindings.length}';
+    final parameter = questionMarks ? '?' : '\$${bindings.length}';
     if (type == 4) return '(${columnSql(c)} = CAST($parameter AS INTEGER))';
     return '(lower(${columnSql(c)} COLLATE "C") = lower(CAST($parameter AS TEXT) COLLATE "C"))';
   }
