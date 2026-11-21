@@ -1,4 +1,4 @@
-import 'package:eloquent/eloquent.dart';
+import 'dart:async';
 import 'package:shelf/shelf.dart';
 
 import '../di/dependency_injector.dart';
@@ -7,23 +7,17 @@ import 'database_service.dart';
 Middleware withDbShelfMiddleware() {
   return (Handler innerHandler) {
     return (Request request) async {
-      final dbService = ioc.get<DatabaseService>();
-      Connection? connection;
-
-      try {
-        ioc.pushNewScope();
-        connection = await dbService.connect();
-        ioc.registerSingleton<Connection>(connection);
-
-        final newRequest = request.change(context: {
-          ...request.context,
-          'db.connection': connection,
-        });
-
-        return await innerHandler(newRequest);
-      } finally {
-        await ioc.popScope();
-      }
+      final connection = await ioc.get<DatabaseService>().connect();
+      final scopedRequest = request.change(context: {
+        ...request.context,
+        'db.connection': connection,
+      });
+      // Async work inherits its request connection without mutating GetIt's
+      // process-wide scope stack. DatabaseService owns the shared pool.
+      return await runZoned(
+        () => innerHandler(scopedRequest),
+        zoneValues: {requestConnectionZoneKey: connection},
+      );
     };
   };
 }

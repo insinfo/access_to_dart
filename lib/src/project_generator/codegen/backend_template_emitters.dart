@@ -9,7 +9,9 @@ String _buildBackendPubspecSource(AnalysisProject project) {
 
 String _buildBackendServerBinSource() {
   return '''
+import 'dart:io';
 import 'package:args/args.dart';
+import 'package:shelf_static/shelf_static.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
@@ -21,7 +23,8 @@ import '../lib/src/routes/api_routes.dart';
 void main(List<String> args) async {
   final parser = ArgParser()
     ..addOption('address', abbr: 'a', defaultsTo: '0.0.0.0')
-    ..addOption('port', abbr: 'p', defaultsTo: '8080');
+    ..addOption('port', abbr: 'p', defaultsTo: '8080')
+    ..addOption('frontend-dir', help: 'Verified frontend release directory');
 
   final argsParsed = parser.parse(args);
   final address = argsParsed['address'];
@@ -29,23 +32,38 @@ void main(List<String> args) async {
 
   setupDependencies();
 
-  final app = Router();
+  final app = Router(notFoundHandler: (_) => _apiNotFound());
   setupApiRoutes(app);
 
-  final handler = Pipeline()
-      .addMiddleware(logRequests())
-      .addMiddleware(withDbShelfMiddleware())
-      .addHandler(app);
+  final api = Pipeline().addMiddleware(withDbShelfMiddleware()).addHandler(app);
+  final frontendPath = argsParsed['frontend-dir'] as String?;
+  final frontend = frontendPath == null ? null : _verifiedFrontend(frontendPath);
+  final handler = Pipeline().addMiddleware(logRequests()).addHandler((request) async {
+    final path = request.url.path;
+    if (path == 'api' || path.startsWith('api/')) {
+      final response = await api(request);
+      if (response.statusCode == 404 &&
+          !(response.headers['content-type'] ?? '').contains('application/json')) {
+        return _apiNotFound();
+      }
+      return response;
+    }
+    if (frontend != null) return frontend(request);
+    return _apiNotFound();
+  });
 
   final server = await io.serve(handler, address, port);
   print('Serving at http://\${server.address.host}:\${server.port}');
 }
+${_buildFrontendServingHelpers()}
 ''';
 }
 
 String _buildBackendPublicServerBinSource() {
   return '''
+import 'dart:io';
 import 'package:args/args.dart';
+import 'package:shelf_static/shelf_static.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
@@ -57,7 +75,8 @@ import '../lib/src/public/api/routes/public_api_routes.dart';
 void main(List<String> args) async {
   final parser = ArgParser()
     ..addOption('address', abbr: 'a', defaultsTo: '0.0.0.0')
-    ..addOption('port', abbr: 'p', defaultsTo: '8080');
+    ..addOption('port', abbr: 'p', defaultsTo: '8080')
+    ..addOption('frontend-dir', help: 'Verified frontend release directory');
 
   final argsParsed = parser.parse(args);
   final address = argsParsed['address'];
@@ -65,19 +84,75 @@ void main(List<String> args) async {
 
   setupModuleApiDependencies();
 
-  final app = Router();
+  final app = Router(notFoundHandler: (_) => _apiNotFound());
   setupRoutes(app);
 
-  final handler = Pipeline()
-      .addMiddleware(logRequests())
-      .addMiddleware(withDbShelfMiddleware())
-      .addHandler(app);
+  final api = Pipeline().addMiddleware(withDbShelfMiddleware()).addHandler(app);
+  final frontendPath = argsParsed['frontend-dir'] as String?;
+  final frontend = frontendPath == null ? null : _verifiedFrontend(frontendPath);
+  final handler = Pipeline().addMiddleware(logRequests()).addHandler((request) async {
+    final path = request.url.path;
+    if (path == 'api' || path.startsWith('api/')) {
+      final response = await api(request);
+      if (response.statusCode == 404 &&
+          !(response.headers['content-type'] ?? '').contains('application/json')) {
+        return _apiNotFound();
+      }
+      return response;
+    }
+    if (frontend != null) return frontend(request);
+    return _apiNotFound();
+  });
 
   final server = await io.serve(handler, address, port);
   print('Public backend at http://\${server.address.host}:\${server.port}');
 }
+${_buildFrontendServingHelpers()}
 ''';
 }
+
+String _buildFrontendServingHelpers() => r'''
+Response _apiNotFound() => Response.notFound(
+    '{"error":"not_found"}', headers: {'content-type': 'application/json'});
+
+Handler _verifiedFrontend(String directory) {
+  final root = Directory(directory).absolute;
+  final manifest = File('${root.path}/.build.manifest');
+  if (!manifest.existsSync()) throw StateError('Frontend manifest missing');
+  final entries = manifest.readAsLinesSync().map((e) => e.trim().replaceAll(r'\', '/'))
+      .where((e) => e.isNotEmpty).toSet();
+  if (!entries.containsAll({'index.html', 'main.dart.js'})) {
+    throw StateError('Frontend manifest must include index.html and main.dart.js');
+  }
+  final rootUri = root.resolveSymbolicLinksSync();
+  for (final entry in entries) {
+    if (entry.startsWith('/') || entry.contains(':') ||
+        entry.split('/').any((s) => s == '..' || s == '.')) {
+      throw StateError('Unsafe frontend manifest path');
+    }
+    final file = File('${root.path}/$entry');
+    if (!file.existsSync()) throw StateError('Frontend asset missing: $entry');
+    final resolved = file.resolveSymbolicLinksSync();
+    if (!resolved.startsWith('$rootUri${Platform.pathSeparator}')) {
+      throw StateError('Frontend asset outside release directory');
+    }
+  }
+  for (final entry in ['index.html', 'main.dart.js']) {
+    if (File('${root.path}/$entry').lengthSync() == 0) {
+      throw StateError('Frontend entrypoint empty: $entry');
+    }
+  }
+  final serve = createStaticHandler(root.path, defaultDocument: 'index.html');
+  return (request) {
+    if (request.method != 'GET' && request.method != 'HEAD') {
+      return Response(405, headers: {'allow': 'GET, HEAD'});
+    }
+    final path = request.url.path.isEmpty ? 'index.html' : request.url.path;
+    if (!entries.contains(path)) return Response.notFound('Not Found');
+    return serve(request);
+  };
+}
+''';
 
 String _buildBackendAppConfigSource() {
   return '''
@@ -174,10 +249,11 @@ void setupApiRoutes(Router app) {
 }
 ''',
     <String, Object?>{
-        'imports': _scaffoldTables(project)
-          .map((t) => "import '../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
+      'imports': _scaffoldTables(project)
+          .map((t) =>
+              "import '../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
           .join('\n'),
-        'setups': _scaffoldTables(project)
+      'setups': _scaffoldTables(project)
           .map((t) => '  setup${t.className}Routes(app, basePath);')
           .join('\n'),
     },
@@ -201,10 +277,11 @@ void setupRoutes(Router app) {
 }
 ''',
     <String, Object?>{
-        'imports': _scaffoldTables(project)
-          .map((t) => "import '../../../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
+      'imports': _scaffoldTables(project)
+          .map((t) =>
+              "import '../../../modules/${t.normalizedName}/routes/${t.normalizedName}_routes.dart';")
           .join('\n'),
-        'setups': _scaffoldTables(project)
+      'setups': _scaffoldTables(project)
           .map((t) => '  setup${t.className}Routes(app, basePath);')
           .join('\n'),
     },

@@ -23,3 +23,12 @@ dart run tool/build_release.dart --verify-only
 ```
 
 O release usa o processo one-shot porque foi reproduzida exclusão/truncamento de arquivos após o merge no caminho webdev build com daemon no Windows. `webdev serve` continua disponível para desenvolvimento.
+
+Para executar o release e a API na mesma origem, prepare o banco migrado e as variáveis `ACCESS_TO_DART_DB_HOST`, `ACCESS_TO_DART_DB_PORT`, `ACCESS_TO_DART_DB_NAME`, `ACCESS_TO_DART_DB_USER` e `ACCESS_TO_DART_DB_PASSWORD`. No diretório `../backend`:
+
+```text
+dart pub get
+dart run bin/server.dart --address 127.0.0.1 --port 8080 --frontend-dir ../frontend/build
+```
+
+Abra `http://127.0.0.1:8080/`. As chamadas relativas `/api/v1` chegam ao mesmo servidor. O servidor recusa release incompleto, serve somente arquivos declarados no manifest e mantém rotas API desconhecidas como JSON 404. Arquivos estáticos não adquirem conexão de banco. Sem `--frontend-dir`, o servidor continua disponível apenas como API.

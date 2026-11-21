@@ -152,7 +152,8 @@ void main() {
     final dbMiddlewareFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}db${Platform.pathSeparator}with_database_shelf.dart');
     expect(await dbMiddlewareFile.exists(), isTrue);
     expect(await dbMiddlewareFile.readAsString(), contains("'db.connection': connection"));
-    expect(await dbMiddlewareFile.readAsString(), contains('ioc.pushNewScope()'));
+    expect(await dbMiddlewareFile.readAsString(), contains('runZoned('));
+    expect(await dbMiddlewareFile.readAsString(), isNot(contains('ioc.pushNewScope()')));
 
     final appConfigFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}shared${Platform.pathSeparator}app_config.dart');
     expect(await appConfigFile.exists(), isTrue);

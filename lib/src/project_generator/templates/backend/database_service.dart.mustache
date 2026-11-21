@@ -3,6 +3,7 @@ import 'package:eloquent/eloquent.dart';
 import '../shared/app_config.dart';
 
 class DatabaseService {
+  final _connections = <String, Future<Connection>>{};
   late final Manager _manager = Manager()..addConnection(_baseConfig, 'default');
 
   Map<String, dynamic> get _baseConfig => {
@@ -17,7 +18,16 @@ class DatabaseService {
         'poolsize': 10,
       };
 
-  Future<Connection> connect([String name = 'default']) async {
-    return _manager.getConnection(name);
+  Future<Connection> connect([String name = 'default']) {
+    // Cache initialization too: concurrent first requests must not create
+    // multiple pools before Eloquent has populated its connection cache.
+    return _connections.putIfAbsent(name, () async {
+      try {
+        return await _manager.getConnection(name);
+      } catch (_) {
+        _connections.remove(name);
+        rethrow;
+      }
+    });
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:eloquent/eloquent.dart';
 import 'package:get_it/get_it.dart';
 
@@ -5,10 +6,21 @@ import '../db/database_service.dart';
 {{{imports}}}
 
 final ioc = GetIt.instance;
+const requestConnectionZoneKey = #accessToDartRequestConnection;
 
 void setupDependencies() {
   if (!ioc.isRegistered<DatabaseService>()) {
     ioc.registerSingleton<DatabaseService>(DatabaseService());
+  }
+
+  if (!ioc.isRegistered<Connection>()) {
+    ioc.registerFactory<Connection>(() {
+      final connection = Zone.current[requestConnectionZoneKey];
+      if (connection is! Connection) {
+        throw StateError('Database connection requested outside an API request');
+      }
+      return connection;
+    });
   }
 
   void regFactoryIfAbs<T extends Object>(T Function() factory) {
