@@ -32,7 +32,7 @@ Future<void> ensurePostgresDatabaseExists(
   } on DpgsqlException catch (error) {
     final duplicateDatabase =
         (error is PostgresException && error.sqlState == '42P04') ||
-        error.message.toLowerCase().contains('already exists');
+            error.message.toLowerCase().contains('already exists');
     if (!duplicateDatabase) {
       rethrow;
     }
@@ -44,27 +44,17 @@ Future<void> ensurePostgresDatabaseExists(
 Future<DpgsqlConnection> _openAdminConnection(
   PostgresConnectionOptions options,
 ) async {
-  final primary = DpgsqlConnection(options.toDpgsqlConnectionString());
+  final connection = DpgsqlConnection(options.toDpgsqlConnectionString());
   try {
-    await primary.open();
-    return primary;
-  } on DpgsqlException catch (error) {
-    final message = error.message.toLowerCase();
-    final requiresDisabledSsl = message.contains('server does not support ssl');
-    if (!requiresDisabledSsl || options.sslMode == SslMode.disable) {
-      try {
-        await primary.close();
-      } catch (_) {}
-      rethrow;
-    }
+    // O driver aplica a política SSL solicitada, inclusive os modos permissivos.
+    // Não reconecte com Disable após uma falha de Require/VerifyCA/VerifyFull.
+    await connection.open();
+    return connection;
+  } catch (_) {
     try {
-      await primary.close();
+      await connection.close();
     } catch (_) {}
-    final retry = DpgsqlConnection(
-      options.copyWith(sslMode: SslMode.disable).toDpgsqlConnectionString(),
-    );
-    await retry.open();
-    return retry;
+    rethrow;
   }
 }
 

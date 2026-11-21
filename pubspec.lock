@@ -172,10 +172,11 @@ packages:
   dpgsql:
     dependency: "direct main"
     description:
-      path: "../dpgsql"
-      relative: true
-    source: path
-    version: "1.0.2"
+      name: dpgsql
+      sha256: "9b1c8cb95fe326dae99601ab57a58ed03c0d108303a6311ad36e6319788bb1a5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.1"
   ffi:
     dependency: "direct main"
     description:

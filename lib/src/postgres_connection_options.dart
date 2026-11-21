@@ -35,7 +35,8 @@ class PostgresConnectionOptions {
     );
   }
 
-  PostgresConnectionOptions forAdminDatabase([String databaseName = 'postgres']) {
+  PostgresConnectionOptions forAdminDatabase(
+      [String databaseName = 'postgres']) {
     return copyWith(database: databaseName);
   }
 
@@ -193,6 +194,10 @@ class PostgresConnectionOptions {
         return null;
       case 'disable':
         return SslMode.disable;
+      case 'verify-ca':
+      case 'verify_ca':
+      case 'verifyca':
+        return SslMode.verifyCa;
       case 'verify-full':
       case 'verify_full':
       case 'verifyfull':
@@ -205,7 +210,7 @@ class PostgresConnectionOptions {
       case 'require':
         return SslMode.require;
       default:
-        return null;
+        throw const FormatException('Unsupported PostgreSQL SSL mode.');
     }
   }
 
