@@ -47,6 +47,37 @@ void main() {
       }
     });
 
+    test('boolean added after an old row defaults to false outside its mask',
+        () async {
+      final env = await _openTestPageChannel();
+      addTearDown(env.dispose);
+      final reader = RowReader(
+          format: env.pageChannel.format,
+          pageChannel: env.pageChannel,
+          columns: [
+            _fixedTestColumn('ID', 0x04, 0, length: 4),
+            _fixedTestColumn('Added', 0x01, 9),
+            _fixedTestColumn('AddedCalculated', 0x01, 10, calculated: true),
+            _fixedTestColumn('AddedInteger', 0x04, 11, length: 4),
+          ]);
+      final data = BytesBuilder(copy: false)
+        ..add(_int16Le(1))
+        ..add(
+            (ByteData(4)..setInt32(0, 256, Endian.little)).buffer.asUint8List())
+        ..add(_int16Le(0))
+        ..addByte(1);
+      final row = await reader.readRow(DataPageRow(
+          rowNumber: 0,
+          isDeleted: false,
+          isOverflow: false,
+          rowData: data.takeBytes()));
+      expect(row['ID'], 256);
+      expect(row.containsKey('Added'), isTrue);
+      expect(row['Added'], isFalse);
+      expect(row.containsKey('AddedCalculated'), isFalse);
+      expect(row.containsKey('AddedInteger'), isFalse);
+    });
+
     test('calculated booleans keep wrapped-byte semantics', () async {
       final env = await _openTestPageChannel();
       addTearDown(env.dispose);

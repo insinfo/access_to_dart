@@ -67,10 +67,9 @@ class RowReader {
     Map<String, dynamic> result = {};
     for (var col in columns) {
       try {
-        // Check if column is in null mask
-        if (col.columnNumber >= columnCount) continue;
-
-        bool isNull =
+        // Older rows may predate added columns. An absent mask bit has the
+        // same meaning as a zero bit: false for ordinary Boolean, null otherwise.
+        bool isNull = col.columnNumber >= columnCount ||
             (nullMask[col.columnNumber ~/ 8] & (1 << (col.columnNumber % 8))) ==
                 0;
         // Ordinary Access Boolean values live in the mask itself, not in
