@@ -631,7 +631,7 @@ class MigrationStatementBuilder {
     }
     if (value is DateTime) {
       final serialized = column == null
-          ? value.toUtc().toIso8601String()
+          ? accessCivilComponentsAsUtc(value).toIso8601String()
           : _formatTemporalValueForSql(column, value, rows: rows, temporalSemantic: temporalSemantic);
       return "'$serialized'";
     }
@@ -849,7 +849,7 @@ class MigrationStatementBuilder {
       return '<null>';
     }
     if (value is DateTime) {
-      return value.toUtc().toIso8601String();
+      return accessCivilComponentsAsUtc(value).toIso8601String();
     }
     return value.toString();
   }
@@ -1524,97 +1524,13 @@ class MigrationStatementBuilder {
     Iterable<Map<String, dynamic>>? rows,
     AccessTemporalSemantic? temporalSemantic,
   }) {
-    final utc = value.toUtc();
-    return switch (temporalSemantic ?? _temporalSemanticForColumn(column, rows: rows)) {
-      AccessTemporalSemantic.dateOnly => _formatDateOnly(utc),
-      AccessTemporalSemantic.timeOnly => _formatTimeOnly(utc),
-      _ => utc.toIso8601String(),
-    };
+    return formatTemporalValueForSql(value, column, rows: rows);
   }
 
   AccessTemporalSemantic _temporalSemanticForColumn(
     AnalysisColumn column, {
     Iterable<Map<String, dynamic>>? rows,
-  }) {
-    final explicit = inferExplicitAccessTemporalSemantic(column);
-    if (explicit != null && explicit != AccessTemporalSemantic.unknown) {
-      return explicit;
-    }
-    final normalizedType = foldToAscii(column.typeName).toLowerCase().trim();
-    if (normalizedType == 'date') {
-      return AccessTemporalSemantic.dateOnly;
-    }
-    if (normalizedType == 'time') {
-      return AccessTemporalSemantic.timeOnly;
-    }
-    if (normalizedType == 'datetime' && _allObservedTemporalValuesAreDateOnly(column, rows)) {
-      return AccessTemporalSemantic.dateOnly;
-    }
-    return inferAccessTemporalSemantic(column);
-  }
-
-  bool _allObservedTemporalValuesAreDateOnly(
-    AnalysisColumn column,
-    Iterable<Map<String, dynamic>>? rows,
-  ) {
-    if (rows == null) {
-      return false;
-    }
-    var sawValue = false;
-    for (final row in rows) {
-      final value = _valueForColumn(row, column.name);
-      if (value == null) {
-        continue;
-      }
-      final dateTime = _coerceTemporalValue(value);
-      if (dateTime == null) {
-        continue;
-      }
-      sawValue = true;
-      final utc = dateTime.toUtc();
-      if (utc.hour != 0 ||
-          utc.minute != 0 ||
-          utc.second != 0 ||
-          utc.millisecond != 0 ||
-          utc.microsecond != 0) {
-        return false;
-      }
-    }
-    return sawValue;
-  }
-
-  Object? _valueForColumn(Map<String, dynamic> row, String columnName) {
-    for (final entry in row.entries) {
-      if (_columnLookupKey(entry.key) == _columnLookupKey(columnName)) {
-        return entry.value;
-      }
-    }
-    return null;
-  }
-
-  DateTime? _coerceTemporalValue(Object value) {
-    if (value is DateTime) {
-      return value;
-    }
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-    return null;
-  }
-
-  String _formatDateOnly(DateTime value) {
-    final year = value.year.toString().padLeft(4, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
-  }
-
-  String _formatTimeOnly(DateTime value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    final second = value.second.toString().padLeft(2, '0');
-    return '$hour:$minute:$second';
-  }
+  }) => inferAccessTemporalStorageSemantic(column);
 
   _CalculatedExpressionKind _inferArithmeticKind(
     _CalculatedExpressionKind left,

@@ -74,11 +74,32 @@ AccessTemporalSemantic inferAccessTemporalSemanticWithRows(
   }
 }
 
+// Display formats and observed samples never narrow Access DateTime storage.
+AccessTemporalSemantic inferAccessTemporalStorageSemantic(AnalysisColumn column) {
+  switch (foldToAscii(column.typeName).toLowerCase().trim()) {
+    case 'datetime':
+      return AccessTemporalSemantic.timestamp;
+    case 'date':
+      return AccessTemporalSemantic.dateOnly;
+    case 'time':
+      return AccessTemporalSemantic.timeOnly;
+    default:
+      return AccessTemporalSemantic.unknown;
+  }
+}
+
+// Access dates are civil components, without a time zone. Retag those same
+// components when a binary driver needs UTC; do not convert the instant.
+DateTime accessCivilComponentsAsUtc(DateTime value) => DateTime.utc(
+      value.year, value.month, value.day, value.hour, value.minute,
+      value.second, value.millisecond, value.microsecond,
+    );
+
 String postgresTemporalTypeForColumn(
   AnalysisColumn column, {
   Iterable<Map<String, dynamic>>? rows,
 }) {
-  return switch (inferAccessTemporalSemanticWithRows(column, rows: rows)) {
+  return switch (inferAccessTemporalStorageSemantic(column)) {
     AccessTemporalSemantic.dateOnly => 'DATE',
     AccessTemporalSemantic.timeOnly => 'TIME',
     _ => 'TIMESTAMP',
@@ -90,11 +111,10 @@ String formatTemporalValueForSql(
   AnalysisColumn column, {
   Iterable<Map<String, dynamic>>? rows,
 }) {
-  final utc = value.toUtc();
-  return switch (inferAccessTemporalSemanticWithRows(column, rows: rows)) {
-    AccessTemporalSemantic.dateOnly => _formatDatePart(utc),
-    AccessTemporalSemantic.timeOnly => _formatTimePart(utc),
-    _ => utc.toIso8601String(),
+  return switch (inferAccessTemporalStorageSemantic(column)) {
+    AccessTemporalSemantic.dateOnly => _formatDatePart(value),
+    AccessTemporalSemantic.timeOnly => _formatTimeStoragePart(value),
+    _ => accessCivilComponentsAsUtc(value).toIso8601String(),
   };
 }
 
@@ -119,6 +139,12 @@ String _formatTimePart(DateTime value) {
   final minute = value.minute.toString().padLeft(2, '0');
   final second = value.second.toString().padLeft(2, '0');
   return '$hour:$minute:$second';
+}
+
+String _formatTimeStoragePart(DateTime value) {
+  final fraction = value.millisecond * 1000 + value.microsecond;
+  final suffix = fraction == 0 ? '' : '.${fraction.toString().padLeft(6, '0')}';
+  return '${_formatTimePart(value)}$suffix';
 }
 
 String _formatDateTimeLocal(DateTime value) {

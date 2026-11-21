@@ -219,7 +219,7 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     final dartType = column.dartType;
     if (dartType == 'DateTime?') {
       final semantic = switch (
-        inferAccessTemporalSemanticWithRows(column, rows: rows)
+        inferAccessTemporalStorageSemantic(column)
       ) {
         AccessTemporalSemantic.dateOnly => 'date',
         AccessTemporalSemantic.timeOnly => 'time',

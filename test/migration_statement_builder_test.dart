@@ -263,10 +263,10 @@ void main() {
     expect(schema, contains('CREATE EXTENSION IF NOT EXISTS pgcrypto;'));
     expect(schema, contains('"id_externo" UUID NOT NULL DEFAULT gen_random_uuid()'));
     expect(schema, contains('"status" TEXT DEFAULT \'NEW\''));
-    expect(schema, contains('"criado_em" DATE DEFAULT \'1/1/1900\''));
+    expect(schema, contains('"criado_em" TIMESTAMP DEFAULT \'1/1/1900\''));
     expect(schema, contains('"codigo" INTEGER DEFAULT FLOOR(13.9)'));
-    expect(schema, contains('"data_agenda" DATE DEFAULT ((MAKE_DATE(CASE WHEN (2024) BETWEEN 0 AND 29 THEN 2000 + (2024) WHEN (2024) BETWEEN 30 AND 99 THEN 1900 + (2024) ELSE (2024) END, 1, 1) + ((2) - 1) * INTERVAL \'1 month\' + ((30) - 1) * INTERVAL \'1 day\'))::date'));
-    expect(schema, contains('"horario_base" TIME DEFAULT ((TIME \'00:00:00\' + (15) * INTERVAL \'1 hour\' + (57) * INTERVAL \'1 minute\' + (34) * INTERVAL \'1 second\'))::time'));
+    expect(schema, contains('"data_agenda" TIMESTAMP DEFAULT ((MAKE_DATE(CASE WHEN (2024) BETWEEN 0 AND 29 THEN 2000 + (2024) WHEN (2024) BETWEEN 30 AND 99 THEN 1900 + (2024) ELSE (2024) END, 1, 1) + ((2) - 1) * INTERVAL \'1 month\' + ((30) - 1) * INTERVAL \'1 day\'))::timestamp'));
+    expect(schema, contains("\"horario_base\" TIMESTAMP DEFAULT (TIMESTAMP '1899-12-30 00:00:00' + (15) * INTERVAL '1 hour' + (57) * INTERVAL '1 minute' + (34) * INTERVAL '1 second')"));
     expect(schema, contains('"status_normalizado" TEXT DEFAULT BTRIM(\'  ativo  \')'));
   });
 
@@ -404,7 +404,7 @@ void main() {
     );
   });
 
-  test('infere date-only por format do PropertyMap no DDL e no seed', () {
+  test('preserva DateTime fisico apesar do format do PropertyMap', () {
     final table = AnalysisTable(
       name: 'Gestacao',
       rowCount: 0,
@@ -485,23 +485,23 @@ void main() {
     );
 
     final ddl = builder.buildCreateTableStatement(table);
-    expect(ddl, contains('"dpp" DATE'));
+    expect(ddl, contains('"dpp" TIMESTAMP'));
     expect(
       ddl,
-      contains('"dp_saida" DATE GENERATED ALWAYS AS ((('),
+      contains('"dp_saida" TIMESTAMP GENERATED ALWAYS AS ((('),
     );
-    expect(ddl, contains('* INTERVAL \'1 day\'))::date'));
+    expect(ddl, contains('* INTERVAL \'1 day\'))::timestamp'));
 
     final inserts = builder.buildInsertStatements(table, [
       {'Dpp': DateTime.utc(2021, 8, 2, 13, 45, 12)},
     ]).toList();
     expect(
       inserts.single,
-      contains("VALUES ('2021-08-02');"),
+      contains("VALUES ('2021-08-02T13:45:12.000Z');"),
     );
   });
 
-  test('infere date-only por valores observados sem pista explicita de format', () {
+  test('preserva timestamp mesmo quando amostras tem apenas meia-noite', () {
     final table = AnalysisTable(
       name: 'TbGestDet',
       rowCount: 2,
@@ -593,14 +593,14 @@ void main() {
     ];
 
     final ddl = builder.buildCreateTableStatement(table, rows: rows);
-    expect(ddl, contains('"dpp" DATE'));
+    expect(ddl, contains('"dpp" TIMESTAMP'));
     expect(
       ddl,
-      contains('"dpsaida" DATE GENERATED ALWAYS AS ((("dpp" + (180) * INTERVAL \'1 day\'))::date) STORED'),
+      contains('"dpsaida" TIMESTAMP GENERATED ALWAYS AS ((("dpp" + (180) * INTERVAL \'1 day\'))::timestamp) STORED'),
     );
 
     final inserts = builder.buildInsertStatements(table, rows).toList();
-    expect(inserts.first, contains("VALUES ('2021-08-02');"));
+    expect(inserts.first, contains("VALUES ('2021-08-02T00:00:00.000Z');"));
   });
 
   test('omite autonumber invalido para deixar a sequence assumir', () {

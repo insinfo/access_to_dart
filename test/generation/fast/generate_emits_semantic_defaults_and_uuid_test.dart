@@ -37,8 +37,8 @@ void main() {
     expect(coreModelContent, contains('static String _accessUuidV4()'));
     expect(coreModelContent, contains('static DateTime? _accessParseTemporalValue('));
     expect(coreModelContent, contains('static Object? _accessFormatTemporalValue('));
-    expect(coreModelContent, contains("_accessFormatTemporalValue(dataBase, semantic: 'date')"));
-    expect(coreModelContent, contains("_accessFormatTemporalValue(horaBase, semantic: 'time')"));
+    expect(coreModelContent, contains("_accessFormatTemporalValue(dataBase, semantic: 'timestamp')"));
+    expect(coreModelContent, contains("_accessFormatTemporalValue(horaBase, semantic: 'timestamp')"));
 
     final frontendPageFile = File(
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}eventos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_eventos${Platform.pathSeparator}incluir_eventos_page.dart',

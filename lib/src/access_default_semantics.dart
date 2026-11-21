@@ -591,7 +591,7 @@ class AccessDefaultSemanticTranslator {
     AnalysisColumn column, {
     Iterable<Map<String, dynamic>>? rows,
   }) {
-    return inferAccessTemporalSemanticWithRows(column, rows: rows) ==
+    return inferAccessTemporalStorageSemantic(column) ==
         AccessTemporalSemantic.timestamp;
   }
 

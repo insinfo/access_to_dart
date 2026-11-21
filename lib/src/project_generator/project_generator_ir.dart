@@ -1383,17 +1383,30 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
       case 'timestamp':
         return DateTime.tryParse(text);
       case 'time':
+        final timestamp = DateTime.tryParse(text);
+        if (timestamp != null) {
+          return timestamp;
+        }
         final parts = text.split(':');
         if (parts.length < 2) {
           return null;
         }
         final hour = int.tryParse(parts[0]);
         final minute = int.tryParse(parts[1]);
-        final second = parts.length >= 3 ? int.tryParse(parts[2]) : 0;
-        if (hour == null || minute == null || second == null) {
+        final seconds = parts.length >= 3 ? parts[2].split('.') : ['0'];
+        if (parts.length > 3 || seconds.length > 2) {
           return null;
         }
-        return DateTime.utc(1899, 12, 30, hour, minute, second);
+        final second = int.tryParse(seconds[0]);
+        final fraction = seconds.length == 2 ? seconds[1] : '';
+        if (fraction.length > 6 || fraction.codeUnits.any((unit) => unit < 48 || unit > 57)) {
+          return null;
+        }
+        final micros = int.parse(fraction.padRight(6, '0'));
+        if (hour == null || minute == null || second == null || hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+          return null;
+        }
+        return DateTime.utc(1899, 12, 30, hour, minute, second, micros ~/ 1000, micros % 1000);
       default:
         return DateTime.tryParse(text);
     }
@@ -1406,7 +1419,7 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
     if (value == null) {
       return null;
     }
-    final utc = value.toUtc();
+    final utc = DateTime.utc(value.year, value.month, value.day, value.hour, value.minute, value.second, value.millisecond, value.microsecond);
     final year = utc.year.toString().padLeft(4, '0');
     final month = utc.month.toString().padLeft(2, '0');
     final day = utc.day.toString().padLeft(2, '0');
@@ -1417,7 +1430,9 @@ List<String> _buildDefaultHelperMethods(Set<String> helperNames) {
       case 'date':
         return '\$year-\$month-\$day';
       case 'time':
-        return '\$hour:\$minute:\$second';
+        final fraction = utc.millisecond * 1000 + utc.microsecond;
+        final suffix = fraction == 0 ? '' : '.\${fraction.toString().padLeft(6, '0')}';
+        return '\$hour:\$minute:\$second\$suffix';
       case 'timestamp':
       default:
         return utc.toIso8601String();

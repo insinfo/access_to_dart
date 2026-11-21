@@ -295,9 +295,10 @@ class DpgsqlMigrationExecutor {
       case 'date':
       case 'time':
         if (value is DateTime) {
-          return value.toUtc();
+          return accessCivilComponentsAsUtc(value);
         }
-        return DateTime.tryParse(value.toString())?.toUtc();
+        final parsed = DateTime.tryParse(value.toString());
+        return parsed == null ? null : accessCivilComponentsAsUtc(parsed);
       case 'binary':
       case 'longbinary':
       case 'ole':

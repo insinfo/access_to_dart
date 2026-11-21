@@ -960,6 +960,12 @@ $allocatorPendingRead
       return value.toString();
     }
 
+    if (metadata['dartType'] == 'DateTime?') {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) {
+        return _formatTemporalInputValue(metadata['inputType'] as String?, parsed);
+      }
+    }
     var text = value;
     final inputMask = metadata['inputMask'] as String?;
     if (inputMask != null && inputMask.trim().isNotEmpty) {
@@ -983,6 +989,10 @@ $allocatorPendingRead
     }
 
     final metadata = _fieldPresentation[key] ?? const <String, Object?>{};
+    // Native HTML temporal inputs supply ISO date/time values, not Access mask text.
+    if (metadata['dartType'] == 'DateTime?') {
+      return _parseTemporalInputValue(metadata['inputType'] as String?, value);
+    }
     var text = _applyAccessFormat(value, metadata['format'] as String?);
     final inputMask = metadata['inputMask'] as String?;
     if (inputMask != null && inputMask.trim().isNotEmpty) {
@@ -1011,7 +1021,7 @@ $allocatorPendingRead
   }
 
   static String _formatTemporalInputValue(String? inputType, DateTime value) {
-    final utc = value.toUtc();
+    final utc = DateTime.utc(value.year, value.month, value.day, value.hour, value.minute, value.second, value.millisecond, value.microsecond);
     final year = utc.year.toString().padLeft(4, '0');
     final month = utc.month.toString().padLeft(2, '0');
     final day = utc.day.toString().padLeft(2, '0');
@@ -1040,6 +1050,10 @@ $allocatorPendingRead
       case 'datetime-local':
         return DateTime.tryParse(text);
       case 'time':
+        final timestamp = DateTime.tryParse(text);
+        if (timestamp != null) {
+          return timestamp;
+        }
         final parts = text.split(':');
         if (parts.length < 2) {
           return null;

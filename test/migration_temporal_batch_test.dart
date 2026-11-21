@@ -33,7 +33,7 @@ void main() {
       {'name': 'EventDate', 'typeName': 'DateTime'}
     ],
   });
-  test('insert temporal inference scans a batch linearly not once per cell',
+  test('insert temporal storage does not rescan rows per cell',
       () {
     final rows = List.generate(
         100, (_) => _ObservedRow({'EventDate': DateTime.utc(2026, 11, 21)}));
@@ -43,12 +43,12 @@ void main() {
         .buildInsertStatements(table, rows)
         .toList();
     expect(statements, hasLength(100));
-    expect(statements.every((s) => s.contains("'2026-11-21'")), isTrue);
+    expect(statements.every((s) => s.contains("'2026-11-21T00:00:00.000Z'")), isTrue);
     // Bounds observations, not wall-clock time: quadratic rescanning fails.
     expect(rows.fold<int>(0, (n, row) => n + row.entryScans),
         lessThanOrEqualTo(300));
   });
-  test('new batches re-infer date semantics and COPY preserves timestamps', () {
+  test('all batches and COPY preserve complete timestamps', () {
     final builder = MigrationStatementBuilder(
         identifierPolicy: const MigrationIdentifierPolicy(
             style: MigrationIdentifierStyle.snakeAscii));
@@ -56,7 +56,7 @@ void main() {
       {'EventDate': DateTime.utc(2026, 11, 21)}
     ];
     expect(builder.buildInsertStatements(table, rows).single,
-        contains("'2026-11-21'"));
+        contains("'2026-11-21T00:00:00.000Z'"));
     rows.add({'EventDate': DateTime.utc(2026, 11, 21, 13, 45)});
     final inserts = builder.buildInsertStatements(table, rows).join('\n');
     expect(inserts, contains('2026-11-21T00:00:00.000Z'));
