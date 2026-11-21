@@ -3,6 +3,24 @@ part of 'project_generator.dart';
 extension _ProjectGeneratorShared on ProjectGenerator {
   Future<void> _writeReport(AnalysisProject project, Directory root) async {
     final inventory = await _writeAccessReportInventory(project, root);
+    final exportedForms = <String, Map>{
+      for (final form in (((project.raw['source_overlay'] as Map?)?['forms'] as List?) ?? const []).whereType<Map>())
+        form['name'].toString().toLowerCase(): form,
+    };
+    final formCapabilities = ((project.raw['forms'] as List?) ?? const [])
+        .whereType<Map>().map((form) => describeAccessFormCapabilities(
+          <String,dynamic>{...form,
+            if (exportedForms.containsKey(form['name']?.toString().toLowerCase()))
+              'properties': exportedForms[form['name']?.toString().toLowerCase()]!['properties'],
+          },
+          hasSourceExport: exportedForms.containsKey(form['name']?.toString().toLowerCase()),
+        )).toList();
+    await File('${root.path}${Platform.pathSeparator}access-form-capabilities.json')
+        .writeAsString(const JsonEncoder.withIndent('  ').convert({
+          'schema_version':'1.0',
+          'scope':'per_form_source_permissions_not_table_authorization',
+          'forms':formCapabilities,
+        }));
     final doctorReport = AnalysisDoctor().inspect(project);
     final summary = doctorReport.summary;
     final reconciliationSummary =
@@ -26,6 +44,7 @@ extension _ProjectGeneratorShared on ProjectGenerator {
     buffer.writeln('- Tables: `${project.tables.length}`');
     buffer.writeln('- Linked tables: `${project.linkedTables.length}`');
     buffer.writeln('- Forms: `${project.forms.length}`');
+    buffer.writeln('- Capacidades por formulário: [access-form-capabilities.json](access-form-capabilities.json). Permissões da fonte não habilitam gravação automaticamente.');
     buffer.writeln('- Reports: `${project.reportCatalogNames.length}`');
     buffer.writeln('- Doctor errors: `${summary['error']}`');
     buffer.writeln('- Doctor warnings: `${summary['warning']}`');

@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:recase/recase.dart';
 
 import '../access_default_semantics.dart';
+import '../access_form_capabilities.dart';
 import '../access_temporal_semantics.dart';
 import '../analysis_doctor.dart';
 import '../analysis_model.dart';
