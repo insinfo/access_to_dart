@@ -1,0 +1,222 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:access_to_dart/access_to_dart.dart';
+import 'package:access_to_dart/src/migration_identifier_style.dart';
+import 'package:dpgsql/dpgsql.dart';
+
+// Full-data acceptance probe. Credentials are session environment only.
+Future<void> main(List<String> args) async {
+  if (args.length < 2 || args.length > 4) {
+    throw ArgumentError(
+        'analysis.json output-directory [dao-oracle.json] [backend.exe]');
+  }
+  final analysis = jsonDecode(await File(args[0]).readAsString()) as Map;
+  Map? oracle;
+  final daoCounts = <String, int>{};
+  if (args.length >= 3) {
+    oracle = jsonDecode(await File(args[2]).readAsString()) as Map;
+    final source =
+        (analysis['backend_analysis'] as Map?)?['source'] ?? analysis['source'];
+    final digest = await _sha256(source as String);
+    if (digest != (oracle['source'] as Map)['sha256']) {
+      throw StateError(
+          'DAO oracle does not match the current Access source hash');
+    }
+    for (final row in (oracle['tables'] as List).cast<Map>()) {
+      daoCounts[row['table'] as String] = row['daoCount'] as int;
+    }
+    final names =
+        (analysis['tables'] as List).cast<Map>().map((t) => t['name']).toSet();
+    if (names.length != daoCounts.length ||
+        !names.every(daoCounts.containsKey)) {
+      throw StateError('DAO oracle must cover exactly the migration table set');
+    }
+  }
+  final env = Platform.environment;
+  final user = env['ACCESS_TO_DART_TEST_PG_USER'];
+  final password = env['ACCESS_TO_DART_TEST_PG_PASSWORD'];
+  if (user == null || password == null) {
+    throw StateError('Test PG credentials required');
+  }
+  final host = env['ACCESS_TO_DART_TEST_PG_HOST'] ?? 'localhost';
+  final port = env['ACCESS_TO_DART_TEST_PG_PORT'] ?? '5432';
+  final name = 'access_siga_audit_${DateTime.now().microsecondsSinceEpoch}';
+  String connection(String db) =>
+      'Host=$host;Port=$port;Database=$db;Username=$user;Password=$password;SSL Mode=Disable';
+  final admin = DpgsqlConnection(connection('postgres'));
+  await admin.open();
+  var created = false;
+  final checks = <Map<String, Object?>>[];
+  try {
+    await admin
+        .createCommand('CREATE DATABASE "$name" TEMPLATE template0')
+        .executeNonQuery();
+    created = true;
+    final code = await run([
+      'migrate',
+      '--analysis',
+      args[0],
+      '--output',
+      args[1],
+      '--backend-password',
+      env['ACCESS_TO_DART_TEST_ACCESS_PASSWORD'] ?? '',
+      '--not-null-mode',
+      'strict',
+      '--unique-mode',
+      'strict',
+      '--auto-number-mode',
+      'sequence',
+      '--pg',
+      Uri(
+          scheme: 'postgresql',
+          userInfo:
+              '${Uri.encodeComponent(user)}:${Uri.encodeComponent(password)}',
+          host: host,
+          port: int.parse(port),
+          path: name,
+          queryParameters: {'sslmode': 'disable'}).toString(),
+    ], out: stdout, err: stderr);
+    if (code != 0) {
+      throw StateError('Complete migration failed with exit $code');
+    }
+    final pg = DpgsqlConnection(connection(name));
+    await pg.open();
+    try {
+      const policy =
+          MigrationIdentifierPolicy(style: MigrationIdentifierStyle.snakeAscii);
+      for (final table in (analysis['tables'] as List).cast<Map>()) {
+        final tableName = table['name'] as String;
+        final reader = await pg.executeReader(
+            'SELECT count(*) FROM ${policy.quotedTableName(tableName)}');
+        int actual;
+        try {
+          await reader.read();
+          actual = int.parse(reader.getValue(0).toString());
+        } finally {
+          await reader.close();
+        }
+        checks.add({
+          'table': tableName,
+          'expectedCatalogRows': table['rowCount'],
+          'actualPostgresRows': actual,
+          'expectedDaoRows': daoCounts[tableName],
+          'catalogMatches': actual == table['rowCount'],
+          'match': actual == (daoCounts[tableName] ?? table['rowCount'])
+        });
+      }
+    } finally {
+      await pg.close();
+    }
+    final report = {
+      'scope':
+          oracle == null ? 'catalog_row_counts_only' : 'dao_row_counts_only',
+      if (oracle != null) 'source': oracle['source'],
+      'tables': checks,
+      'allCountsMatch':
+          checks.isNotEmpty && checks.every((t) => t['match'] == true)
+    };
+    await File('${args[1]}/row-count-audit.json')
+        .writeAsString(const JsonEncoder.withIndent('  ').convert(report));
+    stdout.writeln(
+        'Checked ${checks.length} table counts; mismatches: ${checks.where((t) => t['match'] != true).length}');
+    if (report['allCountsMatch'] != true) {
+      throw StateError('Row count audit mismatch');
+    }
+    if (args.length == 4) {
+      await _smokeBackend(args[3], name, host, port, user, password,
+          daoCounts['TbPessoa'] ?? -1, args[1]);
+    }
+  } finally {
+    try {
+      if (created) {
+        await admin
+            .createCommand('DROP DATABASE "$name" WITH (FORCE)')
+            .executeNonQuery();
+      }
+    } finally {
+      await admin.close();
+    }
+  }
+}
+
+Future<String> _sha256(String path) async {
+  final result = Platform.isWindows
+      ? await Process.run(
+          'certutil', ['-hashfile', File(path).absolute.path, 'SHA256'])
+      : await Process.run('shasum', ['-a', '256', path]);
+  final match = RegExp(r'[0-9a-fA-F]{64}').firstMatch(result.stdout.toString());
+  if (result.exitCode != 0 || match == null) {
+    throw StateError('Cannot hash Access source');
+  }
+  return match.group(0)!.toLowerCase();
+}
+
+Future<void> _smokeBackend(
+    String executable,
+    String database,
+    String host,
+    String port,
+    String user,
+    String password,
+    int expectedRows,
+    String output) async {
+  if (expectedRows < 0) {
+    throw StateError('TbPessoa DAO count required for HTTP smoke');
+  }
+  final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final httpPort = socket.port;
+  await socket.close();
+  final server = await Process.start(File(executable).absolute.path,
+      ['--address', '127.0.0.1', '--port', '$httpPort'],
+      workingDirectory: File(executable).absolute.parent.path,
+      environment: {
+        'ACCESS_TO_DART_DB_HOST': host,
+        'ACCESS_TO_DART_DB_PORT': port,
+        'ACCESS_TO_DART_DB_NAME': database,
+        'ACCESS_TO_DART_DB_USER': user,
+        'ACCESS_TO_DART_DB_PASSWORD': password,
+      });
+  unawaited(server.stdout.drain<void>());
+  unawaited(server.stderr.drain<void>());
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+  try {
+    final deadline = DateTime.now().add(const Duration(seconds: 40));
+    while (true) {
+      try {
+        final request = await client
+            .getUrl(Uri.parse('http://127.0.0.1:$httpPort/api/v1/tb_pessoa'));
+        final response =
+            await request.close().timeout(const Duration(seconds: 30));
+        final body = await response
+            .transform(utf8.decoder)
+            .join()
+            .timeout(const Duration(seconds: 30));
+        if (response.statusCode != 200) {
+          throw StateError('Backend HTTP status ${response.statusCode}');
+        }
+        final rows = jsonDecode(body) as List;
+        if (rows.length != expectedRows) {
+          throw StateError('Backend row count differs from DAO');
+        }
+        await File('$output/backend-http-audit.json').writeAsString(jsonEncode({
+          'scope': 'generated_backend_read_only_person_list',
+          'status': response.statusCode,
+          'rowCount': rows.length,
+          'expectedDaoRows': expectedRows,
+          'writes': 0,
+        }));
+        stdout.writeln(
+            'Generated backend HTTP verified: ${rows.length} person rows; no writes.');
+        break;
+      } on SocketException {
+        if (DateTime.now().isAfter(deadline)) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    }
+  } finally {
+    client.close(force: true);
+    server.kill();
+    await server.exitCode.timeout(const Duration(seconds: 10));
+  }
+}

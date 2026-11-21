@@ -410,6 +410,11 @@ class MigrationStatementBuilder {
     final columnsByName = {
       for (final column in table.columns) column.name: column,
     };
+    // Infer once per column and batch, never once per DateTime cell.
+    final temporalSemantics = {
+      for (final column in table.columns)
+        column.name: _temporalSemanticForColumn(column, rows: rowList),
+    };
     for (final normalizedRow in normalizedRowsForInsert(table, rowList)) {
       final columnNames = normalizedRow.keys
           .map(identifierPolicy.quotedColumnName)
@@ -420,6 +425,7 @@ class MigrationStatementBuilder {
               columnsByName[entry.key],
               entry.value,
               rows: rowList,
+              temporalSemantic: temporalSemantics[entry.key],
             ),
           )
           .join(', ');
@@ -455,6 +461,10 @@ class MigrationStatementBuilder {
         .map(identifierPolicy.quotedColumnName)
         .join(', ');
     yield 'COPY ${identifierPolicy.quotedTableName(table.name)} ($quotedColumns) FROM STDIN;';
+    final temporalSemantics = {
+      for (final column in table.columns)
+        column.name: _temporalSemanticForColumn(column, rows: normalizedRows),
+    };
     for (final row in normalizedRows) {
       final fields = orderedColumns
           .map(
@@ -462,6 +472,7 @@ class MigrationStatementBuilder {
               table.columns.where((column) => column.name == columnName).first,
               row[columnName],
               rows: normalizedRows,
+              temporalSemantic: temporalSemantics[columnName],
             ),
           )
           .join('\t');
@@ -569,6 +580,7 @@ class MigrationStatementBuilder {
     AnalysisColumn column,
     Object? value, {
     Iterable<Map<String, dynamic>>? rows,
+    AccessTemporalSemantic? temporalSemantic,
   }) {
     if (value == null) {
       return r'\N';
@@ -581,7 +593,7 @@ class MigrationStatementBuilder {
     }
     if (value is DateTime) {
       return _escapeCopyText(
-        _formatTemporalValueForSql(column, value, rows: rows),
+        _formatTemporalValueForSql(column, value, rows: rows, temporalSemantic: temporalSemantic),
       );
     }
     if (value is Uint8List) {
@@ -605,6 +617,7 @@ class MigrationStatementBuilder {
     AnalysisColumn? column,
     Object? value, {
     Iterable<Map<String, dynamic>>? rows,
+    AccessTemporalSemantic? temporalSemantic,
   }) {
     value = normalizeValueForPostgres(value);
     if (value == null) {
@@ -619,7 +632,7 @@ class MigrationStatementBuilder {
     if (value is DateTime) {
       final serialized = column == null
           ? value.toUtc().toIso8601String()
-          : _formatTemporalValueForSql(column, value, rows: rows);
+          : _formatTemporalValueForSql(column, value, rows: rows, temporalSemantic: temporalSemantic);
       return "'$serialized'";
     }
     if (value is Uint8List) {
@@ -1510,9 +1523,10 @@ class MigrationStatementBuilder {
     AnalysisColumn column,
     DateTime value, {
     Iterable<Map<String, dynamic>>? rows,
+    AccessTemporalSemantic? temporalSemantic,
   }) {
     final utc = value.toUtc();
-    return switch (_temporalSemanticForColumn(column, rows: rows)) {
+    return switch (temporalSemantic ?? _temporalSemanticForColumn(column, rows: rows)) {
       AccessTemporalSemantic.dateOnly => _formatDateOnly(utc),
       AccessTemporalSemantic.timeOnly => _formatTimeOnly(utc),
       _ => utc.toIso8601String(),
