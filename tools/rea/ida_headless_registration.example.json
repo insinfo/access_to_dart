@@ -1,0 +1,16 @@
+{
+  "command": "/absolute/path/to/isolated-venv/bin/idalib-mcp",
+  "args": [
+    "--stdio",
+    "--max-workers",
+    "1"
+  ],
+  "mode": "headless",
+  "timeoutMs": 110000,
+  "workspaceRoot": "/absolute/path/to/private-ida-workspace",
+  "env": {
+    "IDADIR": "/absolute/path/to/IDA/Contents/MacOS",
+    "IDA_MCP_OPEN_TIMEOUT": "75",
+    "IDA_MCP_WORKER_CALL_TIMEOUT": "90"
+  }
+}
