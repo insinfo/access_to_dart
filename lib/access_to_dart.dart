@@ -795,6 +795,19 @@ Future<AccessTableRowsSnapshot?> _loadMigrationRows({
     );
   }
 
+  // A real Access analysis must never silently become a sample-only migration.
+  final expectedSourceTables = targetTableNames.where((name) =>
+      localTablePagesByName.containsKey(name) ||
+      backendTablePagesByName.containsKey(name));
+  final missingTables = expectedSourceTables
+      .where((name) => !mergedRows.containsKey(name))
+      .toList();
+  if (missingTables.isNotEmpty) {
+    throw StateError(
+      'Full migration rows unavailable for tables: ${missingTables.join(', ')}. '
+      'Provide the original Access sources and passwords, or use --mode schema-only.',
+    );
+  }
   if (mergedRows.isEmpty) {
     return null;
   }
@@ -823,17 +836,11 @@ Future<void> _mergeMigrationRowsFromSource({
   required StringSink out,
   required StringSink err,
 }) async {
-  if (accdbPath.isEmpty) {
-    return;
-  }
   if (targetTableNames.isEmpty || tablePagesByName.isEmpty) {
     return;
   }
-
-  final sourceFile = File(accdbPath);
-  if (!await sourceFile.exists()) {
-    err.writeln('Warning: migration source not found: $accdbPath');
-    return;
+  if (accdbPath.isEmpty || !await File(accdbPath).exists()) {
+    throw FileSystemException('Full migration source not found', accdbPath);
   }
 
   try {
@@ -868,8 +875,9 @@ Future<void> _mergeMigrationRowsFromSource({
     }
   } catch (e) {
     err.writeln(
-      'Warning: failed to load full Access rows from $accdbPath, falling back to sampleRows. Error: $e',
+      'Cannot load complete Access rows from $accdbPath; migration aborted.',
     );
+    rethrow;
   }
 }
 
