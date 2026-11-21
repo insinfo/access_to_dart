@@ -94,7 +94,7 @@ Future<void> main(List<String> args) async {
       final table = tables.firstWhere((t) => t['name'] == name);
       final pk = pkName(table);
       final rows = await reader.readAllRows(table['tdefPage'] as int);
-      rows.sort((a, b) => (a[pk] as int).compareTo(b[pk] as int));
+      rows.sort((a, b) => (a[pk] as num).compareTo(b[pk] as num));
       if (rows.map((r) => r[pk]).toSet().length != rows.length) {
         throw StateError('Duplicate reader primary keys');
       }
@@ -111,6 +111,12 @@ Future<void> main(List<String> args) async {
               (e) => e['name'] == c['name'] && e['type'] == c['typeName']))) {
         throw StateError('Oracle must cover every audited scalar column');
       }
+      final keyType = v2
+          ? schemaCols.singleWhere((c) => c['name'] == pk)['typeName'] as String
+          : 'Long';
+      if (v2 && expected['primaryKeyType'] != keyType) {
+        throw StateError('V2 oracle primary key type differs');
+      }
       final columns = <Map<String, dynamic>>[];
       for (final col in schemaCols) {
         final buffer = StringBuffer();
@@ -118,7 +124,7 @@ Future<void> main(List<String> args) async {
         var nonScale4 = 0;
         double maxResidual = 0;
         for (final row in rows) {
-          final key = canonical(row[pk], 'Long');
+          final key = canonical(row[pk], keyType);
           final value = row[col['name']];
           if (value == null) nulls++;
           if (col['typeName'] == 'Money' && value is num) {

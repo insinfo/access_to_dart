@@ -143,6 +143,10 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
     final nulls = List<int>.filled(cols.length, 0);
     final unsupported = List<int>.filled(cols.length, 0);
     final keyIndex = cols.indexWhere((c) => c['name'] == pk);
+    final keyType = v2 ? cols[keyIndex]['type'] as String : 'Long';
+    if (v2 && expected['primaryKeyType'] != keyType) {
+      throw StateError('V2 oracle primary key type differs');
+    }
     var count = 0;
     final keys = <String>{};
     final projections = [
@@ -159,7 +163,7 @@ Future<Map<String, Object?>> auditPostgresValueHashes({
     try {
       while (await reader.read()) {
         final key = canonicalPostgresText(
-            reader.getValue(keyIndex)?.toString(), 'Long', pgTypes[keyIndex]);
+            reader.getValue(keyIndex)?.toString(), keyType, pgTypes[keyIndex]);
         if (!keys.add(key)) throw StateError('Duplicate migrated primary key');
         for (var i = 0; i < cols.length; i++) {
           final raw = reader.getValue(i)?.toString();

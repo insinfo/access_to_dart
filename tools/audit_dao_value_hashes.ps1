@@ -32,6 +32,7 @@ try {
     $table=$model.tables|Where-Object name -eq $name
     $columns=@($table.columns|Where-Object {$Contract -eq 'v1' -or $_.typeName -ne 'ComplexType'})
     $pk=($table.indexes|Where-Object isPrimaryKey|Select-Object -First 1).columns[0].name
+    $keyType=if($Contract -eq 'v2'){($columns|Where-Object name -eq $pk).typeName}else{'Long'}
     $buffers=@{};$nulls=@{};$submicro=@{}
     foreach($col in $columns){$buffers[$col.name]=[Text.StringBuilder]::new();$nulls[$col.name]=0;$submicro[$col.name]=0}
     $rs=$db.OpenRecordset(('SELECT * FROM '+(Q $name)+' ORDER BY '+(Q $pk)),4)
@@ -40,7 +41,7 @@ try {
     $count=0;$keys=[Collections.Generic.HashSet[string]]::new()
     try {
       while(-not $rs.EOF){
-        $key=Canonical $pkField.Value 'Long'
+        $key=Canonical $pkField.Value $keyType
         if(-not $keys.Add($key)){throw 'Duplicate primary key in DAO source'}
         foreach($col in $columns){
           $value=$fields[$col.name].Value
@@ -54,6 +55,7 @@ try {
     }finally{$rs.Close()}
     $cols=@();foreach($col in $columns){$cols += [pscustomobject]@{name=$col.name;type=$col.typeName;sha256=(Hash-Text $buffers[$col.name].ToString());nullCount=$nulls[$col.name];submicrosecondCount=$submicro[$col.name]}}
     $reports += [pscustomobject]@{table=$name;primaryKey=$pk;rows=$count;columns=$cols}
+    if($Contract -eq 'v2'){$reports[-1]|Add-Member -NotePropertyName primaryKeyType -NotePropertyValue $keyType}
     Write-Output ('HASHED_TABLE='+$name+' ROWS='+$count)
   }
   foreach($table in $model.tables|Where-Object {$Contract -eq 'v1' -and $_.syntheticKind -eq 'attachment'}){
