@@ -39,4 +39,9 @@ Testes do RowReader: nove passaram, incluindo combinações dos bits Boolean em 
 
 DAO exportou os quatro payloads de anexos para arquivos temporários com nomes aleatórios, calculou hashes e removeu os temporários. A comparação inicial com FileData bruto detectou quatro divergências: três blobs têm 28 bytes adicionais e o anexo Ata tem tamanho comprimido distinto. Esses hashes não foram apagados nem tratados como equivalentes; o decoder de envelopes/anexos tem trilha separada.
 
-O comando de comparação retorna código 1 enquanto existir divergência escalar ou entre FileData bruto e payload DAO; `allScalarColumnsMatch` distingue o gate escalar completo. A validação acima não comprova ainda os valores já migrados para PostgreSQL: é necessário migrar novamente usando o decoder corrigido e auditar o resultado. Também não afirma fidelidade integral das demais tabelas fora destas três.
+Na versão inicial, o comando retornava código 1 enquanto existisse divergência escalar ou entre FileData bruto e payload DAO; `allScalarColumnsMatch` distingue o gate escalar completo. A validação acima não comprova ainda os valores já migrados para PostgreSQL: é necessário migrar novamente usando o decoder corrigido e auditar o resultado. Também não afirma fidelidade integral das demais tabelas fora destas três.
+
+
+### Atualização após decoder de anexos
+
+O novo `reader-value-comparison-after-decoders.json` passou: 188/188 colunas e 4/4 payloads decodificados iguais ao DAO. Os hashes brutos permanecem registrados separadamente e diferentes, como esperado pelos envelopes Access. O sucesso atual usa `allDecodedAttachmentPayloadsMatch`, mantendo `allRawAttachmentPayloadsMatch=false` como evidência; a regra inicial de falhar por raw bytes foi substituída pela comparação explícita de payload decodificado. Ver doc30 para o decoder e doc32 para o gate PostgreSQL, ainda independente deste resultado do leitor.

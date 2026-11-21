@@ -4,21 +4,26 @@ import 'dart:io';
 import 'package:access_to_dart/access_to_dart.dart';
 import 'package:access_to_dart/src/migration_identifier_style.dart';
 import 'package:dpgsql/dpgsql.dart';
+import 'audit_postgres_value_hashes.dart';
 
 // Full-data acceptance probe. Credentials are session environment only.
 Future<void> main(List<String> args) async {
-  if (args.length < 2 || args.length > 4) {
+  if (args.length < 2 || args.length > 5) {
     throw ArgumentError(
-        'analysis.json output-directory [dao-oracle.json] [backend.exe]');
+        'analysis.json output-directory [dao-oracle.json] [backend.exe] [dao-value-oracle.json]');
   }
   final analysis = jsonDecode(await File(args[0]).readAsString()) as Map;
   Map? oracle;
+  Map? valueOracle;
+  Map<String, Object?>? valueReport;
+  String? sourceSha256;
   final daoCounts = <String, int>{};
   if (args.length >= 3) {
     oracle = jsonDecode(await File(args[2]).readAsString()) as Map;
     final source =
         (analysis['backend_analysis'] as Map?)?['source'] ?? analysis['source'];
     final digest = await _sha256(source as String);
+    sourceSha256 = digest;
     if (digest != (oracle['source'] as Map)['sha256']) {
       throw StateError(
           'DAO oracle does not match the current Access source hash');
@@ -31,6 +36,14 @@ Future<void> main(List<String> args) async {
     if (names.length != daoCounts.length ||
         !names.every(daoCounts.containsKey)) {
       throw StateError('DAO oracle must cover exactly the migration table set');
+    }
+  }
+  if (args.length == 5) {
+    valueOracle = jsonDecode(await File(args[4]).readAsString()) as Map;
+    if (valueOracle['sourceSha256'] != sourceSha256 ||
+        valueOracle['contract'] != 'typed-column-pk-v1') {
+      throw StateError(
+          'Value oracle does not match the current source/contract');
     }
   }
   final env = Platform.environment;
@@ -105,6 +118,14 @@ Future<void> main(List<String> args) async {
           'match': actual == (daoCounts[tableName] ?? table['rowCount'])
         });
       }
+      if (valueOracle != null) {
+        valueReport = await auditPostgresValueHashes(
+            connection: pg,
+            analysis: analysis,
+            oracle: valueOracle,
+            identifiers: policy,
+            sourceSha256: sourceSha256!);
+      }
     } finally {
       await pg.close();
     }
@@ -120,10 +141,20 @@ Future<void> main(List<String> args) async {
         .writeAsString(const JsonEncoder.withIndent('  ').convert(report));
     stdout.writeln(
         'Checked ${checks.length} table counts; mismatches: ${checks.where((t) => t['match'] != true).length}');
+    if (valueReport != null) {
+      await File('${args[1]}/postgres-value-audit.json').writeAsString(
+          const JsonEncoder.withIndent('  ').convert(valueReport));
+      stdout.writeln(
+          'PostgreSQL values match DAO: ${valueReport['allValuesMatch']}');
+    }
     if (report['allCountsMatch'] != true) {
       throw StateError('Row count audit mismatch');
     }
-    if (args.length == 4) {
+    if (valueReport != null && valueReport['allValuesMatch'] != true) {
+      throw StateError(
+          'PostgreSQL value hash audit mismatch; see private report');
+    }
+    if (args.length >= 4) {
       await _smokeBackend(args[3], name, host, port, user, password,
           daoCounts['TbPessoa'] ?? -1, args[1]);
     }

@@ -148,6 +148,8 @@ Future<void> main(List<String> args) async {
           throw StateError('Attachment binary representation unsupported');
         }
         final actual = sha256.convert(bytes).toString();
+        final decoded = decodeAttachmentFileData(bytes);
+        final decodedHash = sha256.convert(decoded).toString();
         final expected = (oracle['attachments'] as List)
             .cast<Map<String, dynamic>>()
             .where((a) =>
@@ -160,6 +162,10 @@ Future<void> main(List<String> args) async {
           'parentKeyHash': key,
           'ordinal': ordinal,
           'readerRawLength': bytes.length,
+          'readerDecodedLength': decoded.length,
+          'readerDecodedSha256': decodedHash,
+          'decodedMatchesDaoPayload':
+              expected.length == 1 && decodedHash == expected.single['sha256'],
           'readerRawSha256': actual,
           'daoPayloadLength':
               expected.isEmpty ? null : expected.single['length'],
@@ -181,12 +187,14 @@ Future<void> main(List<String> args) async {
       (t['columns'] as List).every((c) => c['match'] == true));
   final payloadMatch =
       attachments.length == (oracle['attachments'] as List).length &&
-          attachments.every((a) => a['rawMatchesDaoPayload'] == true);
+          attachments.every((a) => a['decodedMatchesDaoPayload'] == true);
   final result = {
     'sourceSha256': hash,
     'contract': 'typed-column-pk-v1',
     'allScalarColumnsMatch': scalarMatch,
-    'allRawAttachmentPayloadsMatch': payloadMatch,
+    'allDecodedAttachmentPayloadsMatch': payloadMatch,
+    'allRawAttachmentPayloadsMatch':
+        attachments.every((a) => a['rawMatchesDaoPayload'] == true),
     'currencyRule':
         'fixed4, fail nonScale4 beyond max(1e-8,2ULPscaled) or unsafe scaled integer; residual explicitly reported',
     'tables': reports,
@@ -196,6 +204,6 @@ Future<void> main(List<String> args) async {
   await out.parent.create(recursive: true);
   await out.writeAsString(const JsonEncoder.withIndent('  ').convert(result));
   stdout.writeln(
-      'ATTACHMENTS=${attachments.length} RAW_PAYLOAD_MISMATCHES=${attachments.where((a) => a['rawMatchesDaoPayload'] != true).length}');
+      'ATTACHMENTS=${attachments.length} RAW_PAYLOAD_MISMATCHES=${attachments.where((a) => a['rawMatchesDaoPayload'] != true).length} DECODED_PAYLOAD_MISMATCHES=${attachments.where((a) => a['decodedMatchesDaoPayload'] != true).length}');
   exitCode = scalarMatch && payloadMatch ? 0 : 1;
 }
