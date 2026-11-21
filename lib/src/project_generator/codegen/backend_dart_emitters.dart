@@ -49,6 +49,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
           valueColumn: '${lookup.valueColumnRuntimeName}',
           labelColumn: '${lookup.labelColumnRuntimeName}',
           orderByColumn: ${lookup.orderByColumnRuntimeName == null ? 'null' : "'${lookup.orderByColumnRuntimeName}'"},
+          projectionColumns: [${lookup.projectionColumns.map(_dartStringLiteral).join(', ')}],
           limit: limit,
         );''',
       )

@@ -521,6 +521,7 @@ throw StateError('Resposta inesperada para \$endpoint');
         (builder) => builder
           ..name = 'LookupOption'
           ..fields.addAll(<Field>[
+            Field((field) => field..modifier = FieldModifier.final$..name = 'columns'..type = refer('List<dynamic>')),
             Field((field) => field
               ..modifier = FieldModifier.final$
               ..name = 'value'
@@ -537,7 +538,8 @@ throw StateError('Resposta inesperada para \$endpoint');
                 ..requiredParameters.addAll(<Parameter>[
                   Parameter((param) => param..name = 'value'..toThis = true),
                   Parameter((param) => param..name = 'label'..toThis = true),
-                ]),
+                ])
+                ..optionalParameters.add(Parameter((param) => param..name = 'columns'..toThis = true..named = true..defaultTo = const Code('const []'))),
             ),
           )
           ..methods.add(
@@ -550,7 +552,7 @@ throw StateError('Resposta inesperada para \$endpoint');
               )
               ..lambda = true
               ..body = const Code(
-                "LookupOption(map['value']?.toString() ?? '', map['label']?.toString() ?? map['value']?.toString() ?? '')",
+                "LookupOption(map['value']?.toString() ?? '', map['label']?.toString() ?? map['value']?.toString() ?? '', columns: map['columns'] is List ? List<dynamic>.from(map['columns']) : const [])",
               )),
           ),
       ),

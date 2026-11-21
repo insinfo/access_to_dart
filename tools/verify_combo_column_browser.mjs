@@ -1,0 +1,51 @@
+// Only run against the disposable synthetic database owned by combo_column_postgres_test.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE??'playwright-core');
+const [url,resultFile]=process.argv.slice(2);
+if(!url||!resultFile)throw new Error('Expected disposable URL and result file');
+const browser=await chromium.launch({headless:true,channel:'chrome'});
+let result;
+try{
+ const page=await browser.newPage();const writes=[],errors=[],dialogs=[];
+ page.on('pageerror',e=>errors.push(String(e)));
+ page.on('dialog',async d=>{dialogs.push(d.message());await d.accept();});
+ page.on('request',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.method()))writes.push({method:r.method(),path:new URL(r.url()).pathname});});
+ await page.goto(url);
+ await page.getByRole('button',{name:'Editar',exact:true}).click();
+ const editor=page.locator('incluir-tb-atend-page');
+ const combo=editor.locator('select');
+ const name=editor.getByPlaceholder('NomeFunc',{exact:true});
+ const role=editor.getByPlaceholder('FuncaoFuncionario',{exact:true});
+ await combo.locator('option[value="8"]').waitFor({state:'attached'});
+ assert.equal(await name.inputValue(),'Historical name','loading the editor must not run OnClick');
+ assert.equal(await role.inputValue(),'Historical role');
+ assert.equal(await name.getAttribute('readonly'),'');assert.equal(await role.getAttribute('readonly'),'');
+ assert.deepEqual(writes,[]);
+ await combo.click();await page.keyboard.press('Escape');
+ await page.waitForFunction(()=>document.querySelector('input[placeholder="NomeFunc"]')?.value==='Synthetic name');
+ assert.equal(await role.inputValue(),'Synthetic role','click on current selection executes the recognized Click body');
+ assert.deepEqual(writes,[]);
+ await combo.focus();await page.keyboard.press('o');
+ await page.waitForFunction(()=>document.querySelector('input[placeholder="NomeFunc"]')?.value==='Other name');
+ assert.equal(await role.inputValue(),'','SQL NULL must remain empty, not become the option label');
+ assert.deepEqual(writes,[],'selection changes draft only');
+ let response=page.waitForResponse(r=>r.request().method()==='PUT'&&new URL(r.url()).pathname==='/api/v1/tb_atend/1');
+ await editor.getByRole('button',{name:'Salvar',exact:true}).click();
+ let saved=await response;assert.equal(saved.status(),200);assert.equal((await saved.json()).funcao_funcionario,null);
+ await editor.waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Novo',exact:true}).click();
+ await combo.locator('option[value="7"]').waitFor({state:'attached'});
+ await combo.selectOption('7');
+ await page.waitForFunction(()=>document.querySelector('input[placeholder="FuncaoFuncionario"]')?.value==='Synthetic role');
+ assert.equal(await name.inputValue(),'Synthetic name');
+ assert.equal(writes.length,1);
+ response=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/api/v1/tb_atend');
+ await editor.getByRole('button',{name:'Salvar',exact:true}).click();
+ saved=await response;assert.equal(saved.status(),200);assert.equal((await saved.json()).funcao_funcionario,'Synthetic role');
+ assert.deepEqual(writes,[{method:'PUT',path:'/api/v1/tb_atend/1'},{method:'POST',path:'/api/v1/tb_atend'}]);
+ assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);
+ result={status:'passed',noExecutionOnLoad:true,disabledTargetsReadonly:true,thirdProjectionPreserved:true,currentSelectionClick:true,keyboardSelection:true,nullPreserved:true,writesOnlyOnExplicitSave:2,errors,dialogs};
+ console.log(JSON.stringify(result,null,2));
+}catch(error){result={status:'failed',message:String(error)};throw error;}
+finally{await fs.writeFile(resultFile,JSON.stringify(result));await browser.close();}

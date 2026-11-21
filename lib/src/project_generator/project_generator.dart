@@ -24,6 +24,7 @@ part 'project_generator_form_rules.dart';
 part 'subform_generator.dart';
 part 'multivalue_generator.dart';
 part 'before_insert_allocator.dart';
+part 'combo_column_behavior.dart';
 part 'project_generator_ir.dart';
 part 'project_generator_shared.dart';
 part 'codegen/backend_template_emitters.dart';

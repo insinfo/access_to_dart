@@ -261,6 +261,9 @@ class Consultar${namePascal}Page implements OnInit {
     final moduleNameKebab = module.moduleNameKebab;
     final formLogicClassName = module.formLogicClassName;
 
+    final comboBehaviors = _comboColumnBehaviors(project, table);
+    final comboBehaviorLiteral = _dartStringLiteral(jsonEncode(comboBehaviors));
+    final comboReadOnlyTargets = comboBehaviors.expand((b) => (b['assignments'] as List).cast<Map>()).where((a) => a['readOnly'] == true).map((a) => a['target']).toSet();
     final beforeInsertAllocator = _resolveBeforeInsertAllocator(project, table);
     final allocatorInsertValidation = beforeInsertAllocator == null ? '' :
         '      if (!modoAlterar) validationErrors.remove(${_dartStringLiteral(beforeInsertAllocator.columnRuntimeName)});';
@@ -277,7 +280,7 @@ class Consultar${namePascal}Page implements OnInit {
             'inputType': field.inputType,
             'inputMode': field.inputMode,
             'selectSize': field.selectSize,
-            'isReadOnly': field.isReadOnly || beforeInsertAllocator?.columnRuntimeName == field.runtimeName,
+            'isReadOnly': field.isReadOnly || comboReadOnlyTargets.contains(field.runtimeName) || beforeInsertAllocator?.columnRuntimeName == field.runtimeName,
             'placeholder': beforeInsertAllocator?.columnRuntimeName == field.runtimeName ? 'Código definido ao salvar' : _htmlTextLiteral(field.label),
             'isRequired': field.isRequired,
             'maxLength': field.maxLength,
@@ -343,6 +346,7 @@ class Consultar${namePascal}Page implements OnInit {
     await File(p.join(moduleDir.path, 'access_behaviors.json')).writeAsString(
         const JsonEncoder.withIndent('  ').convert({
           'beforeInsertAllocator': beforeInsertAllocator?.toJson(),
+          'comboColumnAssignments': comboBehaviors,
           'otherVbaEventsImplemented': false,
         }));
     final accessCommands = _buildAccessCommands(project, table);
@@ -765,6 +769,30 @@ $allocatorPendingRead
     }
     _draft[key] = values.join(';');
     validationErrors.remove(key);
+  }
+
+  final List<dynamic> _comboColumnBehaviors = jsonDecode($comboBehaviorLiteral) as List<dynamic>;
+
+  void applyComboColumnClick(String key) {
+    final rules = _comboColumnBehaviors.where((rule) => rule['field'] == key).toList();
+    if (rules.length != 1) return;
+    final selected = readField(key);
+    final options = lookupOptions(key).where((option) => option.value == selected).toList();
+    if (selected.isNotEmpty && options.length != 1) return;
+    final assignments = rules.single['assignments'] as List;
+    final columns = options.isEmpty ? null : options.single.columns;
+    // Never partially execute a procedure when the lookup contract is incomplete.
+    if (columns != null && assignments.any((a) => (a['column'] as int) >= columns.length)) return;
+    for (final assignment in assignments) {
+      final target = assignment['target'] as String;
+      _draft[target] = columns == null ? null : columns[assignment['column'] as int];
+      validationErrors.remove(target);
+    }
+  }
+
+  void updateComboField(String key, Object? value) {
+    updateField(key, value);
+    applyComboColumnClick(key);
   }
 
   void updateField(String key, Object? value) {

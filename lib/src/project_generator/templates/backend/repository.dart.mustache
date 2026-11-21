@@ -44,6 +44,7 @@ class {{className}}Repository {
     required String valueColumn,
     required String labelColumn,
     String? orderByColumn,
+    List<String> projectionColumns = const [],
     int limit = 100,
   }) async {
     final query = db.table(sourceTable).whereNotNull('$sourceTable.$valueColumn');
@@ -54,7 +55,8 @@ class {{className}}Repository {
       final quoted = query.getGrammar().wrap(filterColumn);
       query.whereRaw('LOWER($quoted) = LOWER(?)', [filterValue]);
     }
-    query.select(['$sourceTable.$valueColumn AS lookup_value', '$sourceTable.$labelColumn AS lookup_label']);
+    query.select(['$sourceTable.$valueColumn AS lookup_value', '$sourceTable.$labelColumn AS lookup_label',
+      for (var i = 0; i < projectionColumns.length; i++) '$sourceTable.${projectionColumns[i]} AS lookup_column_$i']);
     if (orderByColumn != null && orderByColumn.isNotEmpty) {
       query.orderBy('$sourceTable.$orderByColumn');
     }
@@ -62,6 +64,7 @@ class {{className}}Repository {
     return rows
         .map(
           (row) => <String, dynamic>{
+            if (projectionColumns.isNotEmpty) 'columns': [for (var i = 0; i < projectionColumns.length; i++) row['lookup_column_$i']],
             'value': row['lookup_value'],
             'label': row['lookup_label'] ?? row['lookup_value'],
           },

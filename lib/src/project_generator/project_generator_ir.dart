@@ -196,6 +196,7 @@ class GeneratedLookupDescriptor {
   final String labelColumnRuntimeName;
   final String? orderByColumnRuntimeName;
   final String rowSourceSql;
+  final List<String> projectionColumns;
   final GeneratedLookupJoin? join;
   final GeneratedLookupFilter? filter;
 
@@ -208,6 +209,7 @@ class GeneratedLookupDescriptor {
     required this.labelColumnRuntimeName,
     required this.orderByColumnRuntimeName,
     required this.rowSourceSql,
+    this.projectionColumns = const [],
     this.join,
     this.filter,
   });
@@ -428,7 +430,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
             semanticDefaultHelpers: const <String>[],
             fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
             toMapExpression: _toMapValue(column, rows: table.sampleRows),
-            lookup: _resolveLookupDescriptor(project, column),
+            lookup: _resolveLookupDescriptor(project, column, rowSourceOverride: _comboBehaviorLookupSql(project, table, column)),
           ),
         )
         .toList(growable: false);
@@ -448,7 +450,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       fields: fields,
       attachments: attachments,
       lookups: table.columns
-          .map((column) => _resolveLookupDescriptor(project, column))
+          .map((column) => _resolveLookupDescriptor(project, column, rowSourceOverride: _comboBehaviorLookupSql(project, table, column)))
           .whereType<GeneratedLookupDescriptor>()
           .toList(growable: false),
     );
@@ -520,7 +522,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
                 : defaultSemantics.dartHelpers.toList(growable: false),
             fromMapExpression: _fromMapValue(column, rows: table.sampleRows),
             toMapExpression: _toMapValue(column, rows: table.sampleRows),
-            lookup: _resolveLookupDescriptor(project, column),
+            lookup: _resolveLookupDescriptor(project, column, rowSourceOverride: _comboBehaviorLookupSql(project, table, column)),
           );
         },
       ).toList(growable: false),
@@ -859,7 +861,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
 
   GeneratedLookupDescriptor? _resolveLookupDescriptor(
     AnalysisProject project,
-    AnalysisColumn column,
+    AnalysisColumn column, {String? rowSourceOverride}
   ) {
     final normalizedType =
         foldToAscii(column.rowSourceType ?? '').toLowerCase().trim();
@@ -867,7 +869,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
       return null;
     }
 
-    final rowSource = column.rowSource?.trim();
+    final rowSource = (rowSourceOverride ?? column.rowSource)?.trim();
     if (rowSource == null || rowSource.isEmpty) {
       return null;
     }
@@ -888,6 +890,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
           ? null
           : columnRuntimeName(resolved.orderByColumn!),
       rowSourceSql: rowSource,
+      projectionColumns: rowSourceOverride == null ? const [] : (_lookupProjectionColumns(project, rowSource) ?? const []),
       join: resolved.join,
       filter: resolved.filter,
     );

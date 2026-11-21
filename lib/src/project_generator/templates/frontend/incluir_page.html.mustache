@@ -39,7 +39,8 @@
 <%#isSingleSelect%>
             <select
               [ngModel]="readField('<%readKey%>')"
-              (ngModelChange)="updateField('<%updateKey%>', $event)"
+              (ngModelChange)="updateComboField('<%updateKey%>', $event)"
+              (click)="applyComboColumnClick('<%updateKey%>')"
               ngControl="<%ngControl%>"
 <%#isReadOnly%>
               disabled
