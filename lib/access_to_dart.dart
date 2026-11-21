@@ -518,8 +518,9 @@ Future<int> _runMigrate(
     )
     ..addOption(
       'auto-number-mode',
-      help: 'Auto-number handling: sequence, plain-int or force-sequence',
-      defaultsTo: 'plain-int',
+      help: 'Auto-number handling: sequence (source AutoNumber only; default), '
+          'plain-int (explicit opt-out) or force-sequence',
+      defaultsTo: 'sequence',
     )
     ..addOption(
       'not-null-mode',
@@ -568,7 +569,7 @@ Future<int> _runMigrate(
   final MigrationAutoNumberMode autoNumberMode;
   try {
     autoNumberMode = MigrationAutoNumberMode.parse(
-      args['auto-number-mode'] as String? ?? 'plain-int',
+      args['auto-number-mode'] as String? ?? 'sequence',
     );
   } on FormatException catch (e) {
     err.writeln(e.message);

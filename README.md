@@ -23,6 +23,7 @@ Current implemented baseline:
 - `read-src` parses checked-in `.accdb.src` exports in Dart without Microsoft Access;
 - `migrate` can now read a real `.accdb`, emit `schema.sql` and `seed.sql`, and optionally apply them directly to PostgreSQL;
 - `migrate --identifier-style snake_ascii` removes accents and emits `snake_case`; `migrate --identifier-style original` preserves the original Access table and column names with quoted PostgreSQL identifiers;
+- `migrate` defaults to `--auto-number-mode sequence` for source columns marked AutoNumber, so generated POST operations can omit their IDs. Existing IDs are retained; sequences start after the imported maximum. Use `--auto-number-mode plain-int` to explicitly omit sequence defaults (automatic inserts then require separately configured defaults). Ordinary primary keys are not promoted to sequences. This does not preserve historical Access counters after deleted records.
 - both commands run only against local inputs, not against `referencias/`.
 
 Generated frontend releases:
