@@ -87,6 +87,12 @@ class {{className}}Repository {
 
   Future<{{primaryKeyParamType}}?> insert({{className}} item) async {
     final payload = item.toMap();
+{{#hasComplexPointers}}
+    // Complex pointers are storage links, never client-supplied scalar fields.
+    for (final column in {{{complexPointerColumnsLiteral}}}) {
+      payload[column] = null;
+    }
+{{/hasComplexPointers}}
 {{#hasBeforeInsertAllocator}}
     // Recognized complete BeforeInsert procedure: SHA-256 {{allocatorSourceSha256}}.
     return await db.transaction((ctx) async {
@@ -118,6 +124,12 @@ class {{className}}Repository {
 
   Future<void> update({{primaryKeyParamType}} id, {{className}} item) async {
     final payload = item.toMap();
+{{#hasComplexPointers}}
+    // Only dedicated collection/attachment operations may change these links.
+    for (final column in {{{complexPointerColumnsLiteral}}}) {
+      payload.remove(column);
+    }
+{{/hasComplexPointers}}
 {{#hasBeforeInsertAllocator}}
     // Source control is disabled; UPDATE never renumbers an existing family.
     payload.remove({{{allocatorColumnLiteral}}});

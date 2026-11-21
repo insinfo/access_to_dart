@@ -11,7 +11,8 @@ void main() {
     addTearDown(() => tempDir.delete(recursive: true));
 
     final analysisFile = await writeDropdownAnalysisFixture(tempDir);
-    final outputDir = '${tempDir.path}${Platform.pathSeparator}dropdown_app_generated';
+    final outputDir =
+        '${tempDir.path}${Platform.pathSeparator}dropdown_app_generated';
     final out = StringBuffer();
     final err = StringBuffer();
 
@@ -30,12 +31,18 @@ void main() {
     final incluirHtmlContent = await incluirHtmlFile.readAsString();
 
     expect(incluirHtmlContent, contains('<select'));
-    expect(incluirHtmlContent, contains('title="DisplayControl Access: 111 | RowSourceType Access: Value List | RowSource Access: &quot;Ativo&quot;;&quot;Inativo&quot;;&quot;Pendente&quot;"'));
-    expect(incluirHtmlContent, contains('title="DisplayControl Access: 111 | Campo multivalorado do Access. | RowSourceType Access: Value List | RowSource Access: &quot;Urgente&quot;;&quot;Revisao&quot;;&quot;Concluido&quot;"'));
-    expect(incluirHtmlContent, contains('<option value="Ativo">Ativo</option>'));
-    expect(incluirHtmlContent, contains('<option value="Inativo">Inativo</option>'));
-    expect(incluirHtmlContent, contains("toggleFieldSelection('tags', 'Urgente', \$event.target.checked)"));
-    expect(incluirHtmlContent, contains("isFieldOptionSelected('tags', 'Urgente')"));
+    // This fixture has multivalue metadata but no exported form or physical collection.
+    // It must not fabricate an editable control that writes a semicolon string.
+    expect(incluirHtmlContent, isNot(contains("toggleFieldSelection('tags'")));
+    expect(incluirHtmlContent, isNot(contains('access-multivalue-panel')));
+    expect(
+        incluirHtmlContent,
+        contains(
+            'title="DisplayControl Access: 111 | RowSourceType Access: Value List | RowSource Access: &quot;Ativo&quot;;&quot;Inativo&quot;;&quot;Pendente&quot;"'));
+    expect(
+        incluirHtmlContent, contains('<option value="Ativo">Ativo</option>'));
+    expect(incluirHtmlContent,
+        contains('<option value="Inativo">Inativo</option>'));
     expect(
       incluirHtmlContent,
       contains("*ngFor=\"let option of lookupOptions('pessoa_selecionada')\""),
@@ -47,7 +54,8 @@ void main() {
       '$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}filtros${Platform.pathSeparator}services${Platform.pathSeparator}filtros_service.dart',
     );
     final frontendServiceContent = await frontendServiceFile.readAsString();
-    expect(frontendServiceContent, contains('Future<List<LookupOption>> lookupOptions'));
+    expect(frontendServiceContent,
+        contains('Future<List<LookupOption>> lookupOptions'));
     expect(frontendServiceContent, contains("'/filtros/lookups/\$fieldKey'"));
 
     final backendServiceFile = File(

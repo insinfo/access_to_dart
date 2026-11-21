@@ -292,6 +292,7 @@ List<String> _parseAccessValueList(String? source) {
 }
 
 class GeneratedBackendModule {
+  final List<String> complexPointerColumns;
   final GeneratedBeforeInsertAllocator? beforeInsertAllocator;
   final String packageName;
   final String className;
@@ -308,6 +309,7 @@ class GeneratedBackendModule {
   final List<GeneratedAttachmentSubresource> attachments;
 
   const GeneratedBackendModule({
+    this.complexPointerColumns = const [],
     this.beforeInsertAllocator,
     required this.packageName,
     required this.className,
@@ -435,6 +437,7 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         )
         .toList(growable: false);
     return GeneratedBackendModule(
+      complexPointerColumns: table.columns.where((column) => column.typeCode == 18 || column.typeName.toLowerCase() == 'complextype' || column.allowMultipleValues == true).map(columnRuntimeName).toList(growable: false),
       beforeInsertAllocator: _resolveBeforeInsertAllocator(project, table),
       packageName: project.dartPackageName,
       className: table.className,

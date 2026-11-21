@@ -98,6 +98,12 @@ class {{className}}Controller {
         ...{{className}}.defaultValues(),
         ...await req.bodyAsMap(),
       };
+{{#hasComplexPointers}}
+      // New parent remains without a collection until its dedicated allocator runs.
+      for (final column in {{{complexPointerColumnsLiteral}}}) {
+        body[column] = null;
+      }
+{{/hasComplexPointers}}
 {{#hasBeforeInsertAllocator}}
       // Client cannot set the disabled source field; final ID is allocated atomically.
       body[{{{allocatorColumnLiteral}}}] = 0;
@@ -122,6 +128,13 @@ class {{className}}Controller {
     try {
       final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final body = await req.bodyAsMap();
+{{#hasComplexPointers}}
+      final persisted = await req.make<{{className}}Service>().findById(id);
+      if (persisted == null) return responseError('Not found', statusCode: 404);
+      for (final column in {{{complexPointerColumnsLiteral}}}) {
+        body[column] = persisted[column];
+      }
+{{/hasComplexPointers}}
 {{#hasBeforeInsertAllocator}}
       body[{{{allocatorColumnLiteral}}}] = id;
 {{/hasBeforeInsertAllocator}}

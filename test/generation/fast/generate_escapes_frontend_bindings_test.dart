@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:access_to_dart/access_to_dart.dart';
 import 'package:test/test.dart';
@@ -30,13 +31,16 @@ void main() {
         .readAsString();
     expect(html, contains(r"readField('Categoria d\'agua')"));
     expect(html, contains(r"lookupOptions('Pessoa d\'agua')"));
+    final descriptorMatch =
+        RegExp(r'''\[descriptorBase64\]="'([A-Za-z0-9+/=]+)'"''')
+            .firstMatch(html);
+    expect(descriptorMatch, isNotNull);
+    final descriptor =
+        jsonDecode(utf8.decode(base64Decode(descriptorMatch![1]!)));
+    expect(descriptor['key'], "Tags d'agua");
     expect(
-        html, contains(r"isFieldOptionSelected('Tags d\'agua', 'O\'Brien')"));
-    expect(
-        html,
-        contains(
-            r"toggleFieldSelection('Tags d\'agua', 'C:\\docs', $event.target.checked)"));
-    expect(html, contains(r"'R\$ 10 &amp; &lt;especial&gt;'"));
+        descriptor['options'], ["O'Brien", r'C:\docs', r'R$ 10 & <especial>']);
+    expect(html, isNot(contains('toggleFieldSelection')));
     expect(html, contains('Categoria &amp; faixa &lt;especial&gt;'));
     expect(html, isNot(contains("readField('Categoria d'agua')")));
     expect(html, isNot(contains("'O'Brien')")));

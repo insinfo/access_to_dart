@@ -15,6 +15,7 @@ String _buildBackendRepositorySource(GeneratedBackendModule module) {
     'backend/repository.dart.mustache',
     <String, Object?>{
       ..._beforeInsertTemplateContext(module),
+      ..._complexPointerTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'tableRuntimeName': module.tableRuntimeName,
@@ -105,6 +106,7 @@ String _buildBackendServiceSource(GeneratedBackendModule module) {
     'backend/service.dart.mustache',
     <String, Object?>{
       ..._beforeInsertTemplateContext(module),
+      ..._complexPointerTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,
@@ -125,6 +127,7 @@ String _buildBackendControllerSource(GeneratedBackendModule module) {
     'backend/controller.dart.mustache',
     <String, Object?>{
       ..._beforeInsertTemplateContext(module),
+      ..._complexPointerTemplateContext(module),
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,
@@ -168,3 +171,8 @@ String _buildBackendDependencyInjectorSource(AnalysisProject project) {
     },
   );
 }
+
+Map<String, Object?> _complexPointerTemplateContext(GeneratedBackendModule module) => {
+  'hasComplexPointers': module.complexPointerColumns.isNotEmpty,
+  'complexPointerColumnsLiteral': '<String>[${module.complexPointerColumns.map(_dartStringLiteral).join(', ')}]',
+};

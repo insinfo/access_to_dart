@@ -16,6 +16,25 @@ Future<File> writeFrontendBindingFixture(Directory directory) async {
   final tags = columns[3] as Map;
   tags['name'] = "Tags d'agua";
   tags['rowSource'] = r'''"O'Brien";"C:\docs";"R$ 10 & <especial>"''';
+  // Explicit control provenance exercises safe readonly descriptor serialization.
+  data['forms'] = [
+    {
+      'name': 'FixtureFiltros',
+      'recordSource': 'Filtros',
+      'controls': [
+        for (final column in [category, lookup, tags])
+          {
+            'name': column['name'],
+            'type': 'ComboBox',
+            'controlSource': column['name'],
+            'properties': {
+              'RowSourceType': column['rowSourceType'],
+              'RowSource': column['rowSource']
+            }
+          }
+      ]
+    }
+  ];
   await file.writeAsString(jsonEncode(data));
   return file;
 }
