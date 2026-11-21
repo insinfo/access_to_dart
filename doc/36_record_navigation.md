@@ -14,7 +14,7 @@ A forma precisa usar tabela direta, PK inteira única, propriedades disponíveis
 
 O repository ordena a consulta por identificador de chave validado. A consulta frontend pede o conjunto completo, sem enviar `limit` ou `offset`; o serviço aceita filtros opcionais mantendo chamadas anteriores compatíveis. O editor recebe o snapshot da consulta e valida chaves inteiras, únicas e crescentes antes de navegar. Não mistura páginas nem assume que um limite de 50 represente todos os registros. Uma futura paginação exige novo contrato de cursor.
 
-Mudanças no draft, anexos pendentes e salvamento em curso impedem navegação. Os avisos são visíveis inline: o helper geral `SimpleDialogComponent.showAlert` atualmente é vazio e não foi usado para esconder erros desta funcionalidade. Novo e Next após o último apenas preparam um draft; nenhum POST é disparado. Salvar continua sendo uma ação separada do usuário.
+Mudanças no draft, anexos pendentes e salvamento em curso impedem navegação. Os avisos de navegação são visíveis inline. O helper geral `SimpleDialogComponent.showAlert` era vazio no primeiro incremento; a continuação descrita abaixo corrige os diálogos chamados por ações explícitas. Novo e Next após o último apenas preparam um draft; nenhum POST é disparado. Salvar continua sendo uma ação separada do usuário.
 
 O snapshot corresponde à última consulta, não é um cursor transacional vivo do Access. Ordem crescente da chave é uma escolha explícita do cadastro gerado; formulários com ordem original declarada ainda não suportada ficam bloqueados.
 
@@ -50,3 +50,12 @@ PLAYWRIGHT_MODULE=/caminho/playwright-core/index.mjs node tools/verify_record_na
 ```
 
 O build integral de 50 módulos e o banco SIGAsul não foram necessários para esses testes de navegação. A limitação antiga de filtros/paginação ignorados no backend não foi apresentada como suporte a filtros originais.
+
+
+## Continuação: alerta real e confirmação explícita
+
+`showAlert(String, {String? subMessage})` mantém a assinatura `void` existente e usa `window.alert` com texto; `showConfirm` devolve o resultado booleano de `window.confirm`. Texto não vira HTML e nenhuma expressão VBA é executada. Os únicos usos de alerta no gerador são validação/erro no fluxo de Salvar acionado pelo usuário, sem diálogo em inicialização automática.
+
+Ao bloquear navegação por alterações pendentes, aparece **Descartar alterações e navegar**. Clicar abre confirmação. Cancelar mantém draft, registro atual e navegação pendente. Confirmar restaura o draft salvo em memória, limpa arquivos de anexo ainda não enviados e executa o comando de navegação pendente. Nenhum endpoint de gravação é chamado. Não se traduzem MsgBox nem sequências OnError por esse helper genérico.
+
+Chrome/Playwright confirmou: ausência de diálogo no carregamento, dois diálogos de confirmação (Cancelar e Confirmar), um alerta de validação ao clicar Salvar com nome obrigatório vazio, manutenção do texto e do registro ao cancelar, descarte e avanço ao confirmar, **zero writes e zero erros JavaScript**. O snapshot da API tem apenas dados sintéticos. Os 16 testes de geração/regressão passaram novamente; análise do gerador/teste e frontend gerado limpa; release de 293 arquivos verificado.

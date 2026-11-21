@@ -22,7 +22,7 @@ Future<Map<String, dynamic>> recordFixture() async {
             'typeCode': 4,
             'isAutoNumber': true
           },
-          {'name': 'Nome', 'typeName': 'Text', 'typeCode': 10},
+          {'name': 'Nome', 'typeName': 'Text', 'typeCode': 10, 'isRequired': true},
         ],
         'indexes': [
           {

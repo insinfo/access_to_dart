@@ -397,6 +397,8 @@ $attachmentPresentationSource;
   bool navigationSaving = false;
   String? _navigationBaseline;
   String? navigationError;
+  String? pendingRecordNavigation;
+  $namePascal? _navigationSavedEntity;
 
   String _draftFingerprint() => jsonEncode(_draft, toEncodable: (value) {
     if (value is DateTime) return value.toIso8601String();
@@ -406,6 +408,7 @@ $attachmentPresentationSource;
   void navigateRecord(String operation) {
     if (navigationSaving || !navigationReady) return;
     navigationError = null;
+    pendingRecordNavigation = null;
     int? previousKey;
     for (final row in navigationRecords) {
       final Object? key = row.${module.primaryKeyField};
@@ -419,6 +422,7 @@ $attachmentPresentationSource;
         _attachmentLoadingFields.isNotEmpty ||
         _attachmentDraftsByField.values.any((draft) => draft.values.any((value) => value.isNotEmpty)) ||
         _attachmentSelectedFilesByField.values.any((files) => files.isNotEmpty)) {
+      pendingRecordNavigation = operation;
       navigationError = 'Salve ou descarte explicitamente as alterações antes de navegar.';
       return;
     }
@@ -445,10 +449,29 @@ $attachmentPresentationSource;
     validationErrors.clear();
   }
 
+  void discardAndNavigate() {
+    final operation = pendingRecordNavigation;
+    if (operation == null || navigationSaving || !navigationReady ||
+        _attachmentLoadingFields.isNotEmpty) return;
+    if (!SimpleDialogComponent.showConfirm(
+        'Descartar as alterações não salvas e continuar a navegação?')) return;
+    final saved = _navigationSavedEntity;
+    modoAlterar = saved != null;
+    _draft
+      ..clear()
+      ..addAll(saved?.toMap() ?? $namePascal.defaultValues());
+    _navigationBaseline = _draftFingerprint();
+    _attachmentDraftsByField.clear();
+    _attachmentSelectedFilesByField.clear();
+    validationErrors.clear();
+    navigateRecord(operation);
+  }
+
   Object? subformParentId;
 
   @Input('entity')
   set entityInput($namePascal? val) {
+    _navigationSavedEntity = val;
     subformParentId = val?.${module.primaryKeyField};
     _draft
       ..clear()

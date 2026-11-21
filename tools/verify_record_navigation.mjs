@@ -17,7 +17,8 @@ const server=http.createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,channel:'chrome'});
 try{
- const page=await browser.newPage(); const errors=[],writes=[],gets=[];
+ const page=await browser.newPage(); const errors=[],writes=[],gets=[],dialogs=[]; let acceptConfirmation=false;
+ page.on('dialog',async dialog=>{dialogs.push({type:dialog.type(),message:dialog.message()});if(dialog.type()==='confirm'&&!acceptConfirmation)await dialog.dismiss();else await dialog.accept();});
  page.on('pageerror',e=>errors.push(String(e)));
  let rows=[{id_nome:10,nome:'Synthetic A'},{id_nome:20,nome:'Synthetic B'},{id_nome:30,nome:'Synthetic C'}];
  await page.route('**/api/**',async route=>{
@@ -31,6 +32,7 @@ try{
  const input=editor.locator('input').first();
  async function value(expected){await page.waitForFunction(([selector,v])=>document.querySelector(selector)?.value===v,['incluir-tb-nome-acolhida-page input',expected]);assert.equal(await input.inputValue(),expected);}
  await value('Synthetic A');
+ assert.deepEqual(dialogs,[],'initialization must not open dialogs');
  await editor.getByRole('button',{name:'Probe Next',exact:true}).click();await value('Synthetic B');
  // Actual exported caption Próximo maps to token 3, Last. Do not infer from label.
  await editor.getByRole('button',{name:'Próximo',exact:true}).click();await value('Synthetic C');
@@ -42,8 +44,25 @@ try{
  await input.fill('Unsaved synthetic edit');
  await editor.getByRole('button',{name:'Próximo',exact:true}).click();await value('Unsaved synthetic edit');
  assert.match(await editor.innerText(),/Salve ou descarte explicitamente/);
+ await editor.getByRole('button',{name:'Descartar alterações e navegar',exact:true}).click();
+ await value('Unsaved synthetic edit');
+ assert.equal(dialogs.at(-1)?.type,'confirm');
+ assert.equal(dialogs.length,1);
  await input.fill('Synthetic A');
+ await editor.getByRole('button',{name:'Probe Previous',exact:true}).click();await value('Synthetic A');
+ assert.match(await editor.innerText(),/Não há registro disponível/,'Cancel must retain the first record, not just input text');
+ await input.fill('Unsaved synthetic edit');
+ await editor.getByRole('button',{name:'Probe Next',exact:true}).click();
+ acceptConfirmation=true;
+ await editor.getByRole('button',{name:'Descartar alterações e navegar',exact:true}).click();
+ await value('Synthetic B');
+ assert.equal(dialogs.length,2);
  await editor.getByRole('button',{name:'Probe New',exact:true}).click();await value('');
+ await editor.getByRole('button',{name:'Salvar',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.invalid-feedback')?.textContent?.trim().length>0);
+ assert.equal(dialogs.at(-1)?.type,'alert');
+ assert.ok(dialogs.at(-1)?.message.length>0);
+ assert.equal(dialogs.length,3,'only two explicit confirmations and one save validation alert');
  assert.equal(await editor.getByRole('button',{name:'Novo',exact:true}).isDisabled(),true,'composed real New macro stays blocked');
  // API contract guard: a nonordered snapshot must never choose an arbitrary row.
  rows=[{id_nome:30,nome:'Synthetic C'},{id_nome:10,nome:'Synthetic A'}];
@@ -52,5 +71,5 @@ try{
  assert.match(await editor.innerText(),/sem chave numérica única e ordenada/);
  assert.ok(gets.every(url=>!url.includes('limit=')&&!url.includes('offset=')));
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
- console.log(JSON.stringify({status:'passed',actualMacros:['First','Last'],syntheticProbes:['Next','Previous','New'],unsavedGuard:true,boundaries:true,orderedSnapshotGuard:true,writes,errors},null,2));
+ console.log(JSON.stringify({status:'passed',actualMacros:['First','Last'],syntheticProbes:['Next','Previous','New'],unsavedGuard:true,boundaries:true,orderedSnapshotGuard:true,discardCancelPreserved:true,discardAcceptNavigated:true,validationAlert:true,dialogs:dialogs.map(d=>d.type),writes,errors},null,2));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

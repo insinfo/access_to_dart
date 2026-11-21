@@ -7,6 +7,8 @@
 
 <div class="content">
   <div *ngIf="navigationError != null" class="alert alert-warning" role="alert">{{ navigationError }}</div>
+  <button *ngIf="pendingRecordNavigation != null" type="button" class="btn btn-outline-warning mb-2"
+    [disabled]="navigationSaving || !navigationReady" (click)="discardAndNavigate()">Descartar alterações e navegar</button>
 <%#accessCommands%>
   <div class="mb-2">
 <%#supported%>

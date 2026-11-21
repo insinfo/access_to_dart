@@ -1029,43 +1029,28 @@ String _buildNotificationToastServiceSource() {
 }
 
 String _buildDialogsSource() {
-  return _emitDartLibrary(
-    body: <Spec>[
-      Class(
-        (builder) => builder
-          ..name = 'StatusMessage'
-          ..fields.addAll(<Field>[
-            Field((field) => field
-              ..static = true
-              ..modifier = FieldModifier.constant
-              ..name = 'errorLoadingData'
-              ..type = refer('String')
-              ..assignment = const Code("'Erro ao carregar dados'")),
-            Field((field) => field
-              ..static = true
-              ..modifier = FieldModifier.constant
-              ..name = 'errorGeneric'
-              ..type = refer('String')
-              ..assignment = const Code("'Erro'")),
-          ]),
-      ),
-      Class(
-        (builder) => builder
-          ..name = 'SimpleDialogComponent'
-          ..methods.add(
-            Method((method) => method
-              ..static = true
-              ..name = 'showAlert'
-              ..returns = refer('void')
-              ..requiredParameters.add(
-                Parameter((param) => param..name = 'message'..type = refer('String')),
-              )
-              ..optionalParameters.add(
-                Parameter((param) => param..name = 'subMessage'..named = true..type = refer('String?')),
-              )
-              ..body = const Code('')),
-          ),
-      ),
-    ],
-  );
+  return r'''import 'dart:html' as html;
+
+class StatusMessage {
+  static const String errorLoadingData = 'Erro ao carregar dados';
+  static const String errorGeneric = 'Erro';
+}
+
+class SimpleDialogComponent {
+  // Called by explicit user actions, never during automatic initialization.
+  static void showAlert(String message, {String? subMessage}) {
+    html.window.alert(_messageText(message, subMessage));
+  }
+
+  static bool showConfirm(String message, {String? subMessage}) {
+    return html.window.confirm(_messageText(message, subMessage));
+  }
+
+  static String _messageText(String message, String? subMessage) {
+    return subMessage == null || subMessage.isEmpty
+        ? message
+        : '$message\n\n$subMessage';
+  }
+}
+''';
 }
