@@ -24,6 +24,7 @@ import '../vba_parser/form_rule_extractor.dart';
 part 'project_generator_form_rules.dart';
 part 'subform_generator.dart';
 part 'multivalue_generator.dart';
+part 'multivalue_frontend.dart';
 part 'query_backend_generator.dart';
 part 'before_insert_allocator.dart';
 part 'combo_column_behavior.dart';
@@ -116,6 +117,6 @@ class ProjectGenerator {
 
 List<AnalysisTable> _scaffoldTables(AnalysisProject project) {
   return project.tables
-      .where((table) => !table.isSyntheticAttachmentTable)
+      .where((table) => !table.isSyntheticComplexTable)
       .toList(growable: false);
 }

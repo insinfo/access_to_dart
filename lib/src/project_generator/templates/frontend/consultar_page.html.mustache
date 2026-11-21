@@ -31,7 +31,7 @@
         <tbody>
           <tr *ngFor="let item of items; let idx = index">
             <td>{{ idx + 1 }}</td>
-            <td>{{ item.toMap() }}</td>
+            <td>{{ recordSummary(item) }}</td>
             <td>
               <button type="button" class="btn btn-sm btn-outline-primary" (click)="openEditForm(item)">Editar</button>
             </td>

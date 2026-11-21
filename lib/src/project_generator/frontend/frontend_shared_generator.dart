@@ -16,6 +16,7 @@ extension _FrontendSharedGenerator on ProjectGenerator {
     const sharedDart = '''
 export 'components/datatable.dart';
 export 'components/access_subform_panel.dart';
+export 'components/access_multivalue_panel.dart';
 export 'components/modal.dart';
 export 'services/api_http_service.dart';
 export 'services/rest_service.dart';
@@ -35,6 +36,8 @@ export 'utils/dialogs.dart';
     await File(p.join(sharedDir.path, 'utils', 'dataframe.dart'))
         .writeAsString(_buildDataFrameSource());
     await File(p.join(sharedDir.path, 'shared.dart')).writeAsString(sharedDart);
+
+    await File(p.join(sharedDir.path, 'components', 'access_multivalue_panel.dart')).writeAsString(_multivaluePanelSource);
 
     await File(p.join(sharedDir.path, 'components', 'access_subform_panel.dart'))
         .writeAsString(_subformPanelSource);

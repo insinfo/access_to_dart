@@ -176,6 +176,7 @@ extension _FrontendModuleGenerator on ProjectGenerator {
     final nameSnake = module.nameSnake;
     final moduleNameKebab = module.moduleNameKebab;
 
+    final collectionKeysLiteral = _multivalueFieldKeys(project, table).map(_dartStringLiteral).join(', ');
     final dartContent = '''
 import 'package:ngdart/angular.dart';
 import 'package:${project.dartPackageName}_core/core.dart';
@@ -215,6 +216,14 @@ class Consultar${namePascal}Page implements OnInit {
     } finally {
       loading = false;
     }
+  }
+
+  Map<String, dynamic> recordSummary($namePascal row) {
+    final values = row.toMap();
+    for (final key in <String>[$collectionKeysLiteral]) {
+      if (values.containsKey(key)) values[key] = 'Coleção — consulte no formulário';
+    }
+    return values;
   }
 
   void openCreateForm() {
@@ -269,8 +278,9 @@ class Consultar${namePascal}Page implements OnInit {
         '      if (!modoAlterar) validationErrors.remove(${_dartStringLiteral(beforeInsertAllocator.columnRuntimeName)});';
     final allocatorPendingRead = beforeInsertAllocator == null ? '' :
         '    if (!modoAlterar && key == ${_dartStringLiteral(beforeInsertAllocator.columnRuntimeName)}) return ${_dartStringLiteral('')};';
+    final collectionKeys = _multivalueFieldKeys(project, table);
     final formFields = module.fields
-        .where((field) => field.isAutoNumber == false)
+        .where((field) => field.isAutoNumber == false && !collectionKeys.contains(field.runtimeName))
         .map(
           (field) => <String, Object?>{
             'label': _htmlTextLiteral(field.label),
@@ -349,6 +359,7 @@ class Consultar${namePascal}Page implements OnInit {
           'comboColumnAssignments': comboBehaviors,
           'otherVbaEventsImplemented': false,
         }));
+    await File(p.join(moduleDir.path, 'access_collections.json')).writeAsString(const JsonEncoder.withIndent('  ').convert(_multivalueUiDescriptors(project, table)));
     final accessCommands = _buildAccessCommands(project, table);
     await File(p.join(moduleDir.path, 'access_commands.json')).writeAsString(
         const JsonEncoder.withIndent('  ').convert(accessCommands));
@@ -364,7 +375,7 @@ class Consultar${namePascal}Page implements OnInit {
       }).toList(),
       namePascal: namePascal,
       fields: formFields,
-    ) + _subformPanelHtml(project, table);
+    ) + _subformPanelHtml(project, table) + _multivaluePanelHtml(project, table);
 
     final dartContent = '''
   import 'dart:async';
@@ -382,7 +393,7 @@ import '../../services/${nameSnake}_service.dart';
 @Component(
   selector: 'incluir-$moduleNameKebab-page',
   templateUrl: 'incluir_${nameSnake}_page.html',
-  directives: [coreDirectives, formDirectives, AccessSubformPanel],
+  directives: [coreDirectives, formDirectives, AccessSubformPanel, AccessMultivaluePanel],
 )
 class Incluir${namePascal}Page implements OnInit {
   final ${namePascal}Service _service =
