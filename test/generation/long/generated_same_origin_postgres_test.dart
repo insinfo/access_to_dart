@@ -71,6 +71,7 @@ void main() {
     };
     final poolProbe = File('$backend/bin/pool_probe.dart');
     await poolProbe.writeAsString(r"""
+import 'dart:async';
 import '../lib/src/db/database_service.dart';
 Future<void> main() async {
   final service = DatabaseService();
@@ -78,6 +79,32 @@ Future<void> main() async {
   try {
     if(connections.toSet().length != 1) throw StateError('Multiple pools on cold start');
     print('ONE_POOL_FOR_TEN_COLD_REQUESTS');
+    final shared = connections.first;
+    await shared.statement('CREATE TABLE transaction_probe (label TEXT)');
+    final bothEntered = Completer<void>();
+    var entered = 0;
+    Future<void> barrier() async {
+      entered++;
+      if (entered == 2) bothEntered.complete();
+      await bothEntered.future.timeout(const Duration(seconds: 10));
+    }
+    final commit = shared.transaction((ctx) async {
+      await ctx.table('transaction_probe').insert({'label': 'commit'});
+      await barrier();
+    });
+    final rollback = shared.transaction((ctx) async {
+      await ctx.table('transaction_probe').insert({'label': 'rollback'});
+      await barrier();
+      throw StateError('intentional rollback');
+    }).then<void>((_) { throw StateError('Rollback swallowed'); }, onError: (Object e) {
+      if (e is! StateError || e.message != 'intentional rollback') throw e;
+    });
+    await Future.wait([commit, rollback]);
+    final rows = await shared.table('transaction_probe').get();
+    if (rows.length != 1 || rows.single['label'] != 'commit') {
+      throw StateError('Concurrent transactions crossed boundaries');
+    }
+    print('CONCURRENT_TRANSACTION_COMMIT_ROLLBACK_OK');
   } finally { for(final c in connections.toSet()) { await c.disconnect(); } }
 }
 """);
@@ -86,6 +113,8 @@ Future<void> main() async {
         workingDirectory: backend, environment: environment);
     expect(pooled.exitCode, 0, reason: '${pooled.stdout}\n${pooled.stderr}');
     expect(pooled.stdout, contains('ONE_POOL_FOR_TEN_COLD_REQUESTS'));
+    expect(
+        pooled.stdout, contains('CONCURRENT_TRANSACTION_COMMIT_ROLLBACK_OK'));
     Future<Uri> start({bool unavailableDatabase = false}) async {
       final process = await Process.start(
           Platform.resolvedExecutable,
