@@ -18,6 +18,10 @@ String _buildBackendRepositorySource(GeneratedBackendModule module) {
       'className': module.className,
       'tableRuntimeName': module.tableRuntimeName,
       'primaryKeyRuntimeName': module.primaryKeyRuntimeName,
+      'orderedPrimaryKeyLiteral': RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$')
+              .hasMatch(module.primaryKeyRuntimeName)
+          ? _dartStringLiteral(module.primaryKeyRuntimeName)
+          : null,
       'primaryKeyFieldName': module.primaryKeyFieldName,
       'primaryKeyParamType': module.primaryKeyParamType,
       'primaryKeyRouteParseExpression': module.primaryKeyRouteParseExpression,

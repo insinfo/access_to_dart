@@ -50,6 +50,8 @@
       <incluir-<%moduleNameKebab%>-page
         [insideModal]="false"
         [entity]="selectedItem"
+        [navigationRecords]="items"
+        [navigationReady]="!loading && errorMessage == null"
         [modoAlterar]="selectedItem != null"
         (onUpdateEntity)="onUpdateEntity($event)">
       </incluir-<%moduleNameKebab%>-page>

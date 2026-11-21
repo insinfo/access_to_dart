@@ -638,8 +638,8 @@ String _buildFrontendModuleServiceSource({
               ..name = 'all'
               ..modifier = MethodModifier.async
               ..returns = refer('Future<DataFrame<${module.className}>>')
-              ..requiredParameters.add(
-                Parameter((param) => param..name = 'filtros'..type = refer('Filters')),
+              ..optionalParameters.add(
+                Parameter((param) => param..name = 'filtros'..type = refer('Filters?')),
               )
               ..body = Code('''
 return getDataFrame<${module.className}>(

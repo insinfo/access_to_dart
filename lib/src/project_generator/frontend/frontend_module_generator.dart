@@ -19,6 +19,41 @@ extension _FrontendModuleGenerator on ProjectGenerator {
     for (final control in ((source['controls'] as List?) ?? const []).whereType<Map>()) {
       if (control['type'] != 'CommandButton') continue;
       final label = (control['caption'] as String? ?? control['name'] as String? ?? 'Ação').trim();
+      final rawSteps = ((control['macroDefinitions'] as Map?)?['OnClickEmMacro'] as List?);
+      if (rawSteps != null && rawSteps.whereType<Map>().any((step) => step['action'] == 'GoToRecord')) {
+        final module = _buildFrontendModuleIr(project, table);
+        final properties = source['properties'] as Map?;
+        final actions = rawSteps.whereType<Map>().where((step) => step['action'] != null).toList();
+        final args = actions.length == 1 ? actions.single['arguments'] as List? : null;
+        final token = args != null && args.length == 3 ? int.tryParse(args[2].toString()) : null;
+        final operation = const {0: 'previous', 1: 'next', 2: 'first', 3: 'last', 5: 'new'}[token];
+        final cleanSteps = rawSteps.every((step) => step is Map &&
+            ((step['children'] as List?) ?? const []).isEmpty &&
+            (step['condition']?.toString() ?? '').trim().isEmpty &&
+            ((step['properties'] as Map?) ?? const {}).keys.every((key) => key == 'Comment'));
+        final hasLifecycle = ((source['events'] as Map?) ?? const {}).isNotEmpty ||
+            ((source['macroDefinitions'] as Map?) ?? const {}).isNotEmpty ||
+            ((source['controls'] as List?) ?? const []).whereType<Map>().any((c) =>
+                ((c['events'] as Map?) ?? const {}).keys.any((key) => key != 'OnClick') ||
+                ((c['macroDefinitions'] as Map?) ?? const {}).keys.any((key) => key != 'OnClickEmMacro'));
+        final plainTable = (source['recordSource']?.toString() ?? '').toLowerCase() == table.name.toLowerCase();
+        final validKey = table.primaryKey?.columns.length == 1 && module.primaryKeyParamType == 'int' &&
+            RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(_buildBackendModuleIr(project, table).primaryKeyRuntimeName);
+        final plainProperties = properties != null &&
+            ['Filter', 'OrderBy'].every((key) => (properties[key]?.toString() ?? '').trim().isEmpty) &&
+            ['DataEntry', 'AllowEdits', 'AllowAdditions', 'AllowDeletions'].every((key) => properties[key] == null);
+        final eligible = cleanSteps && actions.length == 1 && operation != null &&
+            args![0] == '-1' && args[1] == '' && !hasLifecycle && plainTable && validKey && plainProperties;
+        commands.add({
+          'control': control['name'], 'label': label, 'href': null, 'destination': null,
+          'recordOperation': eligible ? operation : null,
+          'status': eligible ? 'partial_record_navigation' : 'unsupported',
+          'notice': eligible
+              ? 'Navega nos registros carregados, em ordem crescente da chave numérica. Salve alterações antes de navegar. Novo apenas prepara o formulário.'
+              : 'Navegação exige ação única, tabela direta, chave numérica única e ausência de filtros, restrições ou eventos ainda não migrados.',
+        });
+        continue;
+      }
       String? reason;
       String? destination;
       String? href;
@@ -162,7 +197,7 @@ class Consultar${namePascal}Page implements OnInit {
     loading = true;
     errorMessage = null;
     try {
-      final frame = await _service.all(Filters(limit: 50, offset: 0));
+      final frame = await _service.all();
       items = frame.items;
     } catch (e, s) {
       errorMessage = '\$e\\n\$s';
@@ -297,7 +332,8 @@ class Consultar${namePascal}Page implements OnInit {
         'notice': _htmlTextLiteral(command['notice'] as String),
         'href': command['href'],
         'supported': command['href'] != null,
-        'unsupported': command['href'] == null,
+        'unsupported': command['href'] == null && command['recordOperation'] == null,
+        'recordOperation': command['recordOperation'],
       }).toList(),
       namePascal: namePascal,
       fields: formFields,
@@ -305,6 +341,7 @@ class Consultar${namePascal}Page implements OnInit {
 
     final dartContent = '''
   import 'dart:async';
+  import 'dart:convert';
   import 'dart:html' as html;
 
 import 'package:ngdart/angular.dart';
@@ -353,6 +390,61 @@ $dynamicLookupSource;
   static const Map<String, Map<String, Object?>> _attachmentPresentation =
 $attachmentPresentationSource;
 
+  @Input()
+  List<$namePascal> navigationRecords = <$namePascal>[];
+  @Input()
+  bool navigationReady = false;
+  bool navigationSaving = false;
+  String? _navigationBaseline;
+  String? navigationError;
+
+  String _draftFingerprint() => jsonEncode(_draft, toEncodable: (value) {
+    if (value is DateTime) return value.toIso8601String();
+    throw StateError('Valor não serializável no formulário.');
+  });
+
+  void navigateRecord(String operation) {
+    if (navigationSaving || !navigationReady) return;
+    navigationError = null;
+    int? previousKey;
+    for (final row in navigationRecords) {
+      final Object? key = row.${module.primaryKeyField};
+      if (key is! int || (previousKey != null && key <= previousKey)) {
+        navigationError = 'Conjunto de registros sem chave numérica única e ordenada. Recarregue a consulta.';
+        return;
+      }
+      previousKey = key;
+    }
+    if (_navigationBaseline == null || _draftFingerprint() != _navigationBaseline ||
+        _attachmentLoadingFields.isNotEmpty ||
+        _attachmentDraftsByField.values.any((draft) => draft.values.any((value) => value.isNotEmpty)) ||
+        _attachmentSelectedFilesByField.values.any((files) => files.isNotEmpty)) {
+      navigationError = 'Salve ou descarte explicitamente as alterações antes de navegar.';
+      return;
+    }
+    final current = navigationRecords.indexWhere((row) => row.${module.primaryKeyField} == subformParentId);
+    if (operation == 'new' || (operation == 'next' && current >= 0 && current == navigationRecords.length - 1)) {
+      modoAlterar = false;
+      entityInput = null;
+      validationErrors.clear();
+      return;
+    }
+    final index = switch (operation) {
+      'first' => 0,
+      'last' => navigationRecords.length - 1,
+      'next' => current < 0 ? -1 : current + 1,
+      'previous' => current < 0 && subformParentId == null ? navigationRecords.length - 1 : current - 1,
+      _ => -1,
+    };
+    if (index < 0 || index >= navigationRecords.length) {
+      navigationError = 'Não há registro disponível nessa direção.';
+      return;
+    }
+    modoAlterar = true;
+    entityInput = navigationRecords[index];
+    validationErrors.clear();
+  }
+
   Object? subformParentId;
 
   @Input('entity')
@@ -361,6 +453,7 @@ $attachmentPresentationSource;
     _draft
       ..clear()
       ..addAll(val?.toMap() ?? $namePascal.defaultValues());
+    _navigationBaseline = ${accessCommands.any((command) => command['recordOperation'] != null) ? '_draftFingerprint()' : 'null'};
     _attachmentDraftsByField.clear();
     _attachmentSelectedFilesByField.clear();
     _loadAttachmentSubresources();
@@ -994,6 +1087,8 @@ $attachmentPresentationSource;
   }
 
   Future<void> salvar() async {
+    if (navigationSaving) return;
+    navigationSaving = true;
     final loading = SimpleLoading();
     try {
       validationErrors
@@ -1016,6 +1111,7 @@ $attachmentPresentationSource;
         subMessage: '\$e \$s',
       );
     } finally {
+      navigationSaving = false;
       loading.hide();
     }
   }

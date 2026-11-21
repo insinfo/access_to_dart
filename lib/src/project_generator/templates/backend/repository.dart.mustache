@@ -22,6 +22,9 @@ class {{className}}Repository {
 
   Future<List<Map<String, dynamic>>> all() async {
     final query = db.table('{{tableRuntimeName}}');
+{{#orderedPrimaryKeyLiteral}}
+    query.orderBy({{{orderedPrimaryKeyLiteral}}});
+{{/orderedPrimaryKeyLiteral}}
     final rows = List<Map<String, dynamic>>.from(await query.get());
 {{#hasTemporalFields}}
     return rows.map(_normalizeRow).toList(growable: false);

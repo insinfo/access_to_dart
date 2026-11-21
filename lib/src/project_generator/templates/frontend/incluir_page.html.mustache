@@ -6,11 +6,15 @@
 </div>
 
 <div class="content">
+  <div *ngIf="navigationError != null" class="alert alert-warning" role="alert">{{ navigationError }}</div>
 <%#accessCommands%>
   <div class="mb-2">
 <%#supported%>
     <a class="btn btn-outline-primary" href="<%href%>"><%label%></a>
 <%/supported%>
+<%#recordOperation%>
+    <button type="button" class="btn btn-outline-primary" [disabled]="navigationSaving || !navigationReady" (click)="navigateRecord('<%recordOperation%>')"><%label%></button>
+<%/recordOperation%>
 <%#unsupported%>
     <button type="button" class="btn btn-outline-secondary" disabled><%label%></button>
 <%/unsupported%>
