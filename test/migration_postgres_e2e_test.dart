@@ -64,7 +64,7 @@ void main() {
       try {
         final result = await _readRows(
           connection,
-          'SELECT "user_name" FROM "e2_e_users" ORDER BY "user_id"',
+          'SELECT "user_name" FROM "e2eusers" ORDER BY "user_id"',
           const ['user_name'],
         );
         expect(result.length, 2);
@@ -180,6 +180,8 @@ void main() {
         description: 'backend smoke dart analyze',
         allowedNonZeroExitCodes: {2},
       );
+      await Directory('${backendDir.path}${Platform.pathSeparator}build')
+          .create(recursive: true);
       await _runProcess(
         'dart',
         ['compile', 'exe', 'bin/server.dart', '-o', 'build/server.exe'],
@@ -194,7 +196,7 @@ void main() {
         serverExe,
         ['--address', '127.0.0.1', '--port', '$port'],
         workingDirectory: backendDir.path,
-        runInShell: true,
+        runInShell: false,
         environment: {
           ...Platform.environment,
           'ACCESS_TO_DART_DB_HOST': harness.host,
@@ -213,8 +215,8 @@ void main() {
         );
       });
 
-      await _waitForHttp('http://127.0.0.1:$port/api/v1/e2_e_users');
-      final body = await _httpGet('http://127.0.0.1:$port/api/v1/e2_e_users');
+      await _waitForHttp('http://127.0.0.1:$port/api/v1/e2eusers');
+      final body = await _httpGet('http://127.0.0.1:$port/api/v1/e2eusers');
       final rows = jsonDecode(body) as List<dynamic>;
 
       expect(rows.length, 2);
@@ -271,7 +273,7 @@ class _LocalPostgresHarness {
     final connection = await openDatabase(adminDatabase);
     try {
       await connection
-          .createCommand('CREATE DATABASE ${_quoteIdentifier(name)}')
+          .createCommand('CREATE DATABASE ${_quoteIdentifier(name)} TEMPLATE template0')
           .executeNonQuery();
       return name;
     } finally {
@@ -295,8 +297,8 @@ class _LocalPostgresHarness {
     }
   }
 
-  Future<NpgsqlConnection> openDatabase(String databaseName) async {
-    final connection = NpgsqlConnection(
+  Future<DpgsqlConnection> openDatabase(String databaseName) async {
+    final connection = DpgsqlConnection(
       'Host=$host;Port=$port;Database=$databaseName;Username=$user;Password=$password;SSL Mode=Disable',
     );
     await connection.open();
@@ -373,7 +375,7 @@ Future<ProcessResult> _runProcess(
 }
 
 Future<List<Map<String, dynamic>>> _readRows(
-  NpgsqlConnection connection,
+  DpgsqlConnection connection,
   String sql,
   List<String> columnNames,
 ) async {

@@ -138,8 +138,8 @@ class Consultar${namePascal}Page implements OnInit {
         .map(
           (field) => <String, Object?>{
             'label': _htmlTextLiteral(field.label),
-            'readKey': field.runtimeName,
-            'updateKey': field.runtimeName,
+            'readKey': _angularStringContents(field.runtimeName),
+            'updateKey': _angularStringContents(field.runtimeName),
             'ngControl': field.fieldName,
             'inputType': field.inputType,
             'inputMode': field.inputMode,
@@ -182,11 +182,14 @@ class Consultar${namePascal}Page implements OnInit {
                 : _htmlTextLiteral(field.rowSource!),
             'displayControl': field.displayControl,
             'textFormat': field.textFormat,
-            'dynamicFieldKey': field.lookup?.fieldRuntimeName,
+            'dynamicFieldKey': field.lookup == null
+                ? null
+                : _angularStringContents(field.lookup!.fieldRuntimeName),
             'options': field.dropdownOptions
                 .map(
                   (option) => <String, Object?>{
                     'value': _htmlTextLiteral(option),
+                    'expressionValue': _angularStringContents(option),
                     'label': _htmlTextLiteral(option),
                   },
                 )
@@ -1165,4 +1168,17 @@ String _buildAttachmentPresentationSource(
   }).join('\n');
 
   return '<String, Map<String, Object?>>{\n$entries\n  }';
+}
+
+// Os bindings passam primeiro pelo parser HTML e depois pelo parser Angular.
+// Escapar apenas HTML não protege aspas que delimitam o literal Angular.
+String _angularStringContents(String value) {
+  final escaped = value
+      .replaceAll(r'\', r'\\')
+      .replaceAll("'", r"\'")
+      .replaceAll(r'$', r'\$')
+      .replaceAll('\r', r'\r')
+      .replaceAll('\n', r'\n')
+      .replaceAll('\t', r'\t');
+  return _htmlTextLiteral(escaped);
 }

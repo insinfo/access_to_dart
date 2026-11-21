@@ -454,7 +454,7 @@ class _LocalPostgresHarness {
     final connection = await openDatabase(adminDatabase);
     try {
       await connection
-          .createCommand('CREATE DATABASE ${_quoteIdentifier(name)}')
+          .createCommand('CREATE DATABASE ${_quoteIdentifier(name)} TEMPLATE template0')
           .executeNonQuery();
       return name;
     } finally {
@@ -478,8 +478,8 @@ class _LocalPostgresHarness {
     }
   }
 
-  Future<NpgsqlConnection> openDatabase(String databaseName) async {
-    final connection = NpgsqlConnection(
+  Future<DpgsqlConnection> openDatabase(String databaseName) async {
+    final connection = DpgsqlConnection(
       'Host=$host;Port=$port;Database=$databaseName;Username=$user;Password=$password;SSL Mode=Disable',
     );
     await connection.open();
@@ -550,7 +550,7 @@ Future<void> _httpDelete(String url) async {
 }
 
 Future<List<Map<String, dynamic>>> _readRows(
-  NpgsqlConnection connection,
+  DpgsqlConnection connection,
   String sql,
   List<String> columnNames,
 ) async {

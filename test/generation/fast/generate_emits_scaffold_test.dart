@@ -41,8 +41,8 @@ void main() {
 
     final modelFile = File('$outputDir${Platform.pathSeparator}core${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}models${Platform.pathSeparator}contatos.dart');
     final modelContent = await modelFile.readAsString();
-    expect(modelContent, contains("static const idCol = 'id';"));
-    expect(modelContent, contains("static const cepCol = 'cep';"));
+    expect(modelContent, contains('static const idCol = "id";'));
+    expect(modelContent, contains('static const cepCol = "cep";'));
     expect(modelContent, contains('factory Contatos.fromMap(Map<String, dynamic> map)'));
     expect(modelContent, contains('map[idCol] as int?'));
     expect(modelContent, isNot(contains('?.toString()')));

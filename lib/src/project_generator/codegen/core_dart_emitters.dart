@@ -9,7 +9,7 @@ String _buildCoreModelSource(GeneratedCoreModelDescriptor model) {
           .map(
             (field) => <String, Object?>{
               'constantName': field.columnConstantName,
-              'runtimeName': field.runtimeName,
+              'runtimeNameLiteral': _dartStringLiteral(field.runtimeName),
             },
           )
           .toList(growable: false),

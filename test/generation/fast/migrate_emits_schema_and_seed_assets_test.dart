@@ -16,7 +16,7 @@ void main() {
     final err = StringBuffer();
 
     final exitCode = await run(
-      ['migrate', '--analysis', analysisFile.path, '--output', tempDir.path],
+      ['migrate', '--not-null-mode', 'strict', '--analysis', analysisFile.path, '--output', tempDir.path],
       out: out,
       err: err,
     );

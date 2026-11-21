@@ -23,7 +23,7 @@ class DpgsqlMigrationExecutor {
     Map<String, List<Map<String, dynamic>>>? tableRowsByName,
   }) async {
     await ensurePostgresDatabaseExists(connectionOptions);
-    final connection = NpgsqlConnection(
+    final connection = DpgsqlConnection(
       connectionOptions.toDpgsqlConnectionString(),
     );
 
@@ -46,7 +46,7 @@ class DpgsqlMigrationExecutor {
     String? currentTableName;
     int? currentRowIndex;
     String? currentStatement;
-    NpgsqlTransaction? transaction;
+    DpgsqlTransaction? transaction;
 
     try {
       transaction = await connection.beginTransaction();

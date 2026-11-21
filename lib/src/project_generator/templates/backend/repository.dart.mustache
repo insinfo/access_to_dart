@@ -74,7 +74,12 @@ class {{className}}Repository {
   Future<{{primaryKeyParamType}}?> insert({{className}} item) async {
     final payload = item.toMap();
 {{#primaryKeyIsAutoNumber}}
-    final insertedId = await db.table('{{tableRuntimeName}}').insertGetId(payload);
+    // Deixe o banco gerar a chave quando ela não foi informada.
+    if (payload['{{primaryKeyRuntimeName}}'] == null) {
+      payload.remove('{{primaryKeyRuntimeName}}');
+    }
+    final insertedId = await db.table('{{tableRuntimeName}}')
+        .insertGetId(payload, '{{primaryKeyRuntimeName}}');
     return insertedId as {{primaryKeyParamType}};
 {{/primaryKeyIsAutoNumber}}
 {{^primaryKeyIsAutoNumber}}

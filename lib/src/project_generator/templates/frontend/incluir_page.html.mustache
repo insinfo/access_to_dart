@@ -69,8 +69,8 @@
                 <input
                   class="form-check-input"
                   type="checkbox"
-                  [checked]="isFieldOptionSelected('<%updateKey%>', '<%value%>')"
-                  (change)="toggleFieldSelection('<%updateKey%>', '<%value%>', $event.target.checked)">
+                  [checked]="isFieldOptionSelected('<%updateKey%>', '<%expressionValue%>')"
+                  (change)="toggleFieldSelection('<%updateKey%>', '<%expressionValue%>', $event.target.checked)">
                 <span class="form-check-label"><%label%></span>
               </label>
 <%/options%>

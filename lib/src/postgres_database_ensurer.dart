@@ -11,7 +11,7 @@ Future<void> ensurePostgresDatabaseExists(
   }
 
   final adminOptions = targetOptions.forAdminDatabase();
-  NpgsqlConnection? adminConnection;
+  DpgsqlConnection? adminConnection;
   try {
     adminConnection = await _openAdminConnection(adminOptions);
 
@@ -29,7 +29,7 @@ Future<void> ensurePostgresDatabaseExists(
           'CREATE DATABASE ${_quotedIdentifier(targetOptions.database)} TEMPLATE template0',
         )
         .executeNonQuery();
-  } on NpgsqlException catch (error) {
+  } on DpgsqlException catch (error) {
     final duplicateDatabase =
         (error is PostgresException && error.sqlState == '42P04') ||
         error.message.toLowerCase().contains('already exists');
@@ -41,14 +41,14 @@ Future<void> ensurePostgresDatabaseExists(
   }
 }
 
-Future<NpgsqlConnection> _openAdminConnection(
+Future<DpgsqlConnection> _openAdminConnection(
   PostgresConnectionOptions options,
 ) async {
-  final primary = NpgsqlConnection(options.toDpgsqlConnectionString());
+  final primary = DpgsqlConnection(options.toDpgsqlConnectionString());
   try {
     await primary.open();
     return primary;
-  } on NpgsqlException catch (error) {
+  } on DpgsqlException catch (error) {
     final message = error.message.toLowerCase();
     final requiresDisabledSsl = message.contains('server does not support ssl');
     if (!requiresDisabledSsl || options.sslMode == SslMode.disable) {
@@ -60,7 +60,7 @@ Future<NpgsqlConnection> _openAdminConnection(
     try {
       await primary.close();
     } catch (_) {}
-    final retry = NpgsqlConnection(
+    final retry = DpgsqlConnection(
       options.copyWith(sslMode: SslMode.disable).toDpgsqlConnectionString(),
     );
     await retry.open();

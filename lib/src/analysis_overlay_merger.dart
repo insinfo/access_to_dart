@@ -8,6 +8,7 @@ class AnalysisOverlayMerger {
     Map<String, dynamic> analysis,
     AccessSrcProject sourceProject,
   ) {
+    _mergeForms(analysis, sourceProject.forms);
     final rawTables = ((analysis['tables'] as List?) ?? const [])
         .whereType<Map>()
         .map((table) => table.cast<String, dynamic>())
@@ -43,6 +44,86 @@ class AnalysisOverlayMerger {
     }
 
     return analysis;
+  }
+
+  void _mergeForms(
+    Map<String, dynamic> analysis,
+    List<AccessSrcForm> sourceForms,
+  ) {
+    if (sourceForms.isEmpty) return;
+    // Os exports fornecem propriedades visuais; o catálogo mantém identidade e
+    // metadados binários. Ausência de uma propriedade no export não a apaga.
+    final forms = ((analysis['forms'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((form) => Map<String, dynamic>.from(form))
+        .toList();
+    for (final source in sourceForms) {
+      final index = forms.indexWhere((form) =>
+          (form['name'] as String? ?? '').toLowerCase() ==
+          source.name.toLowerCase());
+      final form =
+          index < 0 ? <String, dynamic>{'name': source.name} : forms[index];
+      _copyPresentProperties(form, source.toJson(),
+          const ['caption', 'recordSource', 'defaultView']);
+      if (source.macros.isNotEmpty) {
+        form['macros'] = <String, dynamic>{
+          ...((form['macros'] as Map?)?.cast<String, dynamic>() ?? const {}),
+          ...source.macros,
+        };
+      }
+      if (source.controls.isNotEmpty) {
+        final binaryControls = ((form['controls'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((control) => Map<String, dynamic>.from(control))
+            .toList();
+        final controls = <Map<String, dynamic>>[];
+        final consumed = <int>{};
+        // Mantém a ordem do export, sem descartar controles só do binário.
+        for (final sourceControl in source.controls) {
+          final controlIndex = binaryControls.indexWhere((control) =>
+              (control['name'] as String? ?? '').toLowerCase() ==
+              sourceControl.name.toLowerCase());
+          final control = controlIndex < 0
+              ? <String, dynamic>{'name': sourceControl.name}
+              : binaryControls[controlIndex];
+          if (controlIndex >= 0) consumed.add(controlIndex);
+          _copyPresentProperties(control, sourceControl.toJson(),
+              const ['type', 'controlSource', 'caption']);
+          if (sourceControl.macros.isNotEmpty) {
+            control['macros'] = <String, dynamic>{
+              ...((control['macros'] as Map?)?.cast<String, dynamic>() ??
+                  const {}),
+              ...sourceControl.macros,
+            };
+          }
+          controls.add(control);
+        }
+        for (var index = 0; index < binaryControls.length; index++) {
+          if (!consumed.contains(index)) controls.add(binaryControls[index]);
+        }
+        form['controls'] = controls;
+      }
+      if (index < 0) forms.add(form);
+    }
+    analysis['forms'] = forms;
+    final summary = analysis['summary'];
+    if (summary is Map) {
+      analysis['summary'] = <String, dynamic>{
+        ...summary.cast<String, dynamic>(),
+        'forms': forms.length,
+      };
+    }
+  }
+
+  void _copyPresentProperties(
+    Map<String, dynamic> target,
+    Map<String, Object?> source,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = source[key];
+      if (value != null) target[key] = value;
+    }
   }
 
   Map<String, dynamic> _mergeTable(

@@ -938,7 +938,9 @@ class AccessSrcReader {
     final root = _BasNode('Root');
     final stack = <_BasNode>[root];
 
-    for (final rawLine in text.split('\n')) {
+    // SaveAsText divide propriedades longas em segmentos entre aspas. Una os
+    // segmentos antes de procurar '=' para preservar captions e expressões SQL.
+    for (final rawLine in _mergeBasContinuationLines(text)) {
       final trimmed = rawLine.trim();
       if (trimmed.isEmpty) {
         continue;

@@ -33,7 +33,7 @@ void main() {
     expect(exitCode, 0, reason: err.toString());
     final modelFile = File('$outputDir${Platform.pathSeparator}core${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}models${Platform.pathSeparator}contatos.dart');
     final modelContent = await modelFile.readAsString();
-    expect(modelContent, contains("static const nomeDoContatoCol = 'NomeDoContato';"));
+    expect(modelContent, contains('static const nomeDoContatoCol = "NomeDoContato";'));
 
     final repositoryFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}repositories${Platform.pathSeparator}contatos_repository.dart');
     expect(await repositoryFile.readAsString(), contains("db.table('Contatos')"));

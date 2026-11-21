@@ -39,6 +39,10 @@ void main() {
 
     expect(schemaContent, contains('CREATE TABLE "Contatos"'));
     expect(seedContent, contains('INSERT INTO "Contatos"'));
-    expect(seedContent, contains('"NomeDoContato"'));
+    // NomeDoContato is calculated by Access and must not be inserted explicitly.
+    expect(schemaContent, contains('"NomeDoContato"'));
+    expect(seedContent, contains('"Sobrenome"'));
+    expect(seedContent, contains('"Nome"'));
+    expect(seedContent, isNot(contains('"NomeDoContato"')));
   });
 }

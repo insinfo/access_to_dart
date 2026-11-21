@@ -13,7 +13,7 @@ Future<void> main(List<String> arguments) async {
   }
 
   final options = PostgresConnectionOptions.parse(arguments.first);
-  final connection = NpgsqlConnection(options.toDpgsqlConnectionString());
+  final connection = DpgsqlConnection(options.toDpgsqlConnectionString());
 
   try {
     stdout.writeln('Opening connection...');
