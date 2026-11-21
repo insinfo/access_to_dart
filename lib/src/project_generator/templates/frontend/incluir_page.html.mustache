@@ -15,7 +15,7 @@
     <a class="btn btn-outline-primary" href="<%href%>"><%label%></a>
 <%/supported%>
 <%#recordOperation%>
-    <button type="button" class="btn btn-outline-primary" [disabled]="navigationSaving || !navigationReady" (click)="navigateRecord('<%recordOperation%>')"><%label%></button>
+    <button type="button" class="btn btn-outline-primary" [disabled]="navigationSaving || !navigationReady" (click)="navigateRecord('<%recordOperation%>', alertMacroError: <%alertMacroError%>)"><%label%></button>
 <%/recordOperation%>
 <%#unsupported%>
     <button type="button" class="btn btn-outline-secondary" disabled><%label%></button>

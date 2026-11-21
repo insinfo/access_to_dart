@@ -24,12 +24,22 @@ extension _FrontendModuleGenerator on ProjectGenerator {
         final module = _buildFrontendModuleIr(project, table);
         final properties = source['properties'] as Map?;
         final actions = rawSteps.whereType<Map>().where((step) => step['action'] != null).toList();
-        final args = actions.length == 1 ? actions.single['arguments'] as List? : null;
+        final alertMacroError = actions.length == 3 &&
+            actions[0]['action'] == 'OnError' &&
+            _exactMacroArguments(actions[0], const ['0']) &&
+            actions[1]['action'] == 'GoToRecord' &&
+            actions[2]['action'] == 'MsgBox' &&
+            actions[2]['condition'] == '[MacroError]<>0' &&
+            _exactMacroArguments(actions[2], const ['=[MacroError].[Description]', '-1', '0']);
+        final recordAction = alertMacroError ? actions[1] : actions.length == 1 ? actions.single : null;
+        final args = recordAction?['arguments'] as List?;
         final token = args != null && args.length == 3 ? int.tryParse(args[2].toString()) : null;
         final operation = const {0: 'previous', 1: 'next', 2: 'first', 3: 'last', 5: 'new'}[token];
         final cleanSteps = rawSteps.every((step) => step is Map &&
             ((step['children'] as List?) ?? const []).isEmpty &&
-            (step['condition']?.toString() ?? '').trim().isEmpty &&
+            ((step['condition']?.toString() ?? '').trim().isEmpty ||
+                (alertMacroError && identical(step, actions[2]))) &&
+            (step['action'] != null || ((step['arguments'] as List?) ?? const []).isEmpty) &&
             ((step['properties'] as Map?) ?? const {}).keys.every((key) => key == 'Comment'));
         final hasLifecycle = ((source['events'] as Map?) ?? const {}).isNotEmpty ||
             ((source['macroDefinitions'] as Map?) ?? const {}).isNotEmpty ||
@@ -42,15 +52,16 @@ extension _FrontendModuleGenerator on ProjectGenerator {
         final plainProperties = properties != null &&
             ['Filter', 'OrderBy'].every((key) => (properties[key]?.toString() ?? '').trim().isEmpty) &&
             ['DataEntry', 'AllowEdits', 'AllowAdditions', 'AllowDeletions'].every((key) => properties[key] == null);
-        final eligible = cleanSteps && actions.length == 1 && operation != null &&
+        final eligible = cleanSteps && (actions.length == 1 || alertMacroError) && operation != null &&
             args![0] == '-1' && args[1] == '' && !hasLifecycle && plainTable && validKey && plainProperties;
         commands.add({
           'control': control['name'], 'label': label, 'href': null, 'destination': null,
           'recordOperation': eligible ? operation : null,
+          'errorPolicy': eligible && alertMacroError ? 'alert_macro_error' : null,
           'status': eligible ? 'partial_record_navigation' : 'unsupported',
           'notice': eligible
               ? 'Navega nos registros carregados, em ordem crescente da chave numérica. Salve alterações antes de navegar. Novo apenas prepara o formulário.'
-              : 'Navegação exige ação única, tabela direta, chave numérica única e ausência de filtros, restrições ou eventos ainda não migrados.',
+              : 'Navegação exige ação única ou sequência de erro reconhecida, tabela direta, chave numérica única e ausência de filtros, restrições ou eventos ainda não migrados.',
         });
         continue;
       }
@@ -334,6 +345,7 @@ class Consultar${namePascal}Page implements OnInit {
         'supported': command['href'] != null,
         'unsupported': command['href'] == null && command['recordOperation'] == null,
         'recordOperation': command['recordOperation'],
+        'alertMacroError': command['errorPolicy'] == 'alert_macro_error' ? 'true' : 'false',
       }).toList(),
       namePascal: namePascal,
       fields: formFields,
@@ -398,6 +410,7 @@ $attachmentPresentationSource;
   String? _navigationBaseline;
   String? navigationError;
   String? pendingRecordNavigation;
+  bool _pendingMacroErrorAlert = false;
   $namePascal? _navigationSavedEntity;
 
   String _draftFingerprint() => jsonEncode(_draft, toEncodable: (value) {
@@ -405,7 +418,7 @@ $attachmentPresentationSource;
     throw StateError('Valor não serializável no formulário.');
   });
 
-  void navigateRecord(String operation) {
+  void navigateRecord(String operation, {bool alertMacroError = false}) {
     if (navigationSaving || !navigationReady) return;
     navigationError = null;
     pendingRecordNavigation = null;
@@ -423,6 +436,7 @@ $attachmentPresentationSource;
         _attachmentDraftsByField.values.any((draft) => draft.values.any((value) => value.isNotEmpty)) ||
         _attachmentSelectedFilesByField.values.any((files) => files.isNotEmpty)) {
       pendingRecordNavigation = operation;
+      _pendingMacroErrorAlert = alertMacroError;
       navigationError = 'Salve ou descarte explicitamente as alterações antes de navegar.';
       return;
     }
@@ -441,7 +455,15 @@ $attachmentPresentationSource;
       _ => -1,
     };
     if (index < 0 || index >= navigationRecords.length) {
-      navigationError = 'Não há registro disponível nessa direção.';
+      // Local to this invocation: successful commands never inherit MacroError.
+      final macroError = <String, Object>{
+        'number': 2105,
+        'description': 'Não há registro disponível nessa direção.',
+      };
+      navigationError = macroError['description'] as String;
+      if (alertMacroError && macroError['number'] != 0) {
+        SimpleDialogComponent.showAlert(navigationError!);
+      }
       return;
     }
     modoAlterar = true;
@@ -464,7 +486,7 @@ $attachmentPresentationSource;
     _attachmentDraftsByField.clear();
     _attachmentSelectedFilesByField.clear();
     validationErrors.clear();
-    navigateRecord(operation);
+    navigateRecord(operation, alertMacroError: _pendingMacroErrorAlert);
   }
 
   Object? subformParentId;
@@ -1397,4 +1419,11 @@ String _angularStringContents(String value) {
       .replaceAll('\n', r'\n')
       .replaceAll('\t', r'\t');
   return _htmlTextLiteral(escaped);
+}
+
+// Exact finite grammar, not an evaluator for arbitrary Access expressions.
+bool _exactMacroArguments(Map action, List<String> expected) {
+  final arguments = action['arguments'];
+  return arguments is List && arguments.length == expected.length &&
+      expected.asMap().entries.every((entry) => arguments[entry.key] == entry.value);
 }

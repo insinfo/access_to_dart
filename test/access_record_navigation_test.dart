@@ -68,7 +68,7 @@ Future<
     .cast<Map>();
 
 void main() {
-  test('real first/last macros migrate; composed previous/new remain blocked',
+  test('real record macros preserve exact conditional error policy',
       () async {
     final app = await buildRecordFixture(await recordFixture());
     final commands = await readRecordCommands(app);
@@ -79,8 +79,9 @@ void main() {
     expect(
         commands.singleWhere((c) => c['control'] == 'BTULT')['recordOperation'],
         'last');
-    expect(commands.singleWhere((c) => c['control'] == ' BTANTER')['status'],
-        'unsupported');
+    expect(commands.singleWhere((c) => c['control'] == ' BTANTER')['recordOperation'], 'previous');
+    expect(commands.singleWhere((c) => c['control'] == ' BTANTER')['errorPolicy'], 'alert_macro_error');
+    expect(commands.singleWhere((c) => c['control'] == 'btnovo')['recordOperation'], 'new');
     final repository = await File(
             '${app.path}/backend/lib/src/modules/tb_nome_acolhida/repositories/tb_nome_acolhida_repository.dart')
         .readAsString();
@@ -127,6 +128,23 @@ void main() {
       final commands = await readRecordCommands(await buildRecordFixture(data));
       expect(commands.singleWhere((c) => c['control'] == 'BTPRIM')['status'],
           'unsupported');
+    });
+  }
+  for (final variant in ['onerror-mode', 'condition', 'message', 'message-extra', 'trailing', 'children']) {
+    test('reject altered error sequence: $variant', () async {
+      final data = await recordFixture();
+      final form = (data['forms'] as List).single as Map;
+      final control = (form['controls'] as List).cast<Map>().singleWhere((c) => c['name'] == ' BTANTER');
+      final steps = control['macroDefinitions']['OnClickEmMacro'] as List;
+      final actions = steps.cast<Map>().where((s) => s['action'] != null).toList();
+      if (variant == 'onerror-mode') actions[0]['arguments'] = ['2'];
+      if (variant == 'condition') actions[2]['condition'] = '[OtherError]<>0';
+      if (variant == 'message') actions[2]['arguments'][0] = 'Always show';
+      if (variant == 'message-extra') (actions[2]['arguments'] as List).add('Extra');
+      if (variant == 'trailing') steps.add({'action':'GoToControl','arguments':['Nome']});
+      if (variant == 'children') actions[1]['children'] = [{'action':'RunCode'}];
+      final commands = await readRecordCommands(await buildRecordFixture(data));
+      expect(commands.singleWhere((c) => c['control'] == ' BTANTER')['status'], 'unsupported');
     });
   }
   test('persist isolated browser fixture with explicit single-action probes',

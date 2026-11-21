@@ -23,6 +23,7 @@ try{
  let rows=[{id_nome:10,nome:'Synthetic A'},{id_nome:20,nome:'Synthetic B'},{id_nome:30,nome:'Synthetic C'}];
  await page.route('**/api/**',async route=>{
   const request=route.request();
+  assert.equal(new URL(request.url()).pathname,'/api/v1/tb_nome_acolhida','must call actual backend snake_case route');
   if(request.method()!=='GET')writes.push(request.method());else gets.push(request.url());
   await route.fulfill({contentType:'application/json',body:JSON.stringify(rows)});
  });
@@ -33,6 +34,11 @@ try{
  async function value(expected){await page.waitForFunction(([selector,v])=>document.querySelector(selector)?.value===v,['incluir-tb-nome-acolhida-page input',expected]);assert.equal(await input.inputValue(),expected);}
  await value('Synthetic A');
  assert.deepEqual(dialogs,[],'initialization must not open dialogs');
+ await editor.getByRole('button',{name:'Anterior',exact:true}).click();await value('Synthetic A');
+ assert.equal(dialogs.length,1);assert.equal(dialogs[0].type,'alert');
+ await editor.getByRole('button',{name:'Último',exact:true}).click();await value('Synthetic B');
+ assert.equal(dialogs.length,1,'successful GoToRecord must not show stale MacroError');
+ await editor.getByRole('button',{name:'Probe Previous',exact:true}).click();await value('Synthetic A');
  await editor.getByRole('button',{name:'Probe Next',exact:true}).click();await value('Synthetic B');
  // Actual exported caption Próximo maps to token 3, Last. Do not infer from label.
  await editor.getByRole('button',{name:'Próximo',exact:true}).click();await value('Synthetic C');
@@ -47,7 +53,7 @@ try{
  await editor.getByRole('button',{name:'Descartar alterações e navegar',exact:true}).click();
  await value('Unsaved synthetic edit');
  assert.equal(dialogs.at(-1)?.type,'confirm');
- assert.equal(dialogs.length,1);
+ assert.equal(dialogs.length,2);
  await input.fill('Synthetic A');
  await editor.getByRole('button',{name:'Probe Previous',exact:true}).click();await value('Synthetic A');
  assert.match(await editor.innerText(),/Não há registro disponível/,'Cancel must retain the first record, not just input text');
@@ -56,14 +62,14 @@ try{
  acceptConfirmation=true;
  await editor.getByRole('button',{name:'Descartar alterações e navegar',exact:true}).click();
  await value('Synthetic B');
- assert.equal(dialogs.length,2);
- await editor.getByRole('button',{name:'Probe New',exact:true}).click();await value('');
+ assert.equal(dialogs.length,3);
+ await editor.getByRole('button',{name:'Novo',exact:true}).click();await value('');
  await editor.getByRole('button',{name:'Salvar',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.invalid-feedback')?.textContent?.trim().length>0);
  assert.equal(dialogs.at(-1)?.type,'alert');
  assert.ok(dialogs.at(-1)?.message.length>0);
- assert.equal(dialogs.length,3,'only two explicit confirmations and one save validation alert');
- assert.equal(await editor.getByRole('button',{name:'Novo',exact:true}).isDisabled(),true,'composed real New macro stays blocked');
+ assert.equal(dialogs.length,4,'one macro failure, two explicit confirmations and one save validation alert');
+ assert.equal(await editor.getByRole('button',{name:'Novo',exact:true}).isDisabled(),false,'exact real error sequence is supported');
  // API contract guard: a nonordered snapshot must never choose an arbitrary row.
  rows=[{id_nome:30,nome:'Synthetic C'},{id_nome:10,nome:'Synthetic A'}];
  await page.reload();await page.getByRole('button',{name:'Editar',exact:true}).first().click();
@@ -71,5 +77,5 @@ try{
  assert.match(await editor.innerText(),/sem chave numérica única e ordenada/);
  assert.ok(gets.every(url=>!url.includes('limit=')&&!url.includes('offset=')));
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
- console.log(JSON.stringify({status:'passed',actualMacros:['First','Last'],syntheticProbes:['Next','Previous','New'],unsavedGuard:true,boundaries:true,orderedSnapshotGuard:true,discardCancelPreserved:true,discardAcceptNavigated:true,validationAlert:true,dialogs:dialogs.map(d=>d.type),writes,errors},null,2));
+ console.log(JSON.stringify({status:'passed',actualMacros:['First','Last','Previous with conditional error','Next without stale error','New without write'],syntheticProbes:['Next','Previous','New'],unsavedGuard:true,boundaries:true,orderedSnapshotGuard:true,discardCancelPreserved:true,discardAcceptNavigated:true,validationAlert:true,dialogs:dialogs.map(d=>d.type),writes,errors},null,2));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
