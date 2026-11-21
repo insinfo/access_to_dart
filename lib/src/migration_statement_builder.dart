@@ -317,10 +317,10 @@ class MigrationStatementBuilder {
         'REFERENCES ${identifierPolicy.quotedTableName(relationship.toTable)} ($toColumns);',
       );
     }
-    for (final table in project.tables.where((table) => table.isSyntheticAttachmentTable)) {
-      final parentTableName = table.attachmentParentTable;
-      final parentColumnName = table.attachmentParentColumn;
-      final linkColumnName = table.attachmentLinkColumn;
+    for (final table in project.tables.where((table) => table.isSyntheticComplexTable)) {
+      final parentTableName = table.collectionParentTable;
+      final parentColumnName = table.collectionParentColumn;
+      final linkColumnName = table.collectionLinkColumn;
       if (parentTableName == null ||
           parentColumnName == null ||
           linkColumnName == null ||
@@ -329,7 +329,7 @@ class MigrationStatementBuilder {
         continue;
       }
       final syntheticRelationship = AnalysisRelationship(
-        name: 'fk_${table.name}_${parentTableName}_attachment',
+        name: 'fk_${table.name}_${parentTableName}_${table.syntheticKind}',
         fromTable: table.name,
         toTable: parentTableName,
         fromColumns: [linkColumnName],

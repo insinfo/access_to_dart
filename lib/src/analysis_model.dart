@@ -328,6 +328,10 @@ class AnalysisTable {
   final String? attachmentParentTable;
   final String? attachmentParentColumn;
   final String? attachmentLinkColumn;
+  final String? complexParentTable;
+  final String? complexParentColumn;
+  final String? complexLinkColumn;
+  final String? complexValueColumn;
   final List<AnalysisColumn> columns;
   final List<AnalysisIndex> indexes;
   final List<Map<String, dynamic>> sampleRows;
@@ -342,6 +346,10 @@ class AnalysisTable {
     this.attachmentParentTable,
     this.attachmentParentColumn,
     this.attachmentLinkColumn,
+    this.complexParentTable,
+    this.complexParentColumn,
+    this.complexLinkColumn,
+    this.complexValueColumn,
     required this.columns,
     required this.indexes,
     required this.sampleRows,
@@ -358,6 +366,10 @@ class AnalysisTable {
       attachmentParentTable: json['attachmentParentTable'] as String?,
       attachmentParentColumn: json['attachmentParentColumn'] as String?,
       attachmentLinkColumn: json['attachmentLinkColumn'] as String?,
+      complexParentTable: json['complexParentTable'] as String?,
+      complexParentColumn: json['complexParentColumn'] as String?,
+      complexLinkColumn: json['complexLinkColumn'] as String?,
+      complexValueColumn: json['complexValueColumn'] as String?,
       columns: ((json['columns'] as List?) ?? const [])
           .whereType<Map>()
           .map((column) =>
@@ -383,6 +395,12 @@ class AnalysisTable {
   String get routeFieldName => toCamelCaseIdentifier(name);
 
   bool get isSyntheticAttachmentTable => syntheticKind == 'attachment';
+  bool get isSyntheticMultiValueTable => syntheticKind == 'multivalue';
+  bool get isSyntheticComplexTable =>
+      isSyntheticAttachmentTable || isSyntheticMultiValueTable;
+  String? get collectionParentTable => complexParentTable ?? attachmentParentTable;
+  String? get collectionParentColumn => complexParentColumn ?? attachmentParentColumn;
+  String? get collectionLinkColumn => complexLinkColumn ?? attachmentLinkColumn;
 
   AnalysisIndex? get primaryKey {
     for (final index in indexes) {

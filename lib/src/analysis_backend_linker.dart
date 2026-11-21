@@ -78,11 +78,12 @@ class AnalysisBackendLinker {
       }
     }
 
-    // Attachment child tables are synthesized by analysis rather than present
+    // Complex child tables are synthesized by analysis rather than present
     // in the linked-table catalog, but are required by their materialized parent.
     for (final table in backendTables) {
-      if (table['syntheticKind'] != 'attachment') continue;
-      final parentKey = _lookupKey(table['attachmentParentTable'] as String? ?? '');
+      final collection = AnalysisTable.fromJson(table);
+      if (!collection.isSyntheticComplexTable) continue;
+      final parentKey = _lookupKey(collection.collectionParentTable ?? '');
       final key = _lookupKey(table['name'] as String? ?? '');
       if ((localTableKeys.contains(parentKey) || seenResolvedKeys.contains(parentKey)) &&
           !localTableKeys.contains(key) && seenResolvedKeys.add(key)) {
