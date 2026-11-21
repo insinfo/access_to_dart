@@ -99,5 +99,17 @@ fora das três tabelas auditadas.
 
 Atualização de dados complexos e quarentena em `35_complex_source_coverage.md`.
 Navegação de registros e sequências restritas de erro em `36_record_navigation.md`;
-correção da precisão Money em `37_currency_storage_scale.md`. A numeração VBA de
-novas famílias e a edição de coleções ainda estão em implementação.
+correção da precisão Money em `37_currency_storage_scale.md`. A regra de numeração de novas
+famílias foi reconhecida e validada em recorte gerado com PostgreSQL e navegador
+(`40_family_before_insert.md`): somente Salvar cria registro, com numeração
+atômica e proteção contra concorrência. O número é atribuído ao salvar, não na
+primeira digitação como no lifecycle original. Isso não prova os outros eventos
+nem o cadastro familiar completo.
+
+A API de leitura de multivalue passou no campo real MotivoNão e em fixture cujo
+ponteiro complexo difere da PK do pai. As nove coleções preservam PK e
+sinalização autonumérica físicas. A edição e apresentação desses controles
+continuam pendentes (doc35). A leitura estática adicional de parâmetros de
+relatórios no IDA 9.3 está em `42_ida_report_filter.md`; não equivale a relatório
+executável. A consulta CSPRONT1 está sendo preparada para comparação de seus
+resultados com DAO antes de integrar relatórios.
