@@ -21,6 +21,7 @@ import '../vba_parser/form_rule_extractor.dart';
 
 part 'project_generator_form_rules.dart';
 part 'subform_generator.dart';
+part 'multivalue_generator.dart';
 part 'project_generator_ir.dart';
 part 'project_generator_shared.dart';
 part 'codegen/backend_template_emitters.dart';

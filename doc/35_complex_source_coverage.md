@@ -164,3 +164,34 @@ Essa prova é posterior ao gate completo anterior de 54 tabelas, cujo baseline
 registrou 80 índices. A nova preservação das nove PKs foi validada neste banco
 isolado; não se apresenta o gate completo anterior como se já tivesse sido
 reexecutado com os novos metadados.
+
+## API de leitura de multivalue
+
+O scaffold backend agora emite um descritor estático para coleções multivaloradas
+que possuem mapeamento completo e PK física simples. O endpoint de leitura é
+`GET /api/v1/<modulo>/<id>/collections/<campo>`. Para o controle existente de
+FrmEncaminhamento, o caminho é
+`/api/v1/tb_encaminhamento/<id>/collections/motivo_nao`.
+
+A consulta primeiro encontra o registro pai pela PK, lê o ponteiro do campo
+complexo e então busca a tabela filha por esse ponteiro. Não presume que o
+ponteiro seja igual à PK do pai. A resposta contém `values` com pares `id`/`value`,
+ordenados pela PK física da filha, e `truncated` explícito após o limite de 100.
+Pai inexistente produz 404; campo desconhecido e ID inválido produzem 400;
+ponteiro NULL produz coleção vazia. Nomes SQL vêm somente do descritor gerado.
+
+O teste `generated_multivalue_read_postgres_test` migrou uma fixture controlada,
+gerou/analisou o backend e verificou HTTP real, ponteiro100 diferente de PK1,
+um filho de outro pai que não pode vazar, nulos, erros e dez leituras
+concorrentes. A contagem permaneceu inalterada (18 s).
+
+O teste `sigasul_multivalue_read_test` fez nova análise física, migrou o recorte
+real TbEncaminhamento/MotivoNão, gerou/analisou o backend e comparou a coleção
+retornada por HTTP com IDs/valores da tabela física para um registro selecionado
+(2 min). O caso real pode ter números coincidentes para PK/ponteiro; a distinção
+é provada separadamente pela fixture controlada.
+
+Esta etapa adiciona leitura HTTP, sem endpoints de escrita ou controles UI novos.
+A apresentação/edição da seleção múltipla no formulário e o tratamento das
+regras de evento continuam pendentes. Não foram criadas UIs para os dois campos
+multivalorados de TbDemandaReprimida que não possuem controles exportados.
