@@ -520,6 +520,9 @@ class _AccessQuerySqlBuilder {
   int inferQueryType(List<Map<String, dynamic>> rows) {
     final typeRow = rows.where((r) => r['Attribute'] == 1).firstOrNull;
     final explicit = _asInt(typeRow?['Flag']) ?? 0;
+    if (explicit >= 1 && explicit <= 9) {
+      return explicit;
+    }
     final mappedExplicit = _mapObjectFlagToQueryType(explicit);
     if (mappedExplicit != 0) {
       return mappedExplicit;
@@ -543,6 +546,8 @@ class _AccessQuerySqlBuilder {
     switch (queryType) {
       case 1:
         return _buildSelectSql(rows);
+      case 9:
+        return _buildUnionSql(rows);
       default:
         final parts = rows
             .where((r) => r['Expression'] != null)
@@ -585,6 +590,51 @@ class _AccessQuerySqlBuilder {
       default:
         return 0;
     }
+  }
+
+
+  String? _buildUnionSql(List<Map<String, dynamic>> rows) {
+    final flagRow = rows.where((r) => r['Attribute'] == 3).firstOrNull;
+    final unionFlags = _asInt(flagRow?['Flag']) ?? 0;
+    final unionKeyword = (unionFlags & 0x01) != 0 ? 'UNION ALL' : 'UNION';
+
+    final branchRows = rows
+        .where((r) =>
+            r['Attribute'] == 5 &&
+            (r['Expression']?.toString().trim().isNotEmpty ?? false))
+        .toList()
+      ..sort((a, b) =>
+          (a['Name2']?.toString() ?? '').compareTo(b['Name2']?.toString() ?? ''));
+
+    if (branchRows.isEmpty) {
+      return null;
+    }
+
+    final branches = <String>[];
+    for (final row in branchRows) {
+      var expr = (row['Expression']?.toString() ?? '').trim();
+      while (expr.endsWith(';')) {
+        expr = expr.substring(0, expr.length - 1).trimRight();
+      }
+      if (expr.isNotEmpty) {
+        branches.add(expr);
+      }
+    }
+    if (branches.isEmpty) {
+      return null;
+    }
+
+    final orderRows = rows.where((r) => r['Attribute'] == 11).toList();
+    final orderExprs = orderRows
+        .map((row) => _buildOrdering(row))
+        .whereType<String>()
+        .toList();
+
+    final sql = branches.join('\n$unionKeyword\n');
+    if (orderExprs.isEmpty) {
+      return sql;
+    }
+    return '$sql\nORDER BY\n  ${orderExprs.join(',\n  ')}';
   }
 
   String? _buildSelectSql(List<Map<String, dynamic>> rows) {
@@ -754,7 +804,12 @@ class _AccessQuerySqlBuilder {
       left ??= _SqlTableSource.raw(_quoteIdentifierPath(leftName), leftKey);
       right ??= _SqlTableSource.raw(_quoteIdentifierPath(rightName), rightKey);
 
-      final joined = _SqlTableSource.join(left, right, joinType, onExpr);
+      final _SqlTableSource joined;
+      if (identical(left, right) || left.overlaps(right)) {
+        joined = left.addAdditionalCondition(leftKey, rightKey, onExpr);
+      } else {
+        joined = _SqlTableSource.join(left, right, joinType, onExpr);
+      }
       for (final key in {...left.tableNames, ...right.tableNames}) {
         sourcesByName[key] = joined;
         usedNames.add(key);
@@ -880,15 +935,91 @@ class _AccessQuerySqlBuilder {
 }
 
 class _SqlTableSource {
-  final String sql;
   final Set<String> tableNames;
+  final String? _leafSql;
+  final _SqlTableSource? _leftChild;
+  final _SqlTableSource? _rightChild;
+  final String? _joinType;
+  final List<String> _onConditions;
 
-  const _SqlTableSource(this.sql, this.tableNames);
+  const _SqlTableSource._({
+    required this.tableNames,
+    String? leafSql,
+    _SqlTableSource? leftChild,
+    _SqlTableSource? rightChild,
+    String? joinType,
+    List<String> onConditions = const [],
+  })  : _leafSql = leafSql,
+        _leftChild = leftChild,
+        _rightChild = rightChild,
+        _joinType = joinType,
+        _onConditions = onConditions;
+
+  String get sql {
+    if (_leafSql != null) return _leafSql;
+    final onSql = _onConditions.length == 1
+        ? _onConditions.single
+        : _onConditions.map((c) => '($c)').join(' AND ');
+    return '(${_leftChild!.sql} $_joinType ${_rightChild!.sql} ON $onSql)';
+  }
 
   String get lookupKey => tableNames.first;
 
   bool overlaps(_SqlTableSource other) =>
       tableNames.any(other.tableNames.contains);
+
+  _SqlTableSource addAdditionalCondition(
+    String leftKey,
+    String rightKey,
+    String onExpression,
+  ) {
+    if (_leftChild == null || _rightChild == null) return this;
+    final normNew = onExpression.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    final leftHasLeft = _leftChild.tableNames.contains(leftKey);
+    final rightHasRight = _rightChild.tableNames.contains(rightKey);
+    final leftHasRight = _leftChild.tableNames.contains(rightKey);
+    final rightHasLeft = _rightChild.tableNames.contains(leftKey);
+    if ((leftHasLeft && rightHasRight) || (leftHasRight && rightHasLeft)) {
+      final exists = _onConditions.any(
+        (c) => c.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase() == normNew,
+      );
+      if (exists) return this;
+      return _SqlTableSource._(
+        tableNames: tableNames,
+        leftChild: _leftChild,
+        rightChild: _rightChild,
+        joinType: _joinType,
+        onConditions: [..._onConditions, onExpression],
+      );
+    }
+    if (_leftChild.tableNames.contains(leftKey) &&
+        _leftChild.tableNames.contains(rightKey)) {
+      final updatedLeft =
+          _leftChild.addAdditionalCondition(leftKey, rightKey, onExpression);
+      if (identical(updatedLeft, _leftChild)) return this;
+      return _SqlTableSource._(
+        tableNames: tableNames,
+        leftChild: updatedLeft,
+        rightChild: _rightChild,
+        joinType: _joinType,
+        onConditions: _onConditions,
+      );
+    }
+    if (_rightChild.tableNames.contains(leftKey) &&
+        _rightChild.tableNames.contains(rightKey)) {
+      final updatedRight =
+          _rightChild.addAdditionalCondition(leftKey, rightKey, onExpression);
+      if (identical(updatedRight, _rightChild)) return this;
+      return _SqlTableSource._(
+        tableNames: tableNames,
+        leftChild: _leftChild,
+        rightChild: updatedRight,
+        joinType: _joinType,
+        onConditions: _onConditions,
+      );
+    }
+    return this;
+  }
 
   static _SqlTableSource fromRow(
     Map<String, dynamic> row,
@@ -910,11 +1041,11 @@ class _SqlTableSource {
       if (tableName.isNotEmpty) tableName.toLowerCase(),
       if (alias != null && alias.isNotEmpty) alias.toLowerCase(),
     };
-    return _SqlTableSource(sourceSql.join(' '), keys);
+    return _SqlTableSource._(tableNames: keys, leafSql: sourceSql.join(' '));
   }
 
   static _SqlTableSource raw(String sql, String lookupKey) =>
-      _SqlTableSource(sql, {lookupKey});
+      _SqlTableSource._(tableNames: {lookupKey}, leafSql: sql);
 
   static _SqlTableSource join(
     _SqlTableSource left,
@@ -922,7 +1053,12 @@ class _SqlTableSource {
     String joinType,
     String onExpression,
   ) {
-    final sql = '(${left.sql} $joinType ${right.sql} ON $onExpression)';
-    return _SqlTableSource(sql, {...left.tableNames, ...right.tableNames});
+    return _SqlTableSource._(
+      tableNames: {...left.tableNames, ...right.tableNames},
+      leftChild: left,
+      rightChild: right,
+      joinType: joinType,
+      onConditions: [onExpression],
+    );
   }
 }

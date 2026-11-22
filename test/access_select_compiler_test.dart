@@ -178,4 +178,153 @@ void main() {
                   .existsSync()
               ? 'requires real local analysis and DAO shape'
               : false);
+
+  test('extended syntax supports UNION ALL, TOP, DISTINCTROW, PARAMETERS, GROUP BY, HAVING and Jet functions', () {
+    final tExt = AnalysisTable.fromJson({
+      'name': 'Atendimentos',
+      'columns': [
+        {'name': 'Id', 'typeCode': 4},
+        {'name': 'PessoaId', 'typeCode': 4},
+        {'name': 'Nome', 'typeCode': 10},
+        {'name': 'DataNasc', 'typeCode': 8},
+        {'name': 'DataAtend', 'typeCode': 8},
+        {'name': 'Ativo', 'typeCode': 1},
+        {'name': 'Valor', 'typeCode': 5},
+        {'name': 'Logo', 'typeCode': 18},
+      ]
+    });
+    final extCompiler = AccessSelectCompiler([tExt]);
+
+    // Strict mode still rejects extended constructs
+    for (final sql in [
+      'SELECT TOP 10 Atendimentos.Id FROM Atendimentos',
+      'SELECT COUNT(*) FROM Atendimentos',
+      'SELECT Atendimentos.Id FROM Atendimentos UNION ALL SELECT Atendimentos.Id FROM Atendimentos',
+      'SELECT Atendimentos.Id FROM Atendimentos WHERE Atendimentos.DataAtend BETWEEN #01/01/2024# AND #12/31/2024#',
+    ]) {
+      expect(
+        () => extCompiler.compile(sql, asciiCaseInsensitiveText: true),
+        throwsFormatException,
+        reason: 'strict rejects: $sql',
+      );
+    }
+
+    // PARAMETERS + DISTINCTROW + BETWEEN + DateDiff + Int + MonthName + Year + GROUP BY + HAVING + ungrouped Logo
+    final grouped = extCompiler.compile(
+      '\ufeffPARAMETERS [DataIni] DateTime, [DataFim] DateTime;\n'
+      'SELECT Atendimentos.Logo, MonthName(Month([DataAtend])) AS MesRef, '
+      'Int(DateDiff("d", [DataNasc], Date()) / 365.25) AS Idade, '
+      'Sum(Atendimentos.Ativo) AS SomaBool, Count(*) AS Qtd, First(Atendimentos.Nome) AS PrimeiroNome '
+      'FROM Atendimentos '
+      'WHERE Atendimentos.DataAtend BETWEEN [DataIni] AND [DataFim] '
+      'AND Atendimentos.DataAtend >= #01/15/2020# '
+      'AND Atendimentos.Nome LIKE [FiltroNome] + "*" '
+      'GROUP BY Int(DateDiff("d", [DataNasc], Date()) / 365.25), MonthName(Month([DataAtend])) '
+      'HAVING Count(*) > 1 '
+      'ORDER BY Int(DateDiff("d", [DataNasc], Date()) / 365.25) DESC;',
+      allowExtendedSyntax: true,
+      inferParameterTypes: true,
+      asciiCaseInsensitiveText: true,
+    );
+    expect(grouped.outputs.map((o) => o.name),
+        ['Logo', 'MesRef', 'Idade', 'SomaBool', 'Qtd', 'PrimeiroNome']);
+    expect(grouped.sql, contains('ARRAY_AGG("Atendimentos"."logo")'));
+    expect(grouped.sql, contains('SUM(CASE WHEN ("Atendimentos"."ativo") THEN -1 ELSE 0 END)'));
+    expect(grouped.sql, contains('BETWEEN CAST(\$'));
+    expect(grouped.sql, contains('ILIKE replace(replace'));
+    expect(grouped.sql, contains('HAVING (COUNT(*) >'));
+    expect(grouped.inferredParameterTypes['[DataIni]'], 8);
+    expect(grouped.inferredParameterTypes['[DataFim]'], 8);
+    final bound = grouped.bind({
+      '[DataIni]': '2024-01-01',
+      '[DataFim]': '2024-12-31',
+      '[FiltroNome]': 'João',
+    });
+    expect(bound, contains('2020-01-15'));
+    expect(bound, contains('João'));
+
+    // UNION ALL + digit-leading identifiers + hasLimit + correlated IN (SELECT ...)
+    final unionPlan = extCompiler.compile(
+      '(SELECT TOP 5 Atendimentos.Nome AS 0a5inc, 0 AS 6a11inc FROM Atendimentos WHERE Atendimentos.Ativo = Yes) '
+      'UNION ALL '
+      '(SELECT Atendimentos.Nome AS 0a5inc, Count(*) AS 6a11inc FROM Atendimentos GROUP BY Atendimentos.Nome) '
+      'ORDER BY 0a5inc DESC;',
+      allowExtendedSyntax: true,
+      inferParameterTypes: true,
+      asciiCaseInsensitiveText: true,
+      ordinalOutputAliases: true,
+    );
+    expect(unionPlan.isUnion, isTrue);
+    expect(unionPlan.sql, contains('UNION ALL'));
+    expect(unionPlan.sql, contains('LIMIT 5'));
+    expect(unionPlan.sql, contains('ORDER BY "c0" DESC'));
+    expect(unionPlan.outputs.map((o) => o.name), ['0a5inc', '6a11inc']);
+
+    // Correlated Find-Duplicates IN (SELECT ...) + duplicate projection auto-disambiguation
+    final corrPlan = extCompiler.compile(
+      'SELECT Atendimentos.Nome, Atendimentos.Nome, Atendimentos.Valor & " pts" AS Label '
+      'FROM Atendimentos '
+      'WHERE Atendimentos.Nome IN ('
+      '  SELECT Tmp.Nome FROM Atendimentos AS Tmp '
+      '  GROUP BY Tmp.Nome, Tmp.DataNasc '
+      '  HAVING Count(*) > 1 AND Tmp.DataNasc = Atendimentos.DataNasc'
+      ');',
+      allowExtendedSyntax: true,
+      asciiCaseInsensitiveText: true,
+    );
+    expect(corrPlan.outputs.map((o) => o.name), ['Nome', 'Nome_2', 'Label']);
+    expect(corrPlan.sql, contains('"Tmp"."data_nasc" = "Atendimentos"."data_nasc"'));
+
+    // Deep namedSubqueries chain (> 4 levels)
+    var nested = {'Q1': 'SELECT Atendimentos.Id, Atendimentos.Nome FROM Atendimentos'};
+    for (var k = 2; k <= 6; k++) {
+      nested['Q$k'] = 'SELECT Q${k - 1}.Id, Q${k - 1}.Nome FROM Q${k - 1}';
+    }
+    final deep = AccessSelectCompiler([tExt]).compile(
+      'SELECT DISTINCTROW TOP 3 Q6.Id, IIf(Q6.Nome IS NULL, Nz(Q6.Nome, "N/D"), UCase(Trim(Q6.Nome))) AS CleanName FROM Q6',
+      allowExtendedSyntax: true,
+      asciiCaseInsensitiveText: true,
+      namedSubqueries: nested,
+    );
+    expect(deep.hasLimit, isTrue);
+    expect(deep.sql, startsWith('SELECT DISTINCT '));
+    expect(deep.sql, endsWith('LIMIT 3'));
+  });
+
+  test('extended mode allows materialized calculated columns and reverse virtual 3-part lookup while strict mode rejects calculated columns', () {
+    final calcTable = AnalysisTable.fromJson({
+      'name': 'Items',
+      'columns': [
+        {'name': 'Id', 'typeCode': 4},
+        {'name': 'Total', 'typeCode': 5, 'isCalculated': true, 'calculatedExpression': '[Qty]*[Price]'},
+      ]
+    });
+    final extraTable = AnalysisTable.fromJson({
+      'name': 'Categories',
+      'columns': [
+        {'name': 'Id', 'typeCode': 4},
+        {'name': 'Code', 'typeCode': 10},
+      ]
+    });
+    final c = AccessSelectCompiler([calcTable, extraTable]);
+    expect(
+      () => c.compile('SELECT Items.Total FROM Items'),
+      throwsFormatException,
+    );
+    final extCalc = c.compile(
+      'SELECT Items.Id, Items.Total FROM Items',
+      allowExtendedSyntax: true,
+    );
+    expect(extCalc.outputs.map((o) => o.name), ['Id', 'Total']);
+
+    final revPlan = c.compile(
+      'SELECT OuterQ.Code FROM OuterQ',
+      allowExtendedSyntax: true,
+      namedSubqueries: {
+        'InnerQ': 'SELECT Items.Id, Categories.Id, Categories.Code FROM Items INNER JOIN Categories ON Items.Id = Categories.Id',
+        'OuterQ': 'SELECT InnerQ.Categories.Code FROM InnerQ',
+      },
+    );
+    expect(revPlan.outputs.single.name, 'Code');
+  });
 }

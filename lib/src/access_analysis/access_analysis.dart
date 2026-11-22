@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import '../identifier_utils.dart';
@@ -15,6 +16,8 @@ class AccessAnalysis {
   final List<CanonicalForm> forms = [];
   final List<CanonicalReport> reports = [];
   final List<CanonicalModule> modules = [];
+  final Map<String, Map<String, dynamic>> binaryFormsByName = {};
+  final Map<String, Map<String, dynamic>> binaryReportsByName = {};
 
   Future<void> extractFromDatabase(
     AccessDatabase db, {
@@ -57,35 +60,110 @@ class AccessAnalysis {
       return;
     }
 
-    final vbaTableReader = TableReader(
+    final storageReader = TableReader(
       format: db.format,
       pageChannel: db.pageChannel,
     );
-    final formTableReader = TableReader(
-      format: db.format,
-      pageChannel: db.pageChannel,
-    );
-    final vbaReader = VbaProjectReader(vbaTableReader);
+    final vbaReader = VbaProjectReader(storageReader);
     final vbaSources = await vbaReader.extractModules();
-    final formComponentCandidates = await _extractFormComponentCandidates(
-      formTableReader,
-      model,
-    );
-    final formMetadataByOrdinal = await _extractUiStorageMetadataByCatalogOrder(
-      tableReader: formTableReader,
-      objectCount: model.forms.length,
-    );
-    final reportComponentCandidates = await _extractUiComponentCandidates(
-      tableReader: formTableReader,
-      catalogNames: model.reports.map((report) => report.name),
-      tableNames: model.tables.map((table) => table.name).toSet(),
-      queryNames: model.queries
-          .where((query) => !_isTemporaryAccessObjectName(query.name))
-          .map((query) => query.name)
-          .toSet(),
-      relationships: model.relationships,
-      objectKind: 'report',
-    );
+    final vbaNormalized = <String, String>{
+      for (final entry in vbaSources.entries)
+        _normalizeLookupKey(entry.key): entry.value,
+    };
+    final storageId = await _findAccessStorageId(storageReader);
+    final storageRows = storageId == null
+        ? const <Map<String, dynamic>>[]
+        : await storageReader.readAllRows(storageId);
+    final tableNames = model.tables.map((table) => table.name).toSet();
+    final queryNames = model.queries
+        .where((query) => !_isTemporaryAccessObjectName(query.name))
+        .map((query) => query.name)
+        .toSet();
+
+    final formMetaByName = _extractFolderUiMetadata(storageRows, 'Forms');
+    final reportMetaByName = _extractFolderUiMetadata(storageRows, 'Reports');
+
+    final formComponentCandidates = formMetaByName.isNotEmpty
+        ? formMetaByName.entries
+            .map((entry) => _buildFormComponents(
+                  formName: entry.key,
+                  metadata: entry.value,
+                  tableNames: tableNames,
+                  queryNames: queryNames,
+                  relationships: model.relationships,
+                ))
+            .toList(growable: false)
+        : await _extractFormComponentCandidates(storageReader, model);
+
+    final formMetadataByOrdinal = formMetaByName.isNotEmpty
+        ? List<_UiStorageMetadata?>.filled(model.forms.length, null)
+        : await _extractUiStorageMetadataByCatalogOrder(
+            tableReader: storageReader,
+            objectCount: model.forms.length,
+          );
+
+    final reportComponentCandidates = reportMetaByName.isNotEmpty
+        ? reportMetaByName.entries
+            .map((entry) => _buildReportComponents(
+                  reportName: entry.key,
+                  metadata: entry.value,
+                  tableNames: tableNames,
+                  queryNames: queryNames,
+                ))
+            .toList(growable: false)
+        : await _extractUiComponentCandidates(
+            tableReader: storageReader,
+            catalogNames: model.reports.map((report) => report.name),
+            tableNames: tableNames,
+            queryNames: queryNames,
+            relationships: model.relationships,
+            objectKind: 'report',
+          );
+
+    for (final entry in formMetaByName.entries) {
+      final decoded = parseAccessUiBlob(entry.value.blobBytes, isReport: false);
+      if (decoded != null) {
+        final vba = _lookupFormVba(entry.key, vbaSources, vbaNormalized);
+        binaryFormsByName[entry.key.toLowerCase()] = <String, dynamic>{
+          'name': entry.key,
+          if (decoded.recordSource != null) 'recordSource': decoded.recordSource,
+          if (decoded.caption != null) 'caption': decoded.caption,
+          'properties': decoded.properties,
+          if (decoded.controlDefaults.isNotEmpty)
+            'controlDefaults': decoded.controlDefaults,
+          'sections': decoded.sections,
+          'controls': decoded.controls,
+          if (vba != null && vba.trim().isNotEmpty) ...{
+            'rawVbaCode': vba,
+            'hasModule': true,
+          },
+          'binaryStorageSha256': sha256.convert(entry.value.blobBytes).toString(),
+        };
+      }
+    }
+    for (final entry in reportMetaByName.entries) {
+      final decoded = parseAccessUiBlob(entry.value.blobBytes, isReport: true);
+      if (decoded != null) {
+        final vba = _lookupReportVba(entry.key, vbaSources, vbaNormalized);
+        binaryReportsByName[entry.key.toLowerCase()] = <String, dynamic>{
+          'name': entry.key,
+          if (decoded.recordSource != null) 'recordSource': decoded.recordSource,
+          if (decoded.caption != null) 'caption': decoded.caption,
+          'properties': decoded.properties,
+          if (decoded.controlDefaults.isNotEmpty)
+            'controlDefaults': decoded.controlDefaults,
+          if (decoded.groupLevels.isNotEmpty) 'groupLevels': decoded.groupLevels,
+          'sections': decoded.sections,
+          'controls': decoded.controls,
+          if (decoded.hasEventsOrMacros) 'hasEventsOrMacros': true,
+          if (vba != null && vba.trim().isNotEmpty) ...{
+            'rawVbaCode': vba,
+            'hasModule': true,
+          },
+          'binaryStorageSha256': sha256.convert(entry.value.blobBytes).toString(),
+        };
+      }
+    }
     final formComponents = <String, Map<String, dynamic>>{
       for (final candidate in formComponentCandidates)
         if ((candidate['formName'] as String?) != null)
@@ -106,13 +184,13 @@ class AccessAnalysis {
     };
 
     for (var m in model.modules) {
-      final snippet = vbaSources[m.name] ?? 'unparsed_vba_blob_placeholder';
+      final snippet = vbaSources[m.name] ?? vbaNormalized[_normalizeLookupKey(m.name)] ?? 'unparsed_vba_blob_placeholder';
       modules.add(CanonicalModule(m.name, snippet));
     }
 
     for (var formIndex = 0; formIndex < model.forms.length; formIndex++) {
       final f = model.forms[formIndex];
-      final source = vbaSources['Form_${f.name}'] ?? vbaSources[f.name];
+      final source = _lookupFormVba(f.name, vbaSources, vbaNormalized);
       final extractedComponents = formComponents[f.name] ??
           normalizedFormComponents[_normalizeLookupKey(f.name)] ??
           _fallbackComponentsForForm(
@@ -493,6 +571,110 @@ class AccessAnalysis {
       return value.substring(0, value.length - 1);
     }
     return value;
+  }
+
+  String? _lookupFormVba(
+    String formName,
+    Map<String, String> vbaSources,
+    Map<String, String> vbaNormalized,
+  ) {
+    return vbaSources['Form_$formName'] ??
+        vbaSources[formName] ??
+        vbaNormalized[_normalizeLookupKey('Form_$formName')] ??
+        vbaNormalized[_normalizeLookupKey(formName)];
+  }
+
+  String? _lookupReportVba(
+    String reportName,
+    Map<String, String> vbaSources,
+    Map<String, String> vbaNormalized,
+  ) {
+    return vbaSources['Report_$reportName'] ??
+        vbaNormalized[_normalizeLookupKey('Report_$reportName')];
+  }
+
+  Map<String, _UiStorageMetadata> _extractFolderUiMetadata(
+    List<Map<String, dynamic>> storageRows,
+    String folderName,
+  ) {
+    if (storageRows.isEmpty) return const {};
+    final childrenByParent = <int, List<Map<String, dynamic>>>{};
+    Map<String, dynamic>? rootRow;
+    for (final row in storageRows) {
+      final id = row['Id'] as int?;
+      final pid = row['ParentId'] as int?;
+      if (row['Name']?.toString() == 'MSysAccessStorage_ROOT') {
+        rootRow = row;
+      }
+      if (pid != null && pid != id) {
+        (childrenByParent[pid] ??= []).add(row);
+      }
+    }
+    final rootId = rootRow?['Id'] as int?;
+    if (rootId == null) return const {};
+    Map<String, dynamic>? folderRow;
+    for (final child in childrenByParent[rootId] ?? const <Map<String, dynamic>>[]) {
+      if (child['Name']?.toString() == folderName) {
+        folderRow = child;
+        break;
+      }
+    }
+    final folderId = folderRow?['Id'] as int?;
+    if (folderId == null) return const {};
+    final folderKids = childrenByParent[folderId] ?? const <Map<String, dynamic>>[];
+
+    Map<int, String> dirMap = const {};
+    for (final child in folderKids) {
+      if (child['Name']?.toString() == 'DirData') {
+        final bytes = _asBytes(child['Lv']);
+        if (bytes != null && bytes.isNotEmpty) {
+          dirMap = parseAccessDirData(Uint8List.fromList(bytes));
+        }
+        break;
+      }
+    }
+    if (dirMap.isEmpty) return const {};
+
+    final result = <String, _UiStorageMetadata>{};
+    for (final child in folderKids) {
+      final ord = int.tryParse(child['Name']?.toString() ?? '');
+      if (ord == null) continue;
+      final objName = dirMap[ord];
+      if (objName == null || objName.isEmpty) continue;
+      final childId = child['Id'] as int?;
+      if (childId == null) continue;
+
+      final siblingStreams = <String, List<int>>{};
+      for (final leaf in childrenByParent[childId] ?? const <Map<String, dynamic>>[]) {
+        final leafName = leaf['Name']?.toString();
+        final bytes = _asBytes(leaf['Lv']);
+        if (leafName != null && bytes != null && bytes.isNotEmpty) {
+          siblingStreams[leafName] = bytes;
+        }
+      }
+      final blobBytes = siblingStreams['Blob'];
+      if (blobBytes == null || blobBytes.isEmpty) continue;
+      final typeInfoBytes = siblingStreams['TypeInfo'];
+      final propDataBytes = siblingStreams['PropData'];
+      result[objName] = _UiStorageMetadata(
+        blobBytes: Uint8List.fromList(blobBytes),
+        blobStrings: _extractPrintableStrings(blobBytes).toList(growable: false),
+        typeInfoStrings: typeInfoBytes == null
+            ? const <String>[]
+            : _extractPrintableStrings(typeInfoBytes).toList(growable: false),
+        propertyMap: _readPropertyMap(propDataBytes),
+        siblingStreamLengths: <String, int>{
+          for (final entry in siblingStreams.entries)
+            entry.key: entry.value.length,
+        },
+        siblingStreamStrings: <String, List<String>>{
+          for (final entry in siblingStreams.entries)
+            entry.key:
+                _extractPrintableStrings(entry.value).toList(growable: false),
+        },
+      );
+    }
+    return result;
   }
 
   Future<int?> _findAccessStorageId(TableReader tableReader) async {

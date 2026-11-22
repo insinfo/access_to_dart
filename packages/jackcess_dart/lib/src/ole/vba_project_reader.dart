@@ -1,19 +1,56 @@
 import 'dart:typed_data';
 import '../table_reader.dart';
-import 'vba_decompressor.dart';
 
-/// Analisador puro e nativo de projetos VBA e MS-OVBA.
-/// Extrai módulos diretamente da tabela MSysAccessStorage.
+/// Metadata for an extracted VBA module from `MSysAccessStorage`.
+class VbaModuleEntry {
+  final String moduleName;
+  final String streamName;
+  final int textOffset;
+  final bool isProcedural;
+  final String sourceCode;
+  final int compressedStreamLength;
+
+  const VbaModuleEntry({
+    required this.moduleName,
+    required this.streamName,
+    required this.textOffset,
+    required this.isProcedural,
+    required this.sourceCode,
+    required this.compressedStreamLength,
+  });
+}
+
+/// Complete VBA project extraction scoped to `MSysAccessStorage_ROOT/VBA`.
+class VbaProjectExtraction {
+  final Map<String, String> modules;
+  final List<VbaModuleEntry> entries;
+  final List<String> projectStreamNames;
+  final int? accessVbaDataLength;
+  final Map<String, int> vbaStreamLengths;
+
+  const VbaProjectExtraction({
+    required this.modules,
+    required this.entries,
+    required this.projectStreamNames,
+    required this.accessVbaDataLength,
+    required this.vbaStreamLengths,
+  });
+}
+
+/// Pure native MS-OVBA reader for Access `MSysAccessStorage`.
 class VbaProjectReader {
   final TableReader reader;
 
   VbaProjectReader(this.reader);
 
-  /// Retorna um Map onde a chave é o nome do módulo VBA e o valor é o código-fonte em texto plano.
+  /// Extracts a map of `{moduleName: sourceCode}` from `MSysAccessStorage`.
   Future<Map<String, String>> extractModules() async {
-    final modules = <String, String>{};
+    final project = await extractProject();
+    return project.modules;
+  }
 
-    // 1. Encontrar o Id da tabela MSysAccessStorage no catálogo
+  /// Extracts modules and scoped VBA storage metadata from `MSysAccessStorage`.
+  Future<VbaProjectExtraction> extractProject() async {
     final catalogRows = await reader.readAllRows(2); // MSysObjects
     int storageId = -1;
     for (final row in catalogRows) {
@@ -24,94 +61,445 @@ class VbaProjectReader {
     }
 
     if (storageId == -1) {
-      return modules; // Sem VBA ou tabela de storage
+      return const VbaProjectExtraction(
+        modules: <String, String>{},
+        entries: <VbaModuleEntry>[],
+        projectStreamNames: <String>[],
+        accessVbaDataLength: null,
+        vbaStreamLengths: <String, int>{},
+      );
     }
 
-    // 2. Extrair as streams do MSysAccessStorage
     final storageRows = await reader.readAllRows(storageId);
-    final streams = <String, List<int>>{};
-    
-    for (final row in storageRows) {
-      final name = row['Name']?.toString();
-      final lv = row['Lv'];
-      if (name != null && lv is List<int> && lv.isNotEmpty) {
-        streams[name] = lv;
+    final scoped = _scopeVbaStreams(storageRows);
+    final vbaStreams = scoped.vbaStreams;
+    final projectStreams = scoped.projectStreams;
+
+    final dirBytes = vbaStreams['dir'];
+    final parsedDir = dirBytes == null ? const <_ModuleInfo>[] : _parseDirStream(dirBytes);
+
+    final modules = <String, String>{};
+    final entries = <VbaModuleEntry>[];
+
+    for (final info in parsedDir) {
+      final streamName = info.streamName;
+      if (streamName == null) {
+        continue;
+      }
+      final rawStream = vbaStreams[streamName];
+      if (rawStream == null || info.textOffset < 0 || info.textOffset >= rawStream.length) {
+        continue;
+      }
+
+      final compressedSlice = Uint8List.sublistView(
+        Uint8List.fromList(rawStream),
+        info.textOffset,
+      );
+      if (compressedSlice.isEmpty || compressedSlice.first != 0x01) {
+        continue;
+      }
+
+      try {
+        final plainTextBytes = _decompressMsOvba(compressedSlice);
+        final plainText = _decodeSourceText(plainTextBytes);
+        modules[info.moduleName] = plainText;
+        entries.add(
+          VbaModuleEntry(
+            moduleName: info.moduleName,
+            streamName: streamName,
+            textOffset: info.textOffset,
+            isProcedural: info.isProcedural,
+            sourceCode: plainText,
+            compressedStreamLength: rawStream.length,
+          ),
+        );
+      } catch (_) {
+        // Skip unreadable or corrupted compressed module streams.
       }
     }
 
-    // 3. Encontrar e descompactar a stream 'dir'
-    final moduleOffsets = _parseModuleOffsets(streams['dir']);
+    if (modules.isEmpty && parsedDir.isEmpty) {
+      final fallbackStreams = <String, List<int>>{
+        ...projectStreams,
+        ...vbaStreams,
+      };
+      modules.addAll(_recoverModulesWithoutDir(fallbackStreams));
+    }
 
-    // 5. Extrair código fonte das streams apontadas
-    for (final info in moduleOffsets.values) {
-      final streamName = info.streamName!;
-      final rawStream = streams[streamName];
-      
-      if (rawStream != null && info.textOffset < rawStream.length) {
-        // Encontra onde o source comprimido começa, removendo o PerformanceCache (P-Code)
-        final compressedTextParts = rawStream.sublist(info.textOffset);
-        
-        if (compressedTextParts.isNotEmpty && compressedTextParts.first == 0x01) {
-          try {
-            final plainTextBytes = VbaDecompressor.decompress(Uint8List.fromList(compressedTextParts));
-            var plainText = String.fromCharCodes(plainTextBytes);
-            
-            // Corrige line endings de \r\n para \n (opcional) e limpa lixo nulo
-            plainText = plainText.replaceAll('\r\n', '\n').replaceAll('\x00', '');
-            modules[info.moduleName] = plainText;
-          } catch (e) {
-            // Se falhar a descompressão, skip.
-          }
+    final projectStreamNames = <String>[
+      for (final name in const <String>['_VBA_PROJECT', 'dir', 'PROJECT', 'PROJECTwm'])
+        if (vbaStreams.containsKey(name) || projectStreams.containsKey(name)) name,
+    ];
+
+    final vbaStreamLengths = <String, int>{
+      for (final entry in vbaStreams.entries) entry.key: entry.value.length,
+    };
+
+    return VbaProjectExtraction(
+      modules: modules,
+      entries: entries,
+      projectStreamNames: projectStreamNames,
+      accessVbaDataLength: scoped.accessVbaDataLength,
+      vbaStreamLengths: vbaStreamLengths,
+    );
+  }
+
+  _ScopedVbaStreams _scopeVbaStreams(List<Map<String, dynamic>> storageRows) {
+    final byId = <int, Map<String, dynamic>>{};
+    final childrenByParentId = <int, List<Map<String, dynamic>>>{};
+    var hasParentIds = false;
+
+    for (final row in storageRows) {
+      final id = row['Id'];
+      final parentId = row['ParentId'];
+      if (id is int) {
+        byId[id] = row;
+      }
+      if (parentId is int) {
+        hasParentIds = true;
+        childrenByParentId.putIfAbsent(parentId, () => <Map<String, dynamic>>[]).add(row);
+      }
+    }
+
+    if (!hasParentIds) {
+      // Legacy fallback for flat synthetic storage tables without ParentId.
+      final flat = <String, List<int>>{};
+      for (final row in storageRows) {
+        final name = row['Name']?.toString();
+        final lv = row['Lv'];
+        if (name != null && lv is List<int> && lv.isNotEmpty) {
+          flat[name] = lv;
+        }
+      }
+      return _ScopedVbaStreams(
+        vbaStreams: flat,
+        projectStreams: flat,
+        accessVbaDataLength: flat['AcessVBAData']?.length,
+      );
+    }
+
+    Map<String, dynamic>? rootRow;
+    for (final row in storageRows) {
+      if (row['Name']?.toString() == 'MSysAccessStorage_ROOT') {
+        rootRow = row;
+        break;
+      }
+    }
+    rootRow ??= storageRows.where((row) => row['Id'] == row['ParentId']).firstOrNull;
+    if (rootRow == null) {
+      return const _ScopedVbaStreams(
+        vbaStreams: <String, List<int>>{},
+        projectStreams: <String, List<int>>{},
+        accessVbaDataLength: null,
+      );
+    }
+
+    final rootId = rootRow['Id'] as int;
+    final vbaFolder = _findChildFolder(childrenByParentId, rootId, 'VBA');
+    if (vbaFolder == null) {
+      return const _ScopedVbaStreams(
+        vbaStreams: <String, List<int>>{},
+        projectStreams: <String, List<int>>{},
+        accessVbaDataLength: null,
+      );
+    }
+
+    final vbaFolderId = vbaFolder['Id'] as int;
+    int? accessVbaDataLength;
+    for (final child in childrenByParentId[vbaFolderId] ?? const <Map<String, dynamic>>[]) {
+      if (child['Name']?.toString() == 'AcessVBAData') {
+        final lv = child['Lv'];
+        if (lv is List<int>) {
+          accessVbaDataLength = lv.length;
         }
       }
     }
 
-    if (modules.isEmpty) {
-      modules.addAll(_recoverModulesWithoutDir(streams));
+    final vbaProjectFolder = _findChildFolder(childrenByParentId, vbaFolderId, 'VBAProject');
+    if (vbaProjectFolder == null) {
+      return _ScopedVbaStreams(
+        vbaStreams: const <String, List<int>>{},
+        projectStreams: const <String, List<int>>{},
+        accessVbaDataLength: accessVbaDataLength,
+      );
     }
 
-    return modules;
+    final vbaProjectId = vbaProjectFolder['Id'] as int;
+    final projectStreams = <String, List<int>>{};
+    for (final child in childrenByParentId[vbaProjectId] ?? const <Map<String, dynamic>>[]) {
+      final name = child['Name']?.toString();
+      final lv = child['Lv'];
+      if (name != null && lv is List<int> && lv.isNotEmpty) {
+        projectStreams[name] = lv;
+      }
+    }
+
+    final vbaSubFolder = _findChildFolder(childrenByParentId, vbaProjectId, 'VBA');
+    if (vbaSubFolder == null) {
+      return _ScopedVbaStreams(
+        vbaStreams: const <String, List<int>>{},
+        projectStreams: projectStreams,
+        accessVbaDataLength: accessVbaDataLength,
+      );
+    }
+
+    final vbaSubId = vbaSubFolder['Id'] as int;
+    final vbaStreams = <String, List<int>>{};
+    for (final child in childrenByParentId[vbaSubId] ?? const <Map<String, dynamic>>[]) {
+      final name = child['Name']?.toString();
+      final lv = child['Lv'];
+      if (name != null && lv is List<int> && lv.isNotEmpty) {
+        vbaStreams[name] = lv;
+      }
+    }
+
+    return _ScopedVbaStreams(
+      vbaStreams: vbaStreams,
+      projectStreams: projectStreams,
+      accessVbaDataLength: accessVbaDataLength,
+    );
   }
 
-  Map<String, _ModuleInfo> _parseModuleOffsets(List<int>? dirCompressed) {
-    final moduleOffsets = <String, _ModuleInfo>{};
-    if (dirCompressed == null || dirCompressed.isEmpty || dirCompressed.first != 0x01) {
-      return moduleOffsets;
+  Map<String, dynamic>? _findChildFolder(
+    Map<int, List<Map<String, dynamic>>> childrenByParentId,
+    int parentId,
+    String targetName,
+  ) {
+    final kids = childrenByParentId[parentId];
+    if (kids == null) {
+      return null;
+    }
+    for (final child in kids) {
+      if (child['Id'] == parentId) {
+        continue;
+      }
+      if (child['Name']?.toString() == targetName) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  /// Parses the MS-OVBA 2.3.4.2 `dir` stream sequentially without skipping records.
+  List<_ModuleInfo> _parseDirStream(List<int> dirCompressed) {
+    if (dirCompressed.isEmpty || dirCompressed.first != 0x01) {
+      return const <_ModuleInfo>[];
     }
 
-    final dirPayload = VbaDecompressor.decompress(Uint8List.fromList(dirCompressed));
-    _ModuleInfo? currentInfo;
-    for (int pos = 0; pos < dirPayload.length - 6; pos++) {
+    final dirPayload = _decompressMsOvba(Uint8List.fromList(dirCompressed));
+    final modules = <_ModuleInfo>[];
+
+    String? nameMbcs;
+    String? nameUnicode;
+    String? streamMbcs;
+    String? streamUnicode;
+    int textOffset = 0;
+    bool isProcedural = false;
+
+    void flushCurrentModule() {
+      final moduleName = (nameUnicode != null && nameUnicode!.isNotEmpty)
+          ? nameUnicode
+          : nameMbcs;
+      final streamName = (streamUnicode != null && streamUnicode!.isNotEmpty)
+          ? streamUnicode
+          : streamMbcs;
+      if (moduleName != null &&
+          moduleName.isNotEmpty &&
+          streamName != null &&
+          streamName.isNotEmpty) {
+        modules.add(
+          _ModuleInfo(
+            moduleName: moduleName,
+            streamName: streamName,
+            textOffset: textOffset,
+            isProcedural: isProcedural,
+          ),
+        );
+      }
+      nameMbcs = null;
+      nameUnicode = null;
+      streamMbcs = null;
+      streamUnicode = null;
+      textOffset = 0;
+      isProcedural = false;
+    }
+
+    var pos = 0;
+    while (pos + 6 <= dirPayload.length) {
       final id = dirPayload[pos] | (dirPayload[pos + 1] << 8);
+      final size = dirPayload[pos + 2] |
+          (dirPayload[pos + 3] << 8) |
+          (dirPayload[pos + 4] << 16) |
+          (dirPayload[pos + 5] << 24);
 
-      if (id == 0x0019 || id == 0x001A || id == 0x0031) {
-        final size = dirPayload[pos + 2] |
-            (dirPayload[pos + 3] << 8) |
-            (dirPayload[pos + 4] << 16) |
-            (dirPayload[pos + 5] << 24);
+      // MS-OVBA 2.3.4.2.1.10 PROJECTVERSION has Reserved=4 followed by 6 fixed bytes.
+      if (id == 0x0009) {
+        if (pos + 12 > dirPayload.length) {
+          break;
+        }
+        pos += 12;
+        continue;
+      }
 
-        if (size > 0 && size < 256 && pos + 6 + size <= dirPayload.length) {
-          final payload = dirPayload.sublist(pos + 6, pos + 6 + size);
+      if (size < 0 || pos + 6 + size > dirPayload.length) {
+        break;
+      }
 
-          if (id == 0x0019) {
-            currentInfo = _ModuleInfo(String.fromCharCodes(payload));
-          } else if (id == 0x001A && currentInfo != null) {
-            currentInfo.streamName = String.fromCharCodes(payload);
-          } else if (id == 0x0031 && currentInfo != null && size == 4) {
-            currentInfo.textOffset = payload[0] |
+      final payload = dirPayload.sublist(pos + 6, pos + 6 + size);
+      switch (id) {
+        case 0x0019: // MODULENAME (MBCS)
+          nameMbcs = _decodeWindows1252(payload);
+          break;
+        case 0x0047: // MODULENAMEUNICODE (UTF-16LE)
+          nameUnicode = _decodeUtf16Le(payload);
+          break;
+        case 0x001A: // MODULESTREAMNAME (MBCS)
+          streamMbcs = _decodeWindows1252(payload);
+          break;
+        case 0x0032: // MODULESTREAMNAMEUNICODE (UTF-16LE)
+          streamUnicode = _decodeUtf16Le(payload);
+          break;
+        case 0x0031: // MODULEOFFSET (uint32)
+          if (payload.length >= 4) {
+            textOffset = payload[0] |
                 (payload[1] << 8) |
                 (payload[2] << 16) |
                 (payload[3] << 24);
+          }
+          break;
+        case 0x0021: // MODULETYPE Procedural
+          isProcedural = true;
+          break;
+        case 0x0022: // MODULETYPE Document/Class
+          isProcedural = false;
+          break;
+        case 0x002B: // MODULETERMINATOR
+          flushCurrentModule();
+          break;
+        case 0x0010: // PROJECTMODULES terminator / project end
+          flushCurrentModule();
+          break;
+      }
 
-            if (currentInfo.streamName != null) {
-              moduleOffsets[currentInfo.streamName!] = currentInfo;
+      pos += 6 + size;
+    }
+
+    flushCurrentModule();
+    return modules;
+  }
+
+  /// MS-OVBA 2.4.1 RLE decompression.
+  List<int> _decompressMsOvba(Uint8List compressedData) {
+    if (compressedData.isEmpty) {
+      return const <int>[];
+    }
+    if (compressedData[0] != 0x01) {
+      throw FormatException(
+        'MS-OVBA signature byte must be 0x01, found: ${compressedData[0]}',
+      );
+    }
+
+    final decompressed = <int>[];
+    var offset = 1;
+
+    while (offset + 2 <= compressedData.length) {
+      final chunkHeader = compressedData[offset] | (compressedData[offset + 1] << 8);
+      offset += 2;
+
+      final chunkDataLength = (chunkHeader & 0x0FFF) + 1;
+      final isCompressed = (chunkHeader & 0x8000) != 0;
+      final chunkEnd = offset + chunkDataLength;
+      final chunkDecompressedStart = decompressed.length;
+
+      if (!isCompressed) {
+        while (offset < chunkEnd && offset < compressedData.length) {
+          decompressed.add(compressedData[offset]);
+          offset++;
+        }
+      } else {
+        while (offset < chunkEnd && offset < compressedData.length) {
+          final flagByte = compressedData[offset];
+          offset++;
+
+          for (var bitIndex = 0; bitIndex < 8; bitIndex++) {
+            if (offset >= chunkEnd || offset >= compressedData.length) {
+              break;
             }
-            currentInfo = null;
+            if (((flagByte >> bitIndex) & 1) == 0) {
+              decompressed.add(compressedData[offset]);
+              offset++;
+            } else {
+              if (offset + 1 >= chunkEnd || offset + 1 >= compressedData.length) {
+                offset = chunkEnd;
+                break;
+              }
+              final copyToken =
+                  compressedData[offset] | (compressedData[offset + 1] << 8);
+              offset += 2;
+
+              final decompressedChunkSize =
+                  decompressed.length - chunkDecompressedStart;
+              var offsetBits = 4;
+              while ((1 << offsetBits) < decompressedChunkSize) {
+                offsetBits++;
+              }
+              final lengthBits = 16 - offsetBits;
+              final lengthMask = (1 << lengthBits) - 1;
+              final offsetMask = (~lengthMask) & 0xFFFF;
+
+              final copyLength = (copyToken & lengthMask) + 3;
+              final copyOffset = ((copyToken & offsetMask) >> lengthBits) + 1;
+
+              final copySource = decompressed.length - copyOffset;
+              for (var i = 0; i < copyLength; i++) {
+                if (copySource + i >= 0 && copySource + i < decompressed.length) {
+                  decompressed.add(decompressed[copySource + i]);
+                } else {
+                  decompressed.add(0);
+                }
+              }
+            }
           }
         }
       }
+
+      offset = chunkEnd;
     }
-    return moduleOffsets;
+
+    return decompressed;
+  }
+
+  String _decodeSourceText(List<int> bytes) {
+    return _decodeWindows1252(bytes)
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\x00', '');
+  }
+
+  String _decodeUtf16Le(List<int> bytes) {
+    final units = <int>[];
+    for (var i = 0; i + 1 < bytes.length; i += 2) {
+      units.add(bytes[i] | (bytes[i + 1] << 8));
+    }
+    return String.fromCharCodes(units).replaceAll('\x00', '');
+  }
+
+  static const List<int> _cp1252HighMap = <int>[
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
+  ];
+
+  String _decodeWindows1252(List<int> bytes) {
+    final buffer = StringBuffer();
+    for (final byte in bytes) {
+      if (byte >= 0x80 && byte <= 0x9F) {
+        buffer.writeCharCode(_cp1252HighMap[byte - 0x80]);
+      } else {
+        buffer.writeCharCode(byte);
+      }
+    }
+    return buffer.toString();
   }
 
   Map<String, String> _recoverModulesWithoutDir(Map<String, List<int>> streams) {
@@ -267,7 +655,7 @@ class VbaProjectReader {
   }
 
   List<String> _parseProjectDocClasses(List<int> projectStream) {
-    final text = String.fromCharCodes(projectStream);
+    final text = _decodeWindows1252(projectStream);
     final docClasses = <String>[];
     for (final line in text.split('\n')) {
       final trimmed = line.trim();
@@ -325,12 +713,10 @@ class VbaProjectReader {
         continue;
       }
       try {
-        final plainTextBytes = VbaDecompressor.decompress(
+        final plainTextBytes = _decompressMsOvba(
           Uint8List.fromList(rawStream.sublist(offset)),
         );
-        final plainText = String.fromCharCodes(plainTextBytes)
-            .replaceAll('\r\n', '\n')
-            .replaceAll('\x00', '');
+        final plainText = _decodeSourceText(plainTextBytes);
         final score = _vbaSourceScore(plainText);
         if (score > bestScore) {
           bestScore = score;
@@ -413,12 +799,30 @@ class VbaProjectReader {
   }
 }
 
+class _ScopedVbaStreams {
+  final Map<String, List<int>> vbaStreams;
+  final Map<String, List<int>> projectStreams;
+  final int? accessVbaDataLength;
+
+  const _ScopedVbaStreams({
+    required this.vbaStreams,
+    required this.projectStreams,
+    required this.accessVbaDataLength,
+  });
+}
+
 class _ModuleInfo {
   final String moduleName;
-  String? streamName;
-  int textOffset = 0;
+  final String? streamName;
+  final int textOffset;
+  final bool isProcedural;
 
-  _ModuleInfo(this.moduleName);
+  const _ModuleInfo({
+    required this.moduleName,
+    this.streamName,
+    this.textOffset = 0,
+    this.isProcedural = false,
+  });
 }
 
 class _ProjectModuleBinding {

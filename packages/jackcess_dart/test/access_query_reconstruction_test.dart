@@ -106,6 +106,65 @@ void main() {
       expect(sql, 'SELECT 1');
     });
 
+    test('recognizes canonical queryType values 1..9 in Attribute=1 rows', () {
+      expect(
+        AccessCatalog.inferQueryTypeFromRows([
+          {'Attribute': 1, 'Flag': 1},
+        ]),
+        1,
+      );
+      expect(
+        AccessCatalog.inferQueryTypeFromRows([
+          {'Attribute': 1, 'Flag': 9},
+        ]),
+        9,
+      );
+    });
+
+    test('reconstructs UNION and UNION ALL queries with optional ORDER BY', () {
+      final unionAllSql = AccessCatalog.reconstructSqlFromRows([
+        {'Attribute': 1, 'Flag': 9},
+        {'Attribute': 3, 'Flag': 1},
+        {'Attribute': 5, 'Name2': 'X7YZ_____2', 'Expression': 'SELECT 2 AS N FROM B;'},
+        {'Attribute': 5, 'Name2': 'X7YZ_____1', 'Expression': 'SELECT 1 AS N FROM A'},
+      ], 9);
+      expect(unionAllSql, 'SELECT 1 AS N FROM A\nUNION ALL\nSELECT 2 AS N FROM B');
+
+      final unionOrderedSql = AccessCatalog.reconstructSqlFromRows([
+        {'Attribute': 1, 'Flag': 9},
+        {'Attribute': 3, 'Flag': 0},
+        {'Attribute': 5, 'Name2': 'X7YZ_____1', 'Expression': 'SELECT A.Nome FROM A'},
+        {'Attribute': 5, 'Name2': 'X7YZ_____2', 'Expression': 'SELECT B.Nome FROM B'},
+        {'Attribute': 11, 'Expression': 'Nome', 'Name1': 'D'},
+      ], 9);
+      expect(
+        unionOrderedSql,
+        'SELECT A.Nome FROM A\nUNION\nSELECT B.Nome FROM B\nORDER BY\n  [Nome] DESC',
+      );
+    });
+
+    test('deduplicates repeated Attribute=7 join rows and combines distinct conditions cleanly', () {
+      final dupSql = AccessCatalog.reconstructSqlFromRows([
+        {'Attribute': 5, 'Name1': 'A'},
+        {'Attribute': 5, 'Name1': 'B'},
+        {'Attribute': 6, 'Expression': 'A.Id'},
+        {'Attribute': 7, 'Flag': 1, 'Name1': 'A', 'Name2': 'B', 'Expression': 'A.Id = B.AId'},
+        {'Attribute': 7, 'Flag': 1, 'Name1': 'A', 'Name2': 'B', 'Expression': 'A.Id = B.AId'},
+      ], 1);
+      expect(dupSql, contains('([A] INNER JOIN [B] ON A.Id = B.AId)'));
+      expect('INNER JOIN'.allMatches(dupSql!).length, 1);
+
+      final compoundSql = AccessCatalog.reconstructSqlFromRows([
+        {'Attribute': 5, 'Name1': 'A'},
+        {'Attribute': 5, 'Name1': 'B'},
+        {'Attribute': 6, 'Expression': 'A.Id'},
+        {'Attribute': 7, 'Flag': 1, 'Name1': 'A', 'Name2': 'B', 'Expression': 'A.Id = B.AId'},
+        {'Attribute': 7, 'Flag': 1, 'Name1': 'A', 'Name2': 'B', 'Expression': 'A.Kind = B.Kind'},
+      ], 1);
+      expect(compoundSql, contains('(A.Id = B.AId) AND (A.Kind = B.Kind)'));
+      expect('INNER JOIN'.allMatches(compoundSql!).length, 1);
+    });
+
     test('reconstructs top select flag', () {
       final sql = AccessCatalog.reconstructSqlFromRows([
         {'Attribute': 3, 'Flag': 0x10, 'Name1': '50'},

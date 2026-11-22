@@ -73,10 +73,29 @@ class AccdbAnalyzer {
       'linkedTables': model.linkedTables.map((t) => t.toJson()).toList(),
       'relationships': model.relationships.map((r) => r.toJson()).toList(),
       'queries': stableQueries.map((q) => q.toJson()).toList(),
-      'forms': model.forms.map((f) => f.toJson()).toList(),
-      'reports': model.reports.map((r) => r.toJson()).toList(),
+      'forms': model.forms.map((f) {
+        final base = f.toJson();
+        final decoded = canonicalAnalysis.binaryFormsByName[f.name.toLowerCase()];
+        return decoded == null ? base : <String, dynamic>{...base, ...decoded};
+      }).toList(),
+      'reports': model.reports.map((r) {
+        final base = r.toJson();
+        final decoded = canonicalAnalysis.binaryReportsByName[r.name.toLowerCase()];
+        return decoded == null ? base : <String, dynamic>{...base, ...decoded};
+      }).toList(),
       'macros': model.macros.map((m) => m.toJson()).toList(),
-      'modules': model.modules.map((m) => m.toJson()).toList(),
+      'modules': model.modules.map((m) {
+        final base = m.toJson();
+        final matched = canonicalAnalysis.modules
+            .where((cm) => cm.name.toLowerCase() == m.name.toLowerCase())
+            .firstOrNull;
+        if (matched != null &&
+            matched.rawVbaCode.isNotEmpty &&
+            matched.rawVbaCode != 'unparsed_vba_blob_placeholder') {
+          return <String, dynamic>{...base, 'rawVbaCode': matched.rawVbaCode};
+        }
+        return base;
+      }).toList(),
       if (databaseProperties.isNotEmpty)
         'database_properties': databaseProperties,
       if (resources.isNotEmpty) 'resources': resources,

@@ -309,3 +309,488 @@ class BlobLayoutParser {
     return bytes;
   }
 }
+
+
+/// Parses an MSysAccessStorage `DirData` stream into an `(ordinal -> objectName)` map.
+///
+/// Format verified across Access ACCDB storages: 4-byte LE header followed by
+/// repeated records `[tag=0x04][len][UTF-16LE name (len - 4 bytes)][u32 ordinal]`.
+Map<int, String> parseAccessDirData(Uint8List bytes) {
+  final result = <int, String>{};
+  if (bytes.length < 4) return result;
+  var pos = 4;
+  while (pos + 2 <= bytes.length) {
+    final prevPos = pos;
+    final tag = bytes[pos];
+    final len = bytes[pos + 1];
+    if (tag != 0x04 || len < 4 || pos + 2 + len > bytes.length) {
+      break;
+    }
+    final nameLen = len - 4;
+    final name = _decodeUtf16LeSlice(bytes, pos + 2, nameLen);
+    final ord = _readUint32Le(bytes, pos + 2 + nameLen);
+    if (name.isNotEmpty) {
+      result[ord] = name;
+    }
+    pos += 2 + len;
+    if (pos <= prevPos) break;
+  }
+  return result;
+}
+
+class AccessBlobProperty {
+  final int propertyId;
+  final int typeCode;
+  final Uint8List payload;
+
+  const AccessBlobProperty({
+    required this.propertyId,
+    required this.typeCode,
+    required this.payload,
+  });
+
+  String? get stringValue {
+    if (typeCode != 0x0A && typeCode != 0x0C) return null;
+    return _decodeUtf16LeSlice(payload, 0, payload.length);
+  }
+
+  int? get intValue {
+    if (typeCode == 3 && payload.length == 2) {
+      return ByteData.sublistView(payload).getInt16(0, Endian.little);
+    }
+    if (typeCode == 4 && payload.length == 4) {
+      return ByteData.sublistView(payload).getInt32(0, Endian.little);
+    }
+    if ((typeCode == 1 || typeCode == 2) && payload.isNotEmpty) {
+      return payload[0];
+    }
+    return null;
+  }
+}
+
+class AccessBlobObject {
+  final int objectType;
+  final List<AccessBlobProperty> properties;
+
+  const AccessBlobObject({
+    required this.objectType,
+    required this.properties,
+  });
+
+  AccessBlobProperty? prop(int id) {
+    for (final p in properties) {
+      if (p.propertyId == id) return p;
+    }
+    return null;
+  }
+
+  String? str(int id) => prop(id)?.stringValue;
+  int? numVal(int id) => prop(id)?.intValue;
+  bool hasFlag(int id) => prop(id) != null;
+}
+
+class AccessDecodedUiBlob {
+  final bool isReport;
+  final String? recordSource;
+  final String? caption;
+  final Map<String, String> properties;
+  final Map<String, Map<String, String>> controlDefaults;
+  final List<Map<String, dynamic>> groupLevels;
+  final List<Map<String, dynamic>> sections;
+  final List<Map<String, dynamic>> controls;
+  final bool hasEventsOrMacros;
+
+  const AccessDecodedUiBlob({
+    required this.isReport,
+    required this.recordSource,
+    required this.caption,
+    required this.properties,
+    required this.controlDefaults,
+    required this.groupLevels,
+    required this.sections,
+    required this.controls,
+    required this.hasEventsOrMacros,
+  });
+}
+
+/// Decodes a binary MSysAccessStorage Form/Report `Blob` stream into structured
+/// properties, control defaults, group levels, sections and controls.
+AccessDecodedUiBlob? parseAccessUiBlob(
+  Uint8List bytes, {
+  required bool isReport,
+}) {
+  if (bytes.length < 10) return null;
+  final rootType = _readUint16Le(bytes, 8);
+  if (rootType != 150 && rootType != 151) return null;
+
+  final objects = <AccessBlobObject>[];
+  var pos = 10;
+  var expectingCount = false;
+  var seenObjects = 0;
+
+  while (pos < bytes.length && objects.length < 10000) {
+    final outerPrev = pos;
+    if (expectingCount) {
+      if (pos + 2 > bytes.length) break;
+      pos += 2;
+      expectingCount = false;
+      continue;
+    }
+
+    var objType = seenObjects == 0 ? rootType : 0;
+    if (seenObjects > 0) {
+      if (pos + 4 <= bytes.length) {
+        final marker = _readUint32Le(bytes, pos);
+        if (marker == 0x00FD || marker == 0x00FE || marker == 0x00FF) {
+          pos += 4;
+          if (marker == 0x00FF) expectingCount = true;
+          continue;
+        }
+      }
+      if (pos + 2 > bytes.length) break;
+      objType = _readUint16Le(bytes, pos);
+      pos += 2;
+    }
+    seenObjects++;
+
+    final props = <AccessBlobProperty>[];
+    while (pos < bytes.length && props.length < 2000) {
+      final innerPrev = pos;
+      if (pos + 4 > bytes.length) break;
+      final pid = _readUint32Le(bytes, pos);
+      if (pid == 0x00FD || pid == 0x00FE || pid == 0x00FF) {
+        pos += 4;
+        if (pid == 0x00FF) expectingCount = true;
+        break;
+      }
+      if (pos + 18 > bytes.length) return null;
+      final tc = _readUint16Le(bytes, pos + 6);
+      final unk2 = _readUint16Le(bytes, pos + 8);
+      final payloadLen = _readUint32Le(bytes, pos + 14);
+      if (tc == 0 ||
+          tc > 100 ||
+          (unk2 != 0 && unk2 != 1 && unk2 != 2) ||
+          pos + 18 + payloadLen > bytes.length) {
+        return null;
+      }
+      props.add(AccessBlobProperty(
+        propertyId: pid,
+        typeCode: tc,
+        payload: Uint8List.sublistView(bytes, pos + 18, pos + 18 + payloadLen),
+      ));
+      pos += 18 + payloadLen;
+      if (pos <= innerPrev) return null;
+    }
+    objects.add(AccessBlobObject(objectType: objType, properties: props));
+    if (pos <= outerPrev) break;
+  }
+
+  if (objects.isEmpty) return null;
+  final root = objects.first;
+  final rootProps = <String, String>{};
+  final width = root.numVal(99);
+  if (width != null && width > 0) rootProps['Width'] = '$width';
+  final recordSource = root.str(220)?.trim();
+  if (recordSource != null && recordSource.isNotEmpty) {
+    rootProps['RecordSource'] = recordSource;
+  }
+  final caption = root.str(221);
+  if (caption != null && caption.isNotEmpty) {
+    rootProps['Caption'] = caption;
+  }
+  final filter = root.str(195)?.trim();
+  if (filter != null && filter.isNotEmpty) {
+    rootProps['Filter'] = filter;
+  }
+  if (!isReport) {
+    if (root.hasFlag(17)) rootProps['AllowDeletions'] = 'NotDefault';
+    if (root.hasFlag(21)) rootProps['AllowAdditions'] = 'NotDefault';
+    if (root.hasFlag(26)) rootProps['AllowEdits'] = 'NotDefault';
+  }
+  var hasEventsOrMacros = false;
+  for (final p in root.properties) {
+    final s = p.stringValue;
+    if (s == '[Event Procedure]' || s == '[Embedded Macro]') {
+      hasEventsOrMacros = true;
+    }
+  }
+
+  final controlDefaults = <String, Map<String, String>>{};
+  final groupLevels = <Map<String, dynamic>>[];
+  final sections = <Map<String, dynamic>>[];
+  final allControls = <Map<String, dynamic>>[];
+  Map<String, dynamic>? currentSection;
+  var seenSection = false;
+
+  for (var i = 1; i < objects.length; i++) {
+    final obj = objects[i];
+    final ot = obj.objectType;
+
+    if (ot == 159) {
+      final glSource = obj.str(220)?.trim();
+      if (glSource != null && glSource.isNotEmpty) {
+        final glProps = <String, String>{'ControlSource': glSource};
+        if (obj.hasFlag(0)) glProps['SortOrder'] = 'NotDefault';
+        if (obj.hasFlag(1)) glProps['GroupHeader'] = 'NotDefault';
+        if (obj.hasFlag(2)) glProps['GroupFooter'] = 'NotDefault';
+        final groupOn = obj.numVal(49);
+        if (groupOn != null && groupOn != 0) glProps['GroupOn'] = '$groupOn';
+        groupLevels.add(<String, dynamic>{
+          'controlSource': glSource,
+          if (obj.hasFlag(0)) 'sortOrder': 'NotDefault',
+          if (obj.hasFlag(1)) 'groupHeader': 'NotDefault',
+          if (obj.hasFlag(2)) 'groupFooter': 'NotDefault',
+          'properties': glProps,
+        });
+      }
+      continue;
+    }
+
+    final secType = _sectionTypeName(ot, isReport: isReport);
+    if (secType != null) {
+      seenSection = true;
+      final secHeight = obj.numVal(96) ?? 0;
+      final secName = obj.str(223) ?? secType;
+      final secProps = <String, String>{'Height': '$secHeight'};
+      final backColor = obj.numVal(267);
+      if (backColor != null) secProps['BackColor'] = '$backColor';
+      currentSection = <String, dynamic>{
+        'type': secType,
+        'name': secName,
+        'height': secHeight,
+        'properties': secProps,
+        'controls': <Map<String, dynamic>>[],
+      };
+      sections.add(currentSection);
+      continue;
+    }
+
+    final ctrlType = _controlTypeName(ot);
+    if (ctrlType == null) continue;
+
+    final cProps = _decodeControlProperties(obj, ctrlType);
+    if (!seenSection) {
+      controlDefaults[ctrlType] = cProps;
+      continue;
+    }
+
+    final ctrlName = obj.str(220)?.trim() ?? '';
+    if (ctrlName.isEmpty) continue;
+
+    final ctrlMap = <String, dynamic>{
+      'type': ctrlType,
+      'name': ctrlName,
+      if (cProps['Caption'] != null) 'caption': cProps['Caption'],
+      if (cProps['ControlSource'] != null) 'controlSource': cProps['ControlSource'],
+      if (cProps['SourceObject'] != null) 'sourceObject': cProps['SourceObject'],
+      if (cProps['LinkMasterFields'] != null) 'linkMasterFields': cProps['LinkMasterFields'],
+      if (cProps['LinkChildFields'] != null) 'linkChildFields': cProps['LinkChildFields'],
+      if (cProps['Left'] != null) 'left': int.tryParse(cProps['Left']!),
+      if (cProps['Top'] != null) 'top': int.tryParse(cProps['Top']!),
+      if (cProps['Width'] != null) 'width': int.tryParse(cProps['Width']!),
+      if (cProps['Height'] != null) 'height': int.tryParse(cProps['Height']!),
+      if (currentSection != null) 'section': currentSection['name'],
+      'properties': cProps,
+    };
+    allControls.add(ctrlMap);
+    if (currentSection != null) {
+      (currentSection['controls'] as List<Map<String, dynamic>>).add(ctrlMap);
+    }
+  }
+
+  return AccessDecodedUiBlob(
+    isReport: isReport,
+    recordSource: (recordSource != null && recordSource.isNotEmpty) ? recordSource : null,
+    caption: (caption != null && caption.isNotEmpty) ? caption : null,
+    properties: rootProps,
+    controlDefaults: controlDefaults,
+    groupLevels: groupLevels,
+    sections: sections,
+    controls: allControls,
+    hasEventsOrMacros: hasEventsOrMacros,
+  );
+}
+
+String? _sectionTypeName(int objectType, {required bool isReport}) {
+  switch (objectType) {
+    case 152:
+      return 'Section';
+    case 153:
+      return isReport ? 'ReportHeader' : 'FormHeader';
+    case 154:
+      return isReport ? 'ReportFooter' : 'FormFooter';
+    case 155:
+      return 'PageHeader';
+    case 156:
+      return 'PageFooter';
+    case 157:
+      return 'BreakHeader';
+    case 158:
+      return 'BreakFooter';
+    default:
+      return null;
+  }
+}
+
+String? _controlTypeName(int objectType) {
+  switch (objectType) {
+    case 100:
+      return 'Label';
+    case 101:
+      return 'Rectangle';
+    case 102:
+      return 'Line';
+    case 103:
+      return 'Image';
+    case 104:
+      return 'CommandButton';
+    case 105:
+      return 'OptionButton';
+    case 106:
+      return 'CheckBox';
+    case 107:
+      return 'OptionGroup';
+    case 108:
+      return 'BoundObjectFrame';
+    case 109:
+      return 'TextBox';
+    case 110:
+      return 'ListBox';
+    case 111:
+      return 'ComboBox';
+    case 112:
+      return 'Subform';
+    case 114:
+      return 'ObjectFrame';
+    case 118:
+      return 'PageBreak';
+    case 122:
+      return 'ToggleButton';
+    case 123:
+      return 'Tab';
+    case 124:
+      return 'Page';
+    case 126:
+      return 'Attachment';
+    case 127:
+      return 'EmptyCell';
+    default:
+      return null;
+  }
+}
+
+Map<String, String> _decodeControlProperties(
+  AccessBlobObject obj,
+  String ctrlType,
+) {
+  final props = <String, String>{};
+  void setInt(String key, int pid) {
+    final v = obj.numVal(pid);
+    if (v != null) props[key] = '$v';
+  }
+  void setStr(String key, int pid) {
+    final v = obj.str(pid);
+    if (v != null && v.isNotEmpty) props[key] = v;
+  }
+
+  final name = obj.str(220);
+  if (name != null && name.isNotEmpty) props['Name'] = name;
+
+  if (ctrlType == 'ComboBox') {
+    setInt('Left', 99);
+    setInt('Top', 100);
+    setInt('Width', 101);
+    setInt('Height', 102);
+    setStr('ControlSource', 221);
+    setStr('RowSourceType', 222);
+    setStr('RowSource', 223);
+    setStr('ColumnWidths', 224);
+    setStr('FontName', 234);
+    setStr('Format', 250);
+  } else if (ctrlType == 'ListBox') {
+    setInt('Left', 97);
+    setInt('Top', 98);
+    setInt('Width', 99);
+    setInt('Height', 100);
+    setStr('ControlSource', 221);
+    setStr('RowSourceType', 222);
+    setStr('RowSource', 223);
+    setStr('FontName', 234);
+  } else if (ctrlType == 'Subform') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setStr('SourceObject', 221);
+    setStr('LinkChildFields', 222);
+    setStr('LinkMasterFields', 223);
+  } else if (ctrlType == 'Label') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setInt('FontSize', 100);
+    setInt('FontWeight', 101);
+    setInt('BackStyle', 50);
+    setInt('TextAlign', 51);
+    setInt('BackColor', 156);
+    setInt('BorderColor', 268);
+    setStr('Caption', 221);
+    setStr('FontName', 222);
+  } else if (ctrlType == 'TextBox') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setInt('FontSize', 105);
+    setInt('FontWeight', 106);
+    setInt('BackColor', 156);
+    setInt('BorderColor', 272);
+    setStr('ControlSource', 221);
+    setStr('Format', 222);
+    setStr('FontName', 232);
+  } else if (ctrlType == 'Image') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setInt('PictureType', 56);
+    setInt('BorderColor', 157);
+    setStr('Picture', 232);
+  } else if (ctrlType == 'CommandButton' || ctrlType == 'ToggleButton' || ctrlType == 'Page') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setStr('Caption', 221);
+    setStr('FontName', 228);
+  } else if (ctrlType == 'Rectangle' || ctrlType == 'Line') {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setInt('BackStyle', 50);
+    setInt('BorderColor', 157);
+  } else {
+    setInt('Left', 96);
+    setInt('Top', 97);
+    setInt('Width', 98);
+    setInt('Height', 99);
+    setStr('ControlSource', 221);
+  }
+
+  return props;
+}
+
+int _readUint16Le(Uint8List b, int o) => b[o] | (b[o + 1] << 8);
+int _readUint32Le(Uint8List b, int o) =>
+    b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24);
+String _decodeUtf16LeSlice(Uint8List bytes, int start, int length) {
+  if (length <= 0 || start < 0 || start + length > bytes.length) return '';
+  final units = <int>[];
+  for (var i = 0; i + 1 < length; i += 2) {
+    final unit = bytes[start + i] | (bytes[start + i + 1] << 8);
+    if (unit != 0) units.add(unit);
+  }
+  return String.fromCharCodes(units);
+}

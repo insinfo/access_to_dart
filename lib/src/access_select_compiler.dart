@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'analysis_model.dart';
 import 'migration_identifier_style.dart';
 
+part 'access_select_compiler_extended.dart';
+
 /// Read-only Access SELECT compiler. By default only the narrow contract subset
 /// is permitted; callers compiling schema-verified report RecordSources may opt
 /// into [allowExtendedSyntax] and [inferParameterTypes].
@@ -53,6 +55,9 @@ class CompiledAccessSelect {
   final List<String> orderedParameters;
   final Map<String, int> inferredParameterTypes;
   final bool hasExplicitOrdering;
+  final bool hasLimit;
+  final bool isUnion;
+  final bool _allowNonAsciiText;
 
   CompiledAccessSelect._(
     this.sql,
@@ -61,8 +66,12 @@ class CompiledAccessSelect {
     Set<String> parameters,
     List<String> orderedParameters,
     Map<String, int> inferredParameterTypes,
-    this.hasExplicitOrdering,
-  )   : outputs = List.unmodifiable(outputs),
+    this.hasExplicitOrdering, {
+    this.hasLimit = false,
+    this.isUnion = false,
+    bool allowNonAsciiText = false,
+  })  : _allowNonAsciiText = allowNonAsciiText,
+        outputs = List.unmodifiable(outputs),
         _bindings = List.unmodifiable(bindings),
         _parameters = Set.unmodifiable(parameters),
         orderedParameters = List.unmodifiable(orderedParameters),
@@ -123,7 +132,8 @@ class CompiledAccessSelect {
         if (value is DateTime) return value.toIso8601String();
         return value.toString();
       }
-      if (value is! String || value.codeUnits.any((c) => c > 127)) {
+      if (value is! String ||
+          (!_allowNonAsciiText && value.codeUnits.any((c) => c > 127))) {
         throw FormatException('Only ASCII text comparisons are supported');
       }
       return value;
@@ -272,6 +282,9 @@ class _Compiler {
 
   CompiledAccessSelect compile(String source, List<String>? outputNames) {
     tokens = _lex(source, allowExtendedSyntax: allowExtendedSyntax);
+    if (allowExtendedSyntax) {
+      return _compileExtended(outputNames);
+    }
     need('SELECT');
     final isDistinct = allowExtendedSyntax && take('DISTINCT');
     final projectionItems = <_ProjectionItem>[];
@@ -894,7 +907,8 @@ List<_Token> _lex(String source, {bool allowExtendedSyntax = false}) {
   var i = 0;
   while (i < source.length) {
     final char = source[i];
-    if (RegExp(r'\s').hasMatch(char) || (i == 0 && char == '\ufeff')) {
+    if (RegExp(r'\s').hasMatch(char) ||
+        (char == '\ufeff' && (i == 0 || allowExtendedSyntax))) {
       i++;
       continue;
     }
@@ -906,10 +920,29 @@ List<_Token> _lex(String source, {bool allowExtendedSyntax = false}) {
         continue;
       }
     }
-    final singleSymbols = allowExtendedSyntax ? '(),.=!;*<>' : '(),.=!;';
+    final singleSymbols =
+        allowExtendedSyntax ? '(),.=!;*<>+-/&' : '(),.=!;';
     if (singleSymbols.contains(char)) {
       result.add(_Token('symbol', char));
       i++;
+      continue;
+    }
+    if (allowExtendedSyntax && char == '#') {
+      i++;
+      final buffer = StringBuffer();
+      var closed = false;
+      while (i < source.length) {
+        if (source[i] == '#') {
+          i++;
+          closed = true;
+          break;
+        }
+        buffer.write(source[i++]);
+      }
+      if (!closed || buffer.isEmpty) {
+        throw FormatException('Unterminated/empty Access date literal');
+      }
+      result.add(_Token('date', buffer.toString()));
       continue;
     }
     if (allowExtendedSyntax && RegExp(r'[0-9]').hasMatch(char)) {
@@ -929,7 +962,17 @@ List<_Token> _lex(String source, {bool allowExtendedSyntax = false}) {
           break;
         }
       }
-      result.add(_Token('number', source.substring(start, i)));
+      if (!sawDot &&
+          i < source.length &&
+          RegExp(r'[A-Za-z_\u0080-\uffff]').hasMatch(source[i])) {
+        while (i < source.length &&
+            RegExp(r'[A-Za-z_0-9\u0080-\uffff]').hasMatch(source[i])) {
+          i++;
+        }
+        result.add(_Token('word', source.substring(start, i)));
+      } else {
+        result.add(_Token('number', source.substring(start, i)));
+      }
       continue;
     }
     if (char == '[' || char == '"' || char == "'") {
