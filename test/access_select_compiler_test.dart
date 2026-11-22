@@ -102,6 +102,51 @@ void main() {
             .compile('SELECT People.Id FROM People'),
         throwsFormatException);
   });
+  test(
+      'allowExtendedSyntax supports SELECT *, DISTINCT, LEFT JOIN, CROSS JOIN, ORDER BY, OR, IS NOT NULL, aliases, inferred parameters and namedSubqueries',
+      () {
+    final starPlan = compiler.compile(
+      'SELECT DISTINCT * FROM People ORDER BY People.Name DESC',
+      allowExtendedSyntax: true,
+    );
+    expect(starPlan.sql, startsWith('SELECT DISTINCT '));
+    expect(starPlan.sql, contains('ORDER BY "People"."name" DESC'));
+    expect(starPlan.outputs.map((o) => o.name), ['Id', 'Name', 'Ended']);
+
+    final aliasPlan = compiler.compile(
+      'SELECT People.Name AS PessoaNome, Homes.Name FROM People '
+      'LEFT JOIN Homes ON People.Id = Homes.Id '
+      'WHERE People.Ended IS NOT NULL OR People.Name = [Digite Nome]',
+      asciiCaseInsensitiveText: true,
+      allowExtendedSyntax: true,
+      inferParameterTypes: true,
+    );
+    expect(aliasPlan.outputs.map((o) => o.name), ['PessoaNome', 'Name']);
+    expect(aliasPlan.sql, contains('LEFT JOIN'));
+    expect(aliasPlan.sql, contains('IS NOT NULL) OR'));
+    expect(aliasPlan.inferredParameterTypes, {'[Digite Nome]': 10});
+    expect(aliasPlan.bind({'[Digite Nome]': 'Ana'}), ['Ana']);
+
+    final crossPlan = compiler.compile(
+      'SELECT People.Id, Homes.Id FROM Homes, People WHERE People.Id = Homes.Id',
+      allowExtendedSyntax: true,
+    );
+    expect(crossPlan.sql, contains('CROSS JOIN'));
+    expect(crossPlan.outputs.map((o) => o.name), ['People.Id', 'Homes.Id']);
+
+    final subPlan = compiler.compile(
+      'SELECT SubQ.Id, SubQ.Name AS NomePessoa, Homes.Name FROM SubQ, Homes WHERE SubQ.Id = 7',
+      allowExtendedSyntax: true,
+      asciiCaseInsensitiveText: true,
+      namedSubqueries: {
+        'SubQ': 'SELECT People.Id, People.Name FROM People WHERE People.Ended IS NULL',
+      },
+    );
+    expect(subPlan.outputs.map((o) => o.name), ['Id', 'NomePessoa', 'Name']);
+    expect(subPlan.sql, contains('CROSS JOIN'));
+    expect(subPlan.bind({}), [7]);
+  });
+
   test('real CSPRONT1: all 134 projections and DAO ordinal names/types', () {
     final analysis = jsonDecode(
         File('build/codex-sigasul-goal/analysis-complex-complete/analysis.json')

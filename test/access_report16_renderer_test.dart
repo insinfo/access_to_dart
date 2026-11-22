@@ -1012,6 +1012,243 @@ void main() {
     ).readAsString();
     expect(reportsDart, contains('binary_resource_report/logo-SUAS-ICON.png'));
   });
+
+  test(
+      'compiles direct table, inline SELECT, aliased catalog query, Attachment, EmptyCell, static =1 TextBox, unbound CheckBox and empty Detail band',
+      () async {
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    final temp = await Directory.systemTemp.createTemp('phase2_reports_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    final analysis = _buildCspront1Analysis(reports: [
+      {
+        'name': 'DirectTableReport',
+        'recordSource': 'TbUnidade',
+        'sourceSha256': sourceHash,
+        'properties': {'Width': '6000', 'RecordSource': 'TbUnidade'},
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'sections': [
+          {
+            'type': 'FormHeader',
+            'name': 'Header0',
+            'height': 800,
+            'controls': [
+              {
+                'type': 'Label',
+                'name': 'OverhangLbl',
+                'caption': 'Header',
+                'properties': {
+                  'Left': '-15',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '300',
+                  'Caption': 'Header',
+                },
+              },
+              {
+                'type': 'Attachment',
+                'name': 'LogoBox',
+                'controlSource': 'LOGO',
+                'properties': {
+                  'Left': '2200',
+                  'Width': '400',
+                  'Height': '400',
+                  'ControlSource': 'LOGO',
+                },
+              },
+              {
+                'type': 'EmptyCell',
+                'name': 'SpacerCell',
+                'properties': {'Left': '0', 'Top': '400', 'Width': '200', 'Height': '200'},
+              },
+              {
+                'type': 'TextBox',
+                'name': 'RowNumBox',
+                'controlSource': '=1',
+                'properties': {
+                  'Left': '2800',
+                  'Top': '0',
+                  'Width': '300',
+                  'Height': '300',
+                  'ControlSource': '=1',
+                },
+              },
+              {
+                'type': 'CheckBox',
+                'name': 'UnboundChk',
+                'properties': {'Left': '3200', 'Top': '0', 'Width': '200', 'Height': '200'},
+              },
+            ],
+          },
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 0,
+            'controls': const [],
+          },
+        ],
+      },
+      {
+        'name': 'InlineSqlReport',
+        'recordSource': 'SELECT TbUnidade.NOME FROM TbUnidade;',
+        'sourceSha256': sourceHash,
+        'properties': {
+          'Width': '5000',
+          'RecordSource': 'SELECT TbUnidade.NOME FROM TbUnidade;',
+        },
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'sections': [
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 600,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'UnidadeNome',
+                'controlSource': 'NOME',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '300',
+                  'ControlSource': 'NOME',
+                  'Format': '>',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        'name': 'AliasedCatalogReport',
+        'recordSource': 'QueryComAlias',
+        'sourceSha256': sourceHash,
+        'properties': {'Width': '5000', 'RecordSource': 'QueryComAlias'},
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'sections': [
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 600,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'PessoaNomeBox',
+                'controlSource': 'NOME',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '300',
+                  'ControlSource': 'NOME',
+                  'Format': 'Standard',
+                },
+              },
+              {
+                'type': 'TextBox',
+                'name': 'UnidadeAliasBox',
+                'controlSource': 'UNIDADE',
+                'properties': {
+                  'Left': '2200',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '300',
+                  'ControlSource': 'UNIDADE',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    ((analysis['tables'] as List).first['columns'] as List).add({
+      'name': 'LOGO',
+      'typeCode': 18,
+      'typeName': 'ComplexType',
+    });
+    (analysis['queries'] as List).add({
+      'name': 'QueryComAlias',
+      'sqlText':
+          'SELECT TbUnidade.NOME AS UNIDADE, TbPessoa.NOME FROM TbUnidade, CadResidencia INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam;',
+    });
+
+    final analysisFile = File('${temp.path}/analysis.json');
+    await analysisFile.writeAsString(jsonEncode(analysis));
+
+    final appDir = Directory('${temp.path}/app');
+    final err = StringBuffer();
+    expect(
+      await run(
+        ['generate', '--analysis', analysisFile.path, '--output', appDir.path],
+        out: StringBuffer(),
+        err: err,
+      ),
+      0,
+      reason: '$err',
+    );
+    final inventory = jsonDecode(
+      await File('${appDir.path}/access-reports.json').readAsString(),
+    ) as Map<String, dynamic>;
+    final compiled = (inventory['compiled_reports'] as List).cast<Map>();
+    expect(compiled, hasLength(3));
+    expect(
+      compiled.first['queryKey'],
+      'report_table_tb_unidade',
+    );
+    final inlineReport = compiled.singleWhere((r) => r['name'] == 'InlineSqlReport');
+    expect((inlineReport['queryKey'] as String), startsWith('report_sql_'));
+
+    final queriesJson = jsonDecode(
+      await File('${appDir.path}/backend/lib/src/shared/access_queries.json')
+          .readAsString(),
+    ) as Map<String, dynamic>;
+    final queryMap = (queriesJson['queries'] as Map);
+    expect(queryMap.keys, contains('report_table_tb_unidade'));
+    expect(queryMap.keys, contains('query_com_alias'));
+    expect(
+      (queriesJson['diagnostics'] as List)
+          .any((d) => d['status'] == 'missing-dao-contract'),
+      isTrue,
+    );
+
+    final viewerHtml = await File(
+      '${appDir.path}/frontend/lib/src/shared/components/access_report_viewer/access_report_viewer.html',
+    ).readAsString();
+    expect(viewerHtml, contains('>1</div>'));
+    expect(viewerHtml, contains('data-access-control-type'));
+  });
 }
 
 List<int> _buildStoredZip(Map<String, List<int>> entries) {

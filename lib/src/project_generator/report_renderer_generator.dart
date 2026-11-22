@@ -223,10 +223,12 @@ class CompiledReportSpec {
 class CompiledReportCompilationResult {
   final List<CompiledReportSpec> reports;
   final List<Map<String, Object?>> diagnostics;
+  final Map<String, Map<String, Object?>> compiledReportQueries;
 
   const CompiledReportCompilationResult({
     required this.reports,
     required this.diagnostics,
+    this.compiledReportQueries = const <String, Map<String, Object?>>{},
   });
 }
 
@@ -526,6 +528,26 @@ extension _CompiledReportRenderer on ProjectGenerator {
       for (final entry in compiledQueries.entries)
         (entry.value['name'] as String).toLowerCase(): entry,
     };
+    final compiledReportQueries = <String, Map<String, Object?>>{};
+    final usedQueryKeys = <String>{...compiledQueries.keys};
+    final failedRecordSources = <String>{};
+    final tableByLowerName = <String, AnalysisTable>{
+      for (final table in project.tables)
+        if (!table.isSyntheticComplexTable) table.name.toLowerCase(): table,
+    };
+    final catalogQueryByLowerName = <String, Map<String, dynamic>>{};
+    final namedSubqueries = <String, String>{};
+    for (final rawQ in (project.raw['queries'] as List? ?? const []).whereType<Map>()) {
+      final qName = (rawQ['name']?.toString() ?? '').trim();
+      if (qName.isNotEmpty) {
+        final qMap = rawQ.cast<String, dynamic>();
+        catalogQueryByLowerName[qName.toLowerCase()] = qMap;
+        if (qMap['sqlText'] is String &&
+            (qMap['sqlText'] as String).trim().isNotEmpty) {
+          namedSubqueries[qName] = qMap['sqlText'] as String;
+        }
+      }
+    }
     final sourceRoot = _resolveReportSourceRoot(project);
     final themePalette = _OfficeThemePalette.loadFromSource(
       sourceRoot,
@@ -562,8 +584,15 @@ extension _CompiledReportRenderer on ProjectGenerator {
       }
       final compiled = _tryCompileReport(
         rawReport.cast<String, dynamic>(),
+        project: project,
         key: key,
         queryByLowerName: queryByLowerName,
+        compiledReportQueries: compiledReportQueries,
+        usedQueryKeys: usedQueryKeys,
+        failedRecordSources: failedRecordSources,
+        tableByLowerName: tableByLowerName,
+        catalogQueryByLowerName: catalogQueryByLowerName,
+        namedSubqueries: namedSubqueries,
         sourceRoot: sourceRoot,
         themePalette: themePalette,
         binaryResources: binaryResources,
@@ -590,7 +619,62 @@ extension _CompiledReportRenderer on ProjectGenerator {
     return CompiledReportCompilationResult(
       reports: reports,
       diagnostics: diagnostics,
+      compiledReportQueries: compiledReportQueries,
     );
+  }
+
+  MapEntry<String, Map<String, Object?>>? _compileReportQueryForRecordSource(
+    AnalysisProject project,
+    String recordSource, {
+    required Set<String> usedQueryKeys,
+    required Set<String> failedRecordSources,
+    required Map<String, AnalysisTable> tableByLowerName,
+    required Map<String, Map<String, dynamic>> catalogQueryByLowerName,
+    required Map<String, String> namedSubqueries,
+  }) {
+    final lower = recordSource.toLowerCase();
+    if (failedRecordSources.contains(lower)) return null;
+
+    String? sqlText;
+    String? candidateKey;
+    final directTable = tableByLowerName[lower];
+    if (directTable != null) {
+      sqlText = 'SELECT * FROM [${directTable.name}]';
+      candidateKey = 'report_table_${toSnakeCaseIdentifier(directTable.name)}';
+    } else if (recordSource.trimLeft().toUpperCase().startsWith('SELECT ')) {
+      sqlText = recordSource;
+      final hash = sha256
+          .convert(utf8.encode(recordSource))
+          .toString()
+          .substring(0, 12);
+      candidateKey = 'report_sql_$hash';
+    } else {
+      final catalogQuery = catalogQueryByLowerName[lower];
+      if (catalogQuery != null &&
+          catalogQuery['executionContract'] == null &&
+          catalogQuery['sqlText'] is String) {
+        sqlText = catalogQuery['sqlText'] as String;
+        final baseKey = toSnakeCaseIdentifier(catalogQuery['name'] as String);
+        candidateKey =
+            usedQueryKeys.contains(baseKey) ? 'report_q_$baseKey' : baseKey;
+      }
+    }
+    if (sqlText == null || candidateKey == null || usedQueryKeys.contains(candidateKey)) {
+      failedRecordSources.add(lower);
+      return null;
+    }
+    try {
+      return _compileExtendedQuerySpecification(
+        project,
+        key: candidateKey,
+        name: recordSource,
+        sqlText: sqlText,
+        namedSubqueries: namedSubqueries,
+      );
+    } on FormatException {
+      failedRecordSources.add(lower);
+      return null;
+    }
   }
 
   String? _resolveReportSourceRoot(AnalysisProject project) {
@@ -618,9 +702,16 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
   ({CompiledReportSpec? spec, String? reason}) _tryCompileReport(
     Map<String, dynamic> report, {
+    required AnalysisProject project,
     required String key,
     required Map<String, MapEntry<String, Map<String, Object?>>>
         queryByLowerName,
+    required Map<String, Map<String, Object?>> compiledReportQueries,
+    required Set<String> usedQueryKeys,
+    required Set<String> failedRecordSources,
+    required Map<String, AnalysisTable> tableByLowerName,
+    required Map<String, Map<String, dynamic>> catalogQueryByLowerName,
+    required Map<String, String> namedSubqueries,
     required String? sourceRoot,
     required _OfficeThemePalette themePalette,
     required List<Map<String, dynamic>> binaryResources,
@@ -646,8 +737,21 @@ extension _CompiledReportRenderer on ProjectGenerator {
     final recordSource =
         (report['recordSource'] ?? props['RecordSource'])?.toString().trim();
     final isBound = recordSource != null && recordSource.isNotEmpty;
-    final queryEntry =
+    MapEntry<String, Map<String, Object?>>? pendingReportQuery;
+    var queryEntry =
         isBound ? queryByLowerName[recordSource.toLowerCase()] : null;
+    if (isBound && queryEntry == null) {
+      pendingReportQuery = _compileReportQueryForRecordSource(
+        project,
+        recordSource,
+        usedQueryKeys: usedQueryKeys,
+        failedRecordSources: failedRecordSources,
+        tableByLowerName: tableByLowerName,
+        catalogQueryByLowerName: catalogQueryByLowerName,
+        namedSubqueries: namedSubqueries,
+      );
+      queryEntry = pendingReportQuery;
+    }
     if (isBound && queryEntry == null) {
       return (spec: null, reason: 'record-source-not-compiled-query');
     }
@@ -716,9 +820,6 @@ extension _CompiledReportRenderer on ProjectGenerator {
       if (sHeight == null || sHeight < 0) {
         return (spec: null, reason: 'invalid-section-height:$sType');
       }
-      if (sType == 'Section' && sHeight <= 0) {
-        return (spec: null, reason: 'empty-detail-section');
-      }
       final controls = (section['controls'] as List?) ?? const [];
       final typedControls = <Map<String, dynamic>>[];
       for (final ctrl in controls) {
@@ -775,7 +876,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
       sheetOffsetTwips += s.height;
     }
 
-    if (detailHeight <= 0 || sectionControls.isEmpty) {
+    if (sheetOffsetTwips <= 0 || sectionControls.isEmpty) {
       return (spec: null, reason: 'missing-detail-controls');
     }
     pageSetup['detailHeightTwips'] = detailHeight;
@@ -828,6 +929,8 @@ extension _CompiledReportRenderer on ProjectGenerator {
         'CheckBox' => 106,
         'TextBox' => 109,
         'ComboBox' => 111,
+        'Attachment' => 126,
+        'EmptyCell' => 127,
         _ => null,
       };
       if (controlTypeCode == null || cName.isEmpty) {
@@ -844,22 +947,18 @@ extension _CompiledReportRenderer on ProjectGenerator {
       final cachedTop = _parseReportInt(cProps['LayoutCachedTop']);
       final cachedRight = _parseReportInt(cProps['LayoutCachedWidth']);
       final cachedBottom = _parseReportInt(cProps['LayoutCachedHeight']);
-      var left = _parseReportInt(ctrl['left'] ?? cProps['Left']) ?? cachedLeft;
-      if (left == null && width != null && cachedRight == width) {
-        left = 0;
-      }
-      var top = _parseReportInt(ctrl['top'] ?? cProps['Top']) ?? cachedTop;
-      if (top == null && height != null && cachedBottom == height) {
-        top = 0;
-      }
+      var left =
+          _parseReportInt(ctrl['left'] ?? cProps['Left']) ?? cachedLeft ?? 0;
+      if (left >= -30 && left < 0) left = 0;
+      var top =
+          _parseReportInt(ctrl['top'] ?? cProps['Top']) ?? cachedTop ?? 0;
+      if (top >= -30 && top < 0) top = 0;
       if (width == null &&
-          left != null &&
           cachedRight != null &&
           cachedRight >= left) {
         width = cachedRight - left;
       }
       if (height == null &&
-          top != null &&
           cachedBottom != null &&
           cachedBottom >= top) {
         height = cachedBottom - top;
@@ -867,18 +966,14 @@ extension _CompiledReportRenderer on ProjectGenerator {
       if (cType == 'Line') {
         width ??= 0;
         height ??= 0;
-        if (left == null ||
-            top == null ||
-            left < 0 ||
+        if (left < 0 ||
             top < 0 ||
             width < 0 ||
             height < 0 ||
             (width == 0 && height == 0)) {
           return (spec: null, reason: 'invalid-control-geometry:$cName');
         }
-      } else if (left == null ||
-          top == null ||
-          width == null ||
+      } else if (width == null ||
           height == null ||
           left < 0 ||
           top < 0 ||
@@ -887,7 +982,9 @@ extension _CompiledReportRenderer on ProjectGenerator {
         return (spec: null, reason: 'invalid-control-geometry:$cName');
       }
 
-      final backStyle = cType == 'Line' || cType == 'CheckBox'
+      final backStyle = cType == 'Line' ||
+              cType == 'CheckBox' ||
+              cType == 'EmptyCell'
           ? 0
           : (_parseReportInt(cProps['BackStyle'] ?? defProps['BackStyle']) ??
               (cType == 'TextBox' ||
@@ -903,11 +1000,13 @@ extension _CompiledReportRenderer on ProjectGenerator {
         themePalette,
         fallback: 16777215,
       );
-      final borderStyle = _parseReportInt(cProps['BorderStyle'] ??
-              cProps['OldBorderStyle'] ??
-              defProps['BorderStyle'] ??
-              defProps['OldBorderStyle']) ??
-          (cType == 'Label' || cType == 'Image' ? 0 : 1);
+      final borderStyle = cType == 'EmptyCell'
+          ? 0
+          : (_parseReportInt(cProps['BorderStyle'] ??
+                  cProps['OldBorderStyle'] ??
+                  defProps['BorderStyle'] ??
+                  defProps['OldBorderStyle']) ??
+              (cType == 'Label' || cType == 'Image' ? 0 : 1));
       final borderColor = _resolveControlThemeColor(
         'Border',
         cProps,
@@ -960,16 +1059,32 @@ extension _CompiledReportRenderer on ProjectGenerator {
               (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
           final typeSlug = isCombo ? 'combobox' : 'textbox';
           if (controlSource != null && controlSource.isNotEmpty) {
-            if (controlSource.startsWith('=')) {
+            final intMatch = !isCombo
+                ? RegExp(r'^=([+-]?[0-9]+)$').firstMatch(controlSource)
+                : null;
+            final literalMatch = !isCombo && intMatch == null
+                ? RegExp(r'^="([^"]*)"$').firstMatch(controlSource)
+                : null;
+            if (intMatch != null) {
+              caption = intMatch.group(1)!;
+              controlSource = null;
+            } else if (literalMatch != null) {
+              caption = literalMatch.group(1)!;
+              controlSource = null;
+            } else if (controlSource.startsWith('=')) {
               return (spec: null, reason: 'unsupported-$typeSlug-source:$cName');
+            } else {
+              final colMatches = _resolveReportQueryColumns(
+                controlSource,
+                columnsByLower,
+                queryColumns,
+              );
+              if (colMatches.length != 1) {
+                return (spec: null, reason: 'unresolved-$typeSlug-column:$cName');
+              }
+              columnOrdinal = colMatches.single['ordinal'] as int;
+              daoType = colMatches.single['daoType'] as int;
             }
-            final colMatches =
-                columnsByLower[controlSource.toLowerCase()] ?? const [];
-            if (colMatches.length != 1) {
-              return (spec: null, reason: 'unresolved-$typeSlug-column:$cName');
-            }
-            columnOrdinal = colMatches.single['ordinal'] as int;
-            daoType = colMatches.single['daoType'] as int;
           } else {
             if (isCombo) {
               return (spec: null, reason: 'unsupported-combobox-source:$cName');
@@ -977,25 +1092,51 @@ extension _CompiledReportRenderer on ProjectGenerator {
             controlSource = null;
           }
           format = cProps['Format']?.toString();
-          if (format != null && format.isNotEmpty && format != '>') {
+          if (format != null &&
+              !_supportedReportFormats.contains(format.trim().toLowerCase())) {
             return (spec: null, reason: 'unsupported-$typeSlug-format:$cName');
           }
+        }
+      } else if (cType == 'Attachment') {
+        controlSource =
+            (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
+        if (controlSource != null && controlSource.isNotEmpty) {
+          if (controlSource.startsWith('=')) {
+            return (spec: null, reason: 'unsupported-attachment-source:$cName');
+          }
+          final colMatches = _resolveReportQueryColumns(
+            controlSource,
+            columnsByLower,
+            queryColumns,
+          );
+          if (colMatches.length != 1 || colMatches.single['daoType'] != 18) {
+            return (spec: null, reason: 'unresolved-attachment-column:$cName');
+          }
+          columnOrdinal = colMatches.single['ordinal'] as int;
+          daoType = 18;
+        } else {
+          controlSource = null;
         }
       } else if (cType == 'CheckBox') {
         controlSource =
             (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
-        if (controlSource == null ||
-            controlSource.isEmpty ||
-            controlSource.startsWith('=')) {
-          return (spec: null, reason: 'unsupported-checkbox-source:$cName');
+        if (controlSource != null && controlSource.isNotEmpty) {
+          if (controlSource.startsWith('=')) {
+            return (spec: null, reason: 'unsupported-checkbox-source:$cName');
+          }
+          final colMatches = _resolveReportQueryColumns(
+            controlSource,
+            columnsByLower,
+            queryColumns,
+          );
+          if (colMatches.length != 1 || colMatches.single['daoType'] != 1) {
+            return (spec: null, reason: 'unresolved-checkbox-column:$cName');
+          }
+          columnOrdinal = colMatches.single['ordinal'] as int;
+          daoType = 1;
+        } else {
+          controlSource = null;
         }
-        final colMatches =
-            columnsByLower[controlSource.toLowerCase()] ?? const [];
-        if (colMatches.length != 1 || colMatches.single['daoType'] != 1) {
-          return (spec: null, reason: 'unresolved-checkbox-column:$cName');
-        }
-        columnOrdinal = colMatches.single['ordinal'] as int;
-        daoType = 1;
       } else if (cType == 'Image') {
         picture = cProps['Picture']?.toString();
         pictureType =
@@ -1090,6 +1231,12 @@ extension _CompiledReportRenderer on ProjectGenerator {
         pictureAlignment: pictureAlignment,
         assetName: assetName,
       ));
+    }
+
+    if (pendingReportQuery != null) {
+      usedQueryKeys.add(pendingReportQuery.key);
+      compiledReportQueries[pendingReportQuery.key] = pendingReportQuery.value;
+      queryByLowerName[recordSource!.toLowerCase()] = pendingReportQuery;
     }
 
     return (
@@ -1439,6 +1586,71 @@ extension _CompiledReportRenderer on ProjectGenerator {
     return fallback;
   }
 
+  static const Set<String> _supportedReportFormats = {
+    '',
+    '>',
+    '<',
+    '@',
+    '#',
+    r'\',
+    'short date',
+    'long date',
+    'medium date',
+    'short time',
+    'fixed',
+    'standard',
+    'currency',
+    'percent',
+    'general number',
+    'yes/no',
+    'true/false',
+    'dd/mm/yyyy',
+    'dd/mm/yy',
+    'hh:nn',
+  };
+
+  List<Map> _resolveReportQueryColumns(
+    String rawControlSource,
+    Map<String, List<Map>> columnsByLower,
+    List<Map> queryColumns,
+  ) {
+    final direct = columnsByLower[rawControlSource.toLowerCase()];
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final unbracketed = rawControlSource
+        .split('.')
+        .map((part) {
+          final t = part.trim();
+          if (t.startsWith('[') && t.endsWith(']') && t.length >= 2) {
+            return t.substring(1, t.length - 1);
+          }
+          return t;
+        })
+        .join('.');
+    final byNormalized = columnsByLower[unbracketed.toLowerCase()];
+    if (byNormalized != null && byNormalized.isNotEmpty) return byNormalized;
+
+    if (unbracketed.contains('.')) {
+      final dot = unbracketed.indexOf('.');
+      final tbl = unbracketed.substring(0, dot).toLowerCase();
+      final col = unbracketed.substring(dot + 1).toLowerCase();
+      return [
+        for (final entry in queryColumns)
+          if ((entry['sourceTable']?.toString().toLowerCase() ?? '') == tbl &&
+              (entry['sourceColumn']?.toString().toLowerCase() ?? '') == col)
+            entry,
+      ];
+    }
+
+    final lowerCol = unbracketed.toLowerCase();
+    final bySourceCol = [
+      for (final entry in queryColumns)
+        if ((entry['sourceColumn']?.toString().toLowerCase() ?? '') == lowerCol)
+          entry,
+    ];
+    return bySourceCol.length == 1 ? bySourceCol : const [];
+  }
+
   bool _isIdentityDisplayComboBox(
     Map<String, dynamic> ctrlProp,
     Map<String, dynamic> defProp,
@@ -1627,13 +1839,31 @@ class AccessReportController {
     }
     if (value == null) return '';
     String text;
+    final fmtLower = (format ?? '').trim().toLowerCase();
     if (daoType == 1 && value is bool) {
-      text = value ? 'Sim' : 'Não';
+      text = fmtLower == 'true/false'
+          ? (value ? 'True' : 'False')
+          : (value ? 'Sim' : 'Não');
+    } else if (daoType == 8) {
+      final iso = value.toString();
+      if ((fmtLower == 'short date' || fmtLower == 'dd/mm/yyyy') &&
+          iso.length >= 10 &&
+          RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(iso)) {
+        text = '${iso.substring(8, 10)}/${iso.substring(5, 7)}/${iso.substring(0, 4)}';
+      } else if (fmtLower == 'dd/mm/yy' &&
+          iso.length >= 10 &&
+          RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(iso)) {
+        text = '${iso.substring(8, 10)}/${iso.substring(5, 7)}/${iso.substring(2, 4)}';
+      } else {
+        text = iso;
+      }
     } else {
       text = value.toString();
     }
     if (format == '>') {
       text = text.toUpperCase();
+    } else if (format == '<') {
+      text = text.toLowerCase();
     }
     return text;
   }
@@ -1870,12 +2100,20 @@ String _buildAccessReportViewerHtml(List<CompiledReportSpec> reports) {
           break;
         case 'TextBox':
         case 'ComboBox':
-          final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
-          buffer.writeln(
-              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ pageValue(page, $nameArg) }}</div>');
+          if (ctrl.columnOrdinal == null && ctrl.caption != null) {
+            final captionHtml = _ngDartHtmlText(ctrl.caption!);
+            buffer.writeln(
+                '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$captionHtml</div>');
+          } else {
+            final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
+            buffer.writeln(
+                '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ pageValue(page, $nameArg) }}</div>');
+          }
           break;
         case 'Rectangle':
         case 'Line':
+        case 'Attachment':
+        case 'EmptyCell':
           buffer.writeln(
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"></div>');
           break;
@@ -1947,10 +2185,11 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
     for (final ctrl in report.controls) {
       final isLine = ctrl.type == 'Line';
       final isCheck = ctrl.type == 'CheckBox';
-      final bg = isLine || isCheck
+      final isSpacer = ctrl.type == 'EmptyCell';
+      final bg = isLine || isCheck || isSpacer
           ? 'transparent'
           : (ctrl.backStyle == 1 ? ctrl.backColorHex : 'transparent');
-      final border = isLine || isCheck
+      final border = isLine || isCheck || isSpacer
           ? 'none'
           : (ctrl.borderStyle == 1 ? '1px solid ${ctrl.borderColorHex}' : 'none');
       final cssWidth = _twipsToPx(isLine && ctrl.width == 0 ? 15 : ctrl.width);

@@ -64,15 +64,69 @@ extension _CompiledQueryBackend on ProjectGenerator {
     return (specifications: specifications, diagnostics: diagnostics);
   }
 
+  MapEntry<String, Map<String, Object?>>? _compileExtendedQuerySpecification(
+    AnalysisProject project, {
+    required String key,
+    required String name,
+    required String sqlText,
+    Map<String, String> namedSubqueries = const {},
+  }) {
+    final plan = AccessSelectCompiler(
+      project.tables,
+      identifiers: identifierPolicy,
+    ).compile(
+      sqlText,
+      asciiCaseInsensitiveText: true,
+      questionMarkParameters: true,
+      ordinalOutputAliases: true,
+      allowExtendedSyntax: true,
+      inferParameterTypes: true,
+      namedSubqueries: namedSubqueries,
+    );
+    return MapEntry(key, {
+      'name': name,
+      'sql': plan.sql,
+      'bindings': plan.bindingDescriptors,
+      'parameters': [
+        for (var i = 0; i < plan.orderedParameters.length; i++)
+          {
+            'key': 'p$i',
+            'sourceName': plan.orderedParameters[i],
+            'daoType': plan.inferredParameterTypes[plan.orderedParameters[i]] ?? 10,
+          }
+      ],
+      'columns': [
+        for (var i = 0; i < plan.outputs.length; i++)
+          {
+            'ordinal': i,
+            'resultKey': 'c$i',
+            'name': plan.outputs[i].name,
+            'daoType': plan.outputs[i].typeCode,
+            'sourceTable': plan.outputs[i].sourceTable,
+            'sourceColumn': plan.outputs[i].sourceColumn,
+          }
+      ],
+      'allowNonAsciiText': true,
+      if (plan.hasExplicitOrdering) 'ordering': 'explicit',
+    });
+  }
+
   Future<void> _generateQueryBackend(
       AnalysisProject project, Directory backendDir) async {
     final compiled = _compileQuerySpecifications(project);
+    final reportsResult = compileEligibleReports(project);
+    final mergedSpecifications = <String, Map<String, Object?>>{
+      ...compiled.specifications,
+      for (final entry in reportsResult.compiledReportQueries.entries)
+        if (!compiled.specifications.containsKey(entry.key))
+          entry.key: entry.value,
+    };
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.dart'))
         .writeAsString(_queryBackendSource.replaceFirst('/*SPECIFICATIONS*/',
-            _dartStringLiteral(jsonEncode(compiled.specifications))));
+            _dartStringLiteral(jsonEncode(mergedSpecifications))));
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.json'))
         .writeAsString(const JsonEncoder.withIndent('  ').convert({
-      'queries': compiled.specifications,
+      'queries': mergedSpecifications,
       'diagnostics': compiled.diagnostics,
     }));
   }
@@ -116,16 +170,45 @@ class AccessQueryController {
       bySource[p['sourceName'] as String]=value;
     }
     final bindings=<Object?>[];
+    final allowNonAscii = descriptor['allowNonAsciiText'] == true;
     for(final binding in descriptor['bindings'] as List) {
-      final value=binding['parameter']==null ? binding['literal'] : bySource[binding['parameter']];
+      final isParam = binding['parameter'] != null;
+      final value = isParam ? bySource[binding['parameter']] : binding['literal'];
       if(value==null){bindings.add(null);continue;}
-      if(binding['typeCode']==4) {
-        if(value is! String || !RegExp(r'^[+-]?[0-9]+$').hasMatch(value)) throw AccessQueryInputError('Comparacao Long exige string inteira.');
-        final number=int.tryParse(value);
+      final bType = binding['typeCode'];
+      if(bType==4 || bType==3) {
+        final int? number;
+        if(!isParam && value is int) {
+          number = value;
+        } else {
+          if(value is! String || !RegExp(r'^[+-]?[0-9]+$').hasMatch(value)) throw AccessQueryInputError('Comparacao Long exige string inteira.');
+          number = int.tryParse(value);
+        }
         if(number==null || number < -2147483648 || number > 2147483647) throw AccessQueryInputError('Parametro fora da faixa Long.');
         bindings.add(number);
+      } else if(bType==1) {
+        if(!isParam && value is bool) {
+          bindings.add(value);
+        } else {
+          final lower = value.toString().trim().toLowerCase();
+          if(lower=='true'||lower=='yes'||lower=='sim'||lower=='1') {bindings.add(true);}
+          else if(lower=='false'||lower=='no'||lower=='nao'||lower=='0') {bindings.add(false);}
+          else {throw AccessQueryInputError('Comparacao booleana invalida.');}
+        }
+      } else if(bType==5 || bType==7) {
+        if(!isParam && value is num) {
+          bindings.add(bType==5 ? value.toString() : value.toDouble());
+        } else {
+          final parsed = num.tryParse(value.toString().trim().replaceAll(',', '.'));
+          if(parsed==null) throw AccessQueryInputError('Comparacao numerica invalida.');
+          bindings.add(bType==5 ? parsed.toString() : parsed.toDouble());
+        }
+      } else if(bType==8) {
+        final dt = DateTime.tryParse(value.toString().trim());
+        if(dt==null) throw AccessQueryInputError('Comparacao de data exige ISO-8601.');
+        bindings.add(dt);
       } else {
-        if(value is! String || value.codeUnits.any((c)=>c>127)) throw AccessQueryInputError('Comparacao textual restrita a ASCII.');
+        if(value is! String || (!allowNonAscii && value.codeUnits.any((c)=>c>127))) throw AccessQueryInputError('Comparacao textual restrita a ASCII.');
         bindings.add(value);
       }
     }
@@ -137,7 +220,7 @@ class AccessQueryController {
       'rows':[for(final row in rows.take(limit))
         [for(final column in columns) _readValue(row,column)]],
       'limit':limit,'truncated':rows.length>limit,'readOnly':true,
-      'ordering':'unspecified',
+      'ordering':descriptor['ordering'] ?? 'unspecified',
     };
   }
 
@@ -167,7 +250,8 @@ class AccessQueryController {
     if(value==null) return null;
     switch(type) {
       case 1: if(value is bool) return value; break;
-      case 4: if(value is int) return value; if(value is BigInt) return value.toInt(); break;
+      case 3: case 4: case 18: if(value is int) return value; if(value is BigInt) return value.toInt(); if(value is num) return value.toInt(); break;
+      case 7: if(value is num) return value.toDouble(); break;
       case 5:
         final match=RegExp(r'^(-?)([0-9]+)(?:\.([0-9]+))?$').firstMatch(value.toString());
         if(match==null) break;
@@ -178,7 +262,8 @@ class AccessQueryController {
         final sign=integer=='0' && digits=='0000' ? '' : match.group(1)!;
         return '$sign$integer.$digits';
       case 8: if(value is DateTime) return value.toIso8601String(); break;
-      case 10: if(value is String) return value; break;
+      case 10: case 12: if(value is String) return value; break;
+      case 11: if(value is List<int>) return base64Encode(value); return value.toString();
     }
     throw StateError('Unexpected database result type.');
   }
