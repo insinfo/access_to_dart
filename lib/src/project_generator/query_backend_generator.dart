@@ -217,18 +217,7 @@ class AccessQueryInputError implements Exception {
 class AccessQueryController {
   static final Map<String,dynamic> specifications=(jsonDecode(/*SPECIFICATIONS*/) as Map).cast<String,dynamic>();
 
-  static Future<Map<String,dynamic>> executeDescriptor(Request request,Map descriptor) async {
-    final query=request.url.queryParametersAll;
-    if(query.keys.any((k)=>k!='parameters' && k!='limit') || query.values.any((v)=>v.length!=1)) {
-      throw AccessQueryInputError('Parametros HTTP desconhecidos ou repetidos.');
-    }
-    final raw=query['parameters']?.single;
-    if(raw==null || raw.length>4096) throw AccessQueryInputError('parameters deve conter um objeto JSON explicito.');
-    final input=_parseParameters(raw);
-    final limitText=query['limit']?.single ?? '100';
-    if(!RegExp(r'^[0-9]+$').hasMatch(limitText)) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
-    final limit=int.tryParse(limitText);
-    if(limit==null || limit<1 || limit>100) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
+  static List<Object?> _buildBindings(Map descriptor, Map input) {
     final parameters=descriptor['parameters'] as List;
     if(input.length!=parameters.length || parameters.any((p)=>!input.containsKey(p['key']))) {
       throw AccessQueryInputError('Informe exatamente os parametros declarados p0, p1, ... .');
@@ -289,6 +278,32 @@ class AccessQueryController {
         bindings.add(value);
       }
     }
+    return bindings;
+  }
+
+  static Future<Map<String,dynamic>> executeDescriptor(
+    Request request,
+    Map descriptor, {
+    Map<String,Object?>? parsedParametersOverride,
+  }) async {
+    final query=request.url.queryParametersAll;
+    if(query.keys.any((k)=>k!='parameters' && k!='limit') || query.values.any((v)=>v.length!=1)) {
+      throw AccessQueryInputError('Parametros HTTP desconhecidos ou repetidos.');
+    }
+    final Map input;
+    if(parsedParametersOverride!=null) {
+      input=parsedParametersOverride;
+    } else {
+      final raw=query['parameters']?.single;
+      if(raw==null || raw.length>4096) throw AccessQueryInputError('parameters deve conter um objeto JSON explicito.');
+      input=_parseParameters(raw);
+    }
+    final limitText=query['limit']?.single ?? '100';
+    if(!RegExp(r'^[0-9]+$').hasMatch(limitText)) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
+    final limit=int.tryParse(limitText);
+    if(limit==null || limit<1 || limit>100) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
+    final parameters=descriptor['parameters'] as List;
+    final bindings=_buildBindings(descriptor, input);
     // SQL is a build-time compiler product; request data enters only bindings.
     final rawSql = descriptor['sql'] as String;
     final execSql = (descriptor['hasLimit'] == true || descriptor['isUnion'] == true)
@@ -303,6 +318,58 @@ class AccessQueryController {
       'limit':limit,'truncated':rows.length>limit,'readOnly':true,
       'ordering':descriptor['ordering'] ?? 'unspecified',
     };
+  }
+
+  static Future<Map<String,String>> executeLookupMap(
+    Request request,
+    String queryKey,
+    int boundOrdinal,
+    int displayOrdinal,
+  ) async {
+    final descriptor=specifications[queryKey] as Map?;
+    if(descriptor==null) return const <String,String>{};
+    if(((descriptor['parameters'] as List?) ?? const []).isNotEmpty) {
+      return const <String,String>{};
+    }
+    final bindings=<Object?>[
+      for(final b in (descriptor['bindings'] as List? ?? const []))
+        b['literal'],
+    ];
+    final rawSql=descriptor['sql'] as String;
+    final execSql=(descriptor['hasLimit'] == true || descriptor['isUnion'] == true)
+        ? 'SELECT * FROM ($rawSql) AS _access_lkp LIMIT 50000'
+        : '$rawSql LIMIT 50000';
+    final rows=await request.make<Connection>().select(execSql, bindings);
+    final map=<String,String>{};
+    final boundKey='c$boundOrdinal';
+    final dispKey='c$displayOrdinal';
+    for(final row in rows) {
+      final k=row[boundKey];
+      if(k==null) continue;
+      map.putIfAbsent(k.toString(), ()=>(row[dispKey] ?? '').toString());
+    }
+    return map;
+  }
+
+  static Future<List<List<Object?>>> executeRowsInternal(
+    Request request,
+    String queryKey,
+    Map<String,Object?> paramInput, {
+    int maxRows = 5000,
+  }) async {
+    final descriptor=specifications[queryKey] as Map?;
+    if(descriptor==null) return const <List<Object?>>[];
+    final bindings=_buildBindings(descriptor, paramInput);
+    final rawSql=descriptor['sql'] as String;
+    final execSql=(descriptor['hasLimit'] == true || descriptor['isUnion'] == true)
+        ? 'SELECT * FROM ($rawSql) AS _access_sub LIMIT $maxRows'
+        : '$rawSql LIMIT $maxRows';
+    final rows=await request.make<Connection>().select(execSql, bindings);
+    final columns=descriptor['columns'] as List;
+    return [
+      for(final row in rows)
+        [for(final column in columns) _readValue(row, column)],
+    ];
   }
 
   static Future<Response> run(Request request,String key) async {

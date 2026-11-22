@@ -1551,6 +1551,271 @@ void main() {
     expect((bands[8]['values'] as Map)['NowBox'], '22/11/2026 09:05');
     expect((bands[8]['values'] as Map)['PageBox'], 'Página 1 de 1');
   });
+
+  test(
+      'compiles binary-only reports, lookup ComboBoxes, 3-level month groups, expanded expressions, BoundObjectFrame, EmptyCell and embedded SubReports',
+      () async {
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    final temp = await Directory.systemTemp.createTemp('phase_b1_reports_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    final analysis = {
+      'schema_version': '1.0',
+      'source': 'synthetic_b1.accdb',
+      'format': 'VERSION_14',
+      'tables': [
+        {
+          'name': 'Categorias',
+          'columns': [
+            {'name': 'Id', 'typeCode': 4},
+            {'name': 'Descricao', 'typeCode': 10},
+          ],
+        },
+        {
+          'name': 'Lancamentos',
+          'columns': [
+            {'name': 'Id', 'typeCode': 4},
+            {'name': 'CatId', 'typeCode': 4},
+            {'name': 'DataRef', 'typeCode': 8},
+            {'name': 'GrupoB', 'typeCode': 10},
+            {'name': 'ValA', 'typeCode': 5},
+            {'name': 'ValB', 'typeCode': 4},
+            {'name': 'Ativo', 'typeCode': 1},
+            {'name': 'Obs', 'typeCode': 10},
+            {'name': 'ObjBin', 'typeCode': 11},
+          ],
+        },
+        {
+          'name': 'Itens',
+          'columns': [
+            {'name': 'Id', 'typeCode': 4},
+            {'name': 'LancId', 'typeCode': 4},
+            {'name': 'ItemNome', 'typeCode': 10},
+          ],
+        },
+      ],
+      'queries': [
+        {
+          'name': 'QryLancamentos',
+          'sqlText':
+              'SELECT Lancamentos.Id, Lancamentos.CatId, Lancamentos.DataRef, Lancamentos.GrupoB, Lancamentos.ValA, Lancamentos.ValB, Lancamentos.Ativo, Lancamentos.Obs, Lancamentos.ObjBin FROM Lancamentos WHERE Lancamentos.DataRef >= [DATA INICIAL];',
+        },
+      ],
+      'forms': <Object?>[],
+      'reports': [
+        {
+          'name': 'SubItensReport',
+          'recordSource': 'Itens',
+          'binaryStorageSha256': sourceHash,
+          'properties': {'Width': '6000', 'RecordSource': 'Itens'},
+          'sections': [
+            {
+              'type': 'Section',
+              'name': 'Detalhe',
+              'height': 300,
+              'controls': [
+                {
+                  'type': 'TextBox',
+                  'name': 'ItemNomeTxt',
+                  'controlSource': 'ItemNome',
+                  'properties': {'Left': '0', 'Top': '0', 'Width': '3000', 'Height': '240', 'ControlSource': 'ItemNome'},
+                },
+              ],
+            },
+          ],
+        },
+        {
+          'name': 'BinaryMasterReport',
+          'recordSource': 'QryLancamentos',
+          'binaryStorageSha256': sourceHash,
+          'properties': {'Width': '11022', 'RecordSource': 'QryLancamentos'},
+          'groupLevels': [
+            {'controlSource': 'DataRef', 'groupOn': '3', 'groupHeader': 'NotDefault', 'groupFooter': 'NotDefault'},
+            {'controlSource': 'GrupoB', 'groupOn': '0'},
+            {'controlSource': 'CatId', 'groupOn': '0'},
+          ],
+          'sections': [
+            {
+              'type': 'PageHeader',
+              'name': 'CabPag',
+              'height': 400,
+              'controls': [
+                {
+                  'type': 'TextBox',
+                  'name': 'MesTitulo',
+                  'controlSource': '=MonthName(Month([DATA INICIAL]))',
+                  'properties': {'Left': '0', 'Top': '0', 'Width': '2500', 'Height': '240', 'ControlSource': '=MonthName(Month([DATA INICIAL]))'},
+                },
+                {
+                  'type': 'TextBox',
+                  'name': 'PromptMesAno',
+                  'controlSource': '@mes/ano',
+                  'properties': {'Left': '2600', 'Top': '0', 'Width': '1500', 'Height': '240', 'ControlSource': '@mes/ano'},
+                },
+              ],
+            },
+            {
+              'type': 'BreakHeader',
+              'name': 'GrpHeader0',
+              'height': 350,
+              'controls': [
+                {
+                  'type': 'ComboBox',
+                  'name': 'CatCombo',
+                  'controlSource': 'CatId',
+                  'properties': {
+                    'Left': '0', 'Top': '0', 'Width': '3000', 'Height': '240',
+                    'ControlSource': 'CatId',
+                    'RowSourceType': 'Table/Query',
+                    'RowSource': 'SELECT Categorias.Id, Categorias.Descricao FROM Categorias;',
+                    'ColumnCount': '2', 'BoundColumn': '1', 'ColumnWidths': '0;2000',
+                  },
+                },
+              ],
+            },
+            {
+              'type': 'Section',
+              'name': 'Detalhe',
+              'height': 800,
+              'controls': [
+                {
+                  'type': 'TextBox',
+                  'name': 'StatusExpr',
+                  'controlSource': '=IIf([Ativo], "OK", Nz([Obs], "-"))',
+                  'properties': {
+                    'Left': '0', 'Top': '0', 'Width': '2000',
+                    'Format': '"R\$"#,##0.00;"-R\$"#,##0.00',
+                    'ControlSource': '=IIf([Ativo], "OK", Nz([Obs], "-"))',
+                  },
+                },
+                {
+                  'type': 'ComboBox',
+                  'name': 'GrupoComboVal',
+                  'controlSource': 'GrupoB',
+                  'properties': {
+                    'Left': '2100', 'Top': '0', 'Width': '1500', 'Height': '240',
+                    'ControlSource': 'GrupoB',
+                    'RowSourceType': 'Value List',
+                    'RowSource': '1;Alpha;2;Beta',
+                    'ColumnCount': '2', 'BoundColumn': '1', 'ColumnWidths': '0;1400',
+                  },
+                },
+                {
+                  'type': 'BoundObjectFrame',
+                  'name': 'BinFrame',
+                  'controlSource': 'ObjBin',
+                  'properties': {'Left': '3700', 'Top': '0', 'Width': '600', 'Height': '240', 'ControlSource': 'ObjBin'},
+                },
+                {
+                  'type': 'EmptyCell',
+                  'name': 'SpacerCell',
+                  'properties': {'Left': '4400', 'Top': '0', 'LayoutCachedWidth': '4900', 'LayoutCachedHeight': '240'},
+                },
+                {
+                  'type': 'Subform',
+                  'name': 'SubItensCtrl',
+                  'sourceObject': 'Report.SubItensReport',
+                  'linkMasterFields': 'Id',
+                  'linkChildFields': 'LancId',
+                  'properties': {'Left': '0', 'Top': '300', 'Width': '6000', 'Height': '400'},
+                },
+              ],
+            },
+            {
+              'type': 'BreakFooter',
+              'name': 'GrpFooter0',
+              'height': 350,
+              'controls': [
+                {
+                  'type': 'TextBox',
+                  'name': 'SomaExpr',
+                  'controlSource': '=Sum([ValA]+[ValB])',
+                  'properties': {'Left': '0', 'Top': '0', 'Width': '2000', 'Height': '240', 'ControlSource': '=Sum([ValA]+[ValB])'},
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    final analysisFile = File('${temp.path}/analysis.json');
+    await analysisFile.writeAsString(jsonEncode(analysis));
+    final appDir = Directory('${temp.path}/app');
+    final err = StringBuffer();
+    expect(
+      await run(['generate', '--analysis', analysisFile.path, '--output', appDir.path],
+          out: StringBuffer(), err: err),
+      0,
+      reason: '$err',
+    );
+
+    final inv = jsonDecode(await File('${appDir.path}/access-reports.json').readAsString()) as Map<String, dynamic>;
+    final master = (inv['compiled_reports'] as List).cast<Map>().singleWhere((r) => r['key'] == 'binary_master_report');
+    expect(master['pageSetup']['paperSizeName'], 'A4');
+    expect((master['groupLevels'] as List), hasLength(3));
+    expect((master['parameters'] as List).map((p) => p['sourceName']), containsAll(['[DATA INICIAL]', '@mes/ano']));
+    expect((master['subReports'] as List).single['childReportKey'], 'sub_itens_report');
+    final catCombo = (master['boundControls'] as List).cast<Map>().singleWhere((c) => c['controlName'] == 'CatCombo');
+    expect((catCombo['lookupSpec'] as Map)['boundOrdinal'], 0);
+    expect((catCombo['lookupSpec'] as Map)['displayOrdinal'], 1);
+
+    final probe = File('${appDir.path}/backend/bin/b1_runtime_probe.dart');
+    await probe.writeAsString(r'''
+import 'package:generated_backend/src/shared/access_reports.dart';
+void main() {
+  final bands = AccessReportController.buildGroupedBands(
+    rows: [
+      [1, 10, '2024-03-05T00:00:00', '1', '10.50', 2, true, null, ''],
+      [2, 10, '2024-03-19T00:00:00', '2', '5.00', 3, false, 'OBS', ''],
+      [3, 20, '2024-04-02T00:00:00', '1', '7.00', 1, true, null, ''],
+    ],
+    groupLevels: [
+      {'index': 0, 'columnOrdinal': 2, 'daoType': 8, 'descending': false, 'hasHeader': true, 'hasFooter': true, 'groupOn': 3, 'groupInterval': 1},
+      {'index': 1, 'columnOrdinal': 3, 'daoType': 10, 'descending': false, 'hasHeader': false, 'hasFooter': false, 'groupOn': 0, 'groupInterval': 1},
+      {'index': 2, 'columnOrdinal': 1, 'daoType': 4, 'descending': false, 'hasHeader': false, 'hasFooter': false, 'groupOn': 0, 'groupInterval': 1},
+    ],
+    sections: [
+      {'code': 3, 'key': 'page_header', 'height': 400},
+      {'code': 5, 'key': 'group_header_0', 'height': 350},
+      {'code': 0, 'key': 'detail', 'height': 800},
+      {'code': 6, 'key': 'group_footer_0', 'height': 350},
+    ],
+    boundControls: [
+      {'controlName': 'GrupoComboVal', 'controlType': 111, 'section': 0, 'columnOrdinal': 3, 'daoType': 10, 'format': null, 'lookupSpec': {'staticMap': {'1': 'Alpha', '2': 'Beta'}}},
+    ],
+    exprControls: [
+      {'controlName': 'MesTitulo', 'controlType': 109, 'section': 3, 'format': null, 'expression': {'op': 'expr', 'node': {'k': 'fn', 'fn': 'MONTHNAME', 'args': [{'k': 'fn', 'fn': 'MONTH', 'args': [{'k': 'param', 'name': '[DATA INICIAL]'}]}]}}},
+      {'controlName': 'StatusExpr', 'controlType': 109, 'section': 0, 'format': null, 'expression': {'op': 'expr', 'node': {'k': 'fn', 'fn': 'IIF', 'args': [{'k': 'col', 'ord': 6, 'daoType': 1}, {'k': 'lit', 'v': 'OK'}, {'k': 'fn', 'fn': 'NZ', 'args': [{'k': 'col', 'ord': 7, 'daoType': 10}, {'k': 'lit', 'v': '-'}]}]}}},
+      {'controlName': 'SomaExpr', 'controlType': 109, 'section': 6, 'format': null, 'expression': {'op': 'expr', 'node': {'k': 'fn', 'fn': 'SUM', 'args': [{'k': 'bin', 'op': '+', 'l': {'k': 'col', 'ord': 4, 'daoType': 5}, 'r': {'k': 'col', 'ord': 5, 'daoType': 4}}]}}},
+    ],
+    lookupMapsByCtrl: {'GrupoComboVal': {'1': 'Alpha', '2': 'Beta'}},
+    parameterValues: {'[DATA INICIAL]': '2024-03-01'},
+    nowDt: DateTime(2026, 11, 22),
+  );
+  if ((bands.first['values'] as Map)['MesTitulo'] != 'Março') throw StateError('bad MesTitulo: ${bands.first}');
+  final details = bands.where((b) => b['bandKey'] == 'detail').toList();
+  if ((details[0]['values'] as Map)['GrupoComboVal'] != 'Alpha' || (details[1]['values'] as Map)['StatusExpr'] != 'OBS') {
+    throw StateError('bad detail eval: $details');
+  }
+  final footers = bands.where((b) => b['bandKey'] == 'group_footer_0').toList();
+  if (footers.length != 2 || (footers[0]['values'] as Map)['SomaExpr'] != '20.5' || (footers[1]['values'] as Map)['SomaExpr'] != '8') {
+    throw StateError('bad month group sums: $footers');
+  }
+}
+''');
+    // Match exact package name from backend pubspec.yaml
+    final pubYaml = await File('${appDir.path}/backend/pubspec.yaml').readAsString();
+    final pkgName = RegExp(r'^name:\s*(\S+)', multiLine: true).firstMatch(pubYaml)!.group(1)!;
+    await probe.writeAsString((await probe.readAsString()).replaceFirst('generated_backend', pkgName));
+
+    final pubGet = await Process.run(Platform.resolvedExecutable, ['pub', 'get'], workingDirectory: '${appDir.path}/backend');
+    expect(pubGet.exitCode, 0, reason: '${pubGet.stdout}\n${pubGet.stderr}');
+    final probeRun = await Process.run(Platform.resolvedExecutable, ['run', probe.path], workingDirectory: '${appDir.path}/backend');
+    expect(probeRun.exitCode, 0, reason: '${probeRun.stdout}\n${probeRun.stderr}');
+  });
+
 }
 
 List<int> _buildStoredZip(Map<String, List<int>> entries) {

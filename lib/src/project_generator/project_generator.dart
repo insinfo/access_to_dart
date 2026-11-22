@@ -33,6 +33,7 @@ part 'multivalue_generator.dart';
 part 'multivalue_frontend.dart';
 part 'query_backend_generator.dart';
 part 'report_renderer_generator.dart';
+part 'report_expression_compiler.dart';
 part 'before_insert_allocator.dart';
 part 'combo_column_behavior.dart';
 part 'project_generator_ir.dart';
