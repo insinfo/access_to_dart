@@ -63,6 +63,7 @@ class CompiledReportControl {
   final int? sizeMode;
   final int? pictureAlignment;
   final String? assetName;
+  final Map<String, Object?>? expression;
 
   const CompiledReportControl({
     required this.index,
@@ -97,6 +98,7 @@ class CompiledReportControl {
     this.sizeMode,
     this.pictureAlignment,
     this.assetName,
+    this.expression,
   });
 
   Map<String, Object?> toJson() => {
@@ -132,17 +134,22 @@ class CompiledReportControl {
         if (sizeMode != null) 'sizeMode': sizeMode,
         if (pictureAlignment != null) 'pictureAlignment': pictureAlignment,
         if (assetName != null) 'assetName': assetName,
+        if (expression != null) 'expression': expression,
       };
 }
 
 class CompiledReportSection {
   final String type;
+  final String key;
+  final int code;
   final String name;
   final int height;
   final bool keepTogether;
 
   const CompiledReportSection({
     required this.type,
+    required this.key,
+    required this.code,
     required this.name,
     required this.height,
     required this.keepTogether,
@@ -150,6 +157,8 @@ class CompiledReportSection {
 
   Map<String, Object?> toJson() => {
         'type': type,
+        'key': key,
+        'code': code,
         'name': name,
         'height': height,
         'keepTogether': keepTogether,
@@ -169,6 +178,7 @@ class CompiledReportSpec {
   final List<CompiledReportSection> sections;
   final List<CompiledReportControl> controls;
   final List<CompiledReportAsset> assets;
+  final List<Map<String, Object?>> groupLevels;
 
   const CompiledReportSpec({
     required this.key,
@@ -183,21 +193,38 @@ class CompiledReportSpec {
     required this.sections,
     required this.controls,
     required this.assets,
+    this.groupLevels = const <Map<String, Object?>>[],
   });
+
+  bool get isGrouped => groupLevels.isNotEmpty;
 
   List<Map<String, Object?>> get boundControls => [
         for (final control in controls)
           if ((control.type == 'TextBox' ||
                   control.type == 'ComboBox' ||
-                  control.type == 'CheckBox') &&
+                  control.type == 'CheckBox' ||
+                  control.type == 'Attachment') &&
               control.columnOrdinal != null)
             {
               'controlName': control.name,
               'controlType': control.controlType,
+              'section': control.section,
               'controlSource': control.controlSource,
               'columnOrdinal': control.columnOrdinal,
               'daoType': control.daoType,
               'format': control.format,
+            },
+      ];
+
+  List<Map<String, Object?>> get expressionControls => [
+        for (final control in controls)
+          if (control.expression != null)
+            {
+              'controlName': control.name,
+              'controlType': control.controlType,
+              'section': control.section,
+              'format': control.format,
+              'expression': control.expression,
             },
       ];
 
@@ -211,9 +238,12 @@ class CompiledReportSpec {
         'printSettingsSha256': printSettingsSha256,
         'pageSetup': pageSetup,
         'parameters': parameters,
+        if (groupLevels.isNotEmpty) 'groupLevels': groupLevels,
         'sections': sections.map((s) => s.toJson()).toList(growable: false),
         'controls': controls.map((c) => c.toJson()).toList(growable: false),
         'boundControls': boundControls,
+        if (expressionControls.isNotEmpty)
+          'expressionControls': expressionControls,
         'assets':
             assets.map((a) => a.toMetadataJson(key)).toList(growable: false),
         'readOnly': true,
@@ -729,14 +759,68 @@ extension _CompiledReportRenderer on ProjectGenerator {
     }
     final onOpenWindowAction = _cosmeticOpenWindowAction(report);
 
-    final groupLevels = (report['groupLevels'] as List?) ?? const [];
-    if (groupLevels.isNotEmpty) {
-      return (spec: null, reason: 'unsupported-group-levels');
-    }
+    final rawGroupLevels = (report['groupLevels'] as List?) ?? const [];
 
     final recordSource =
         (report['recordSource'] ?? props['RecordSource'])?.toString().trim();
     final isBound = recordSource != null && recordSource.isNotEmpty;
+    if (rawGroupLevels.isNotEmpty && !isBound) {
+      return (spec: null, reason: 'unsupported-group-levels');
+    }
+    final parsedGroupLevels = <({
+      int index,
+      String controlSource,
+      bool descending,
+      bool hasHeader,
+      bool hasFooter,
+    })>[];
+    final headerGroupIndices = <int>[];
+    final footerGroupIndices = <int>[];
+    for (var gi = 0; gi < rawGroupLevels.length; gi++) {
+      final rawGl = rawGroupLevels[gi];
+      if (rawGl is! Map) {
+        return (spec: null, reason: 'unsupported-group-levels');
+      }
+      final gl = rawGl.cast<String, dynamic>();
+      final glProps =
+          ((gl['properties'] as Map?) ?? const {}).cast<String, dynamic>();
+      final groupOn =
+          (gl['groupOn'] ?? glProps['GroupOn'])?.toString().trim();
+      if (groupOn != null && groupOn.isNotEmpty && groupOn != '0') {
+        return (spec: null, reason: 'unsupported-group-levels');
+      }
+      final groupInterval =
+          (gl['groupInterval'] ?? glProps['GroupInterval'])?.toString().trim();
+      if (groupInterval != null &&
+          groupInterval.isNotEmpty &&
+          groupInterval != '1') {
+        return (spec: null, reason: 'unsupported-group-levels');
+      }
+      final glSource =
+          (gl['controlSource'] ?? glProps['ControlSource'])?.toString().trim();
+      if (glSource == null || glSource.isEmpty || glSource.startsWith('=')) {
+        return (spec: null, reason: 'unsupported-group-levels');
+      }
+      final sortRaw = (gl['sortOrder'] ?? glProps['SortOrder'])
+          ?.toString()
+          .trim()
+          .toLowerCase();
+      final descending =
+          sortRaw == 'notdefault' || sortRaw == 'true' || sortRaw == '1';
+      final hasHeader =
+          _isAccessFlagSet(gl['groupHeader'] ?? glProps['GroupHeader']);
+      final hasFooter =
+          _isAccessFlagSet(gl['groupFooter'] ?? glProps['GroupFooter']);
+      if (hasHeader) headerGroupIndices.add(gi);
+      if (hasFooter) footerGroupIndices.add(gi);
+      parsedGroupLevels.add((
+        index: gi,
+        controlSource: glSource,
+        descending: descending,
+        hasHeader: hasHeader,
+        hasFooter: hasFooter,
+      ));
+    }
     MapEntry<String, Map<String, Object?>>? pendingReportQuery;
     var queryEntry =
         isBound ? queryByLowerName[recordSource.toLowerCase()] : null;
@@ -774,26 +858,68 @@ extension _CompiledReportRenderer on ProjectGenerator {
       return (spec: null, reason: 'missing-sections');
     }
 
-    int sectionBucket(String type) => switch (type) {
-          'FormHeader' || 'ReportHeader' => 0,
-          'PageHeader' => 1,
-          'Section' => 2,
-          'FormFooter' || 'ReportFooter' => 3,
-          'PageFooter' => 4,
-          _ => -1,
-        };
-    int accessSectionCode(String type) => switch (type) {
-          'Section' => 0,
-          'FormHeader' || 'ReportHeader' => 1,
-          'FormFooter' || 'ReportFooter' => 2,
-          'PageHeader' => 3,
-          'PageFooter' => 4,
-          _ => 0,
-        };
+    final queryColumns = queryEntry == null
+        ? const <Map>[]
+        : (queryEntry.value['columns'] as List).cast<Map>();
+    final columnsByLower = <String, List<Map>>{};
+    for (final col in queryColumns) {
+      final colName = (col['name'] as String).toLowerCase();
+      (columnsByLower[colName] ??= []).add(col);
+    }
 
+    final compiledGroupLevels = <Map<String, Object?>>[];
+    for (final gl in parsedGroupLevels) {
+      final glMatches = _resolveReportQueryColumns(
+        gl.controlSource,
+        columnsByLower,
+        queryColumns,
+      );
+      if (glMatches.length != 1) {
+        return (spec: null, reason: 'unsupported-group-levels');
+      }
+      compiledGroupLevels.add({
+        'index': gl.index,
+        'controlSource': gl.controlSource,
+        'columnOrdinal': glMatches.single['ordinal'] as int,
+        'daoType': glMatches.single['daoType'] as int,
+        'descending': gl.descending,
+        'hasHeader': gl.hasHeader,
+        'hasFooter': gl.hasFooter,
+      });
+    }
+
+    var breakHeaderCount = 0;
+    var breakFooterCount = 0;
+    for (final item in rawSections) {
+      if (item is! Map) continue;
+      final sType = item['type']?.toString() ?? '';
+      if (sType == 'BreakHeader') breakHeaderCount++;
+      if (sType == 'BreakFooter') breakFooterCount++;
+    }
+    if (breakHeaderCount > 2 ||
+        breakFooterCount > 2 ||
+        breakHeaderCount > compiledGroupLevels.length ||
+        breakFooterCount > compiledGroupLevels.length) {
+      return (spec: null, reason: 'unsupported-group-levels');
+    }
+
+    final assignedHeaderLevels = headerGroupIndices.length == breakHeaderCount
+        ? headerGroupIndices
+        : [for (var idx = 0; idx < breakHeaderCount; idx++) idx];
+    final assignedFooterLevels = footerGroupIndices.length == breakFooterCount
+        ? footerGroupIndices
+        : [for (var idx = 0; idx < breakFooterCount; idx++) idx];
+    if (assignedHeaderLevels.any((lvl) => lvl > 1) ||
+        assignedFooterLevels.any((lvl) => lvl > 1)) {
+      return (spec: null, reason: 'unsupported-group-levels');
+    }
+
+    var seenHeaderIdx = 0;
+    var seenFooterIdx = 0;
     final validatedSections = <({
       Map<String, dynamic> raw,
       String type,
+      String sectionKey,
       String name,
       int height,
       int bucket,
@@ -812,9 +938,51 @@ extension _CompiledReportRenderer on ProjectGenerator {
       if (_mapHasBehaviorOrEvents(section, sProps)) {
         return (spec: null, reason: 'section-has-events-or-macros');
       }
-      final bucket = sectionBucket(sType);
-      if (bucket < 0) {
-        return (spec: null, reason: 'unsupported-section-type:$sType');
+      int bucket;
+      int code;
+      String sectionKey;
+      switch (sType) {
+        case 'FormHeader':
+        case 'ReportHeader':
+          bucket = 0;
+          code = 1;
+          sectionKey = 'report_header';
+          break;
+        case 'PageHeader':
+          bucket = 1;
+          code = 3;
+          sectionKey = 'page_header';
+          break;
+        case 'BreakHeader':
+          final lvl = assignedHeaderLevels[seenHeaderIdx++];
+          bucket = 2 + lvl;
+          code = 5 + (2 * lvl);
+          sectionKey = 'group_header_$lvl';
+          break;
+        case 'Section':
+          bucket = 4;
+          code = 0;
+          sectionKey = 'detail';
+          break;
+        case 'BreakFooter':
+          final lvl = assignedFooterLevels[seenFooterIdx++];
+          bucket = 6 - lvl;
+          code = 6 + (2 * lvl);
+          sectionKey = 'group_footer_$lvl';
+          break;
+        case 'FormFooter':
+        case 'ReportFooter':
+          bucket = 7;
+          code = 2;
+          sectionKey = 'report_footer';
+          break;
+        case 'PageFooter':
+          bucket = 8;
+          code = 4;
+          sectionKey = 'page_footer';
+          break;
+        default:
+          return (spec: null, reason: 'unsupported-section-type:$sType');
       }
       final sHeight = _parseReportInt(section['height'] ?? sProps['Height']);
       if (sHeight == null || sHeight < 0) {
@@ -832,7 +1000,15 @@ extension _CompiledReportRenderer on ProjectGenerator {
           final cs = (ctrlMap['controlSource'] ?? cProps['ControlSource'])
               ?.toString()
               .trim();
-          if (cs != null && cs.isNotEmpty) {
+          if (cs != null &&
+              cs.isNotEmpty &&
+              _compileReportControlExpression(
+                    cs,
+                    columnsByLower,
+                    queryColumns,
+                    isBound: false,
+                  ) ==
+                  null) {
             return (spec: null, reason: 'missing-record-source');
           }
         }
@@ -841,10 +1017,11 @@ extension _CompiledReportRenderer on ProjectGenerator {
       validatedSections.add((
         raw: section,
         type: sType,
+        sectionKey: sectionKey,
         name: section['name']?.toString() ?? sType,
         height: sHeight,
         bucket: bucket,
-        code: accessSectionCode(sType),
+        code: code,
         keepTogether: sProps['KeepTogether']?.toString() == 'NotDefault',
         controls: typedControls,
       ));
@@ -869,6 +1046,8 @@ extension _CompiledReportRenderer on ProjectGenerator {
       }
       compiledSections.add(CompiledReportSection(
         type: s.type,
+        key: s.sectionKey,
+        code: s.code,
         name: s.name,
         height: s.height,
         keepTogether: s.keepTogether,
@@ -887,14 +1066,6 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
     final defaultsRaw =
         ((report['controlDefaults'] as Map?) ?? const {}).cast<String, dynamic>();
-    final queryColumns = queryEntry == null
-        ? const <Map>[]
-        : (queryEntry.value['columns'] as List).cast<Map>();
-    final columnsByLower = <String, List<Map>>{};
-    for (final col in queryColumns) {
-      final colName = (col['name'] as String).toLowerCase();
-      (columnsByLower[colName] ??= []).add(col);
-    }
 
     final rawImages = (report['images'] as List?) ?? const [];
     final imageByControl = <String, Map<String, dynamic>>{};
@@ -1036,6 +1207,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
       int? sizeMode;
       int? pictureAlignment;
       String? assetName;
+      Map<String, Object?>? expression;
 
       if (cType == 'Label' || cType == 'TextBox' || cType == 'ComboBox') {
         fontName =
@@ -1072,7 +1244,17 @@ extension _CompiledReportRenderer on ProjectGenerator {
               caption = literalMatch.group(1)!;
               controlSource = null;
             } else if (controlSource.startsWith('=')) {
-              return (spec: null, reason: 'unsupported-$typeSlug-source:$cName');
+              expression = !isCombo
+                  ? _compileReportControlExpression(
+                      controlSource,
+                      columnsByLower,
+                      queryColumns,
+                      isBound: isBound,
+                    )
+                  : null;
+              if (expression == null) {
+                return (spec: null, reason: 'unsupported-$typeSlug-source:$cName');
+              }
             } else {
               final colMatches = _resolveReportQueryColumns(
                 controlSource,
@@ -1230,6 +1412,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         sizeMode: sizeMode,
         pictureAlignment: pictureAlignment,
         assetName: assetName,
+        expression: expression,
       ));
     }
 
@@ -1256,6 +1439,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         sections: compiledSections,
         controls: compiledControls,
         assets: compiledAssets,
+        groupLevels: compiledGroupLevels,
       ),
       reason: null,
     );
@@ -1586,6 +1770,159 @@ extension _CompiledReportRenderer on ProjectGenerator {
     return fallback;
   }
 
+  bool _isAccessFlagSet(Object? raw) {
+    final s = raw?.toString().trim().toLowerCase() ?? '';
+    return s == 'notdefault' || s == 'true' || s == '1';
+  }
+
+  Map<String, Object?>? _compileReportControlExpression(
+    String rawSource,
+    Map<String, List<Map>> columnsByLower,
+    List<Map> queryColumns, {
+    required bool isBound,
+  }) {
+    final trimmed = rawSource.trim();
+    if (!trimmed.startsWith('=')) return null;
+    final body = trimmed.substring(1).trim();
+    if (body.isEmpty) return null;
+    final lower = body.toLowerCase();
+    if (RegExp(r'^date\s*\(\s*\)$').hasMatch(lower)) {
+      return const {'op': 'date'};
+    }
+    if (RegExp(r'^now\s*\(\s*\)$').hasMatch(lower)) {
+      return const {'op': 'now'};
+    }
+    final countMatch = RegExp(
+      r'^count\s*\(\s*(.+?)\s*\)$',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (countMatch != null) {
+      if (!isBound) return null;
+      final arg = countMatch.group(1)!.trim();
+      if (arg == '*') {
+        return const {'op': 'count', 'columnOrdinal': null};
+      }
+      final cols = _resolveExpressionColumn(arg, columnsByLower, queryColumns);
+      if (cols.length != 1) return null;
+      return {
+        'op': 'count',
+        'columnOrdinal': cols.single['ordinal'] as int,
+      };
+    }
+    final sumMatch = RegExp(
+      r'^([+-])?\s*sum\s*\(\s*(.+?)\s*\)$',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (sumMatch != null) {
+      if (!isBound) return null;
+      final sign = sumMatch.group(1) == '-' ? -1 : 1;
+      final arg = sumMatch.group(2)!.trim();
+      final cols = _resolveExpressionColumn(arg, columnsByLower, queryColumns);
+      if (cols.length != 1) return null;
+      final daoType = cols.single['daoType'] as int;
+      if (!const {1, 3, 4, 5, 7}.contains(daoType)) return null;
+      return {
+        'op': 'sum',
+        'columnOrdinal': cols.single['ordinal'] as int,
+        'daoType': daoType,
+        'sign': sign,
+      };
+    }
+
+    final parts = _parsePageConcatExpression(body);
+    if (parts != null) {
+      return {'op': 'concat', 'parts': parts};
+    }
+    return null;
+  }
+
+  List<Map> _resolveExpressionColumn(
+    String rawArg,
+    Map<String, List<Map>> columnsByLower,
+    List<Map> queryColumns,
+  ) {
+    final direct =
+        _resolveReportQueryColumns(rawArg, columnsByLower, queryColumns);
+    if (direct.isNotEmpty) return direct;
+
+    final segments = rawArg
+        .split('.')
+        .map((part) {
+          final t = part.trim();
+          if (t.startsWith('[') && t.endsWith(']') && t.length >= 2) {
+            return t.substring(1, t.length - 1);
+          }
+          return t;
+        })
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.length >= 2) {
+      final tail2 = '${segments[segments.length - 2]}.${segments.last}';
+      final byTail2 =
+          _resolveReportQueryColumns(tail2, columnsByLower, queryColumns);
+      if (byTail2.isNotEmpty) return byTail2;
+    }
+    if (segments.isNotEmpty) {
+      return _resolveReportQueryColumns(
+          segments.last, columnsByLower, queryColumns);
+    }
+    return const [];
+  }
+
+  List<Map<String, String>>? _parsePageConcatExpression(String body) {
+    final rawParts = <String>[];
+    final current = StringBuffer();
+    String? quoteChar;
+    for (var i = 0; i < body.length; i++) {
+      final ch = body[i];
+      if (quoteChar != null) {
+        current.write(ch);
+        if (ch == quoteChar) {
+          if (i + 1 < body.length && body[i + 1] == quoteChar) {
+            current.write(body[++i]);
+          } else {
+            quoteChar = null;
+          }
+        }
+      } else {
+        if (ch == '"' || ch == "'") {
+          quoteChar = ch;
+          current.write(ch);
+        } else if (ch == '&') {
+          rawParts.add(current.toString().trim());
+          current.clear();
+        } else {
+          current.write(ch);
+        }
+      }
+    }
+    if (quoteChar != null) return null;
+    rawParts.add(current.toString().trim());
+    if (rawParts.any((p) => p.isEmpty)) return null;
+
+    final result = <Map<String, String>>[];
+    var sawPageVar = false;
+    for (final part in rawParts) {
+      if ((part.startsWith('"') && part.endsWith('"') && part.length >= 2) ||
+          (part.startsWith("'") && part.endsWith("'") && part.length >= 2)) {
+        final q = part[0];
+        final inner = part.substring(1, part.length - 1).replaceAll('$q$q', q);
+        result.add({'literal': inner});
+      } else {
+        final clean = (part.startsWith('[') && part.endsWith(']') && part.length >= 2)
+            ? part.substring(1, part.length - 1).trim().toLowerCase()
+            : part.toLowerCase();
+        if (clean == 'page' || clean == 'pages') {
+          sawPageVar = true;
+          result.add({'var': clean});
+        } else {
+          return null;
+        }
+      }
+    }
+    return sawPageVar ? result : null;
+  }
+
   static const Set<String> _supportedReportFormats = {
     '',
     '>',
@@ -1739,7 +2076,21 @@ class AccessReportController {
       return responseError('Relatorio nao compilado.', statusCode: 404);
     }
     final queryKey = descriptor['queryKey'] as String?;
+    final exprControls =
+        ((descriptor['expressionControls'] as List?) ?? const []).cast<Map>();
+    final nowDt = DateTime.now();
     if (queryKey == null || queryKey.isEmpty) {
+      final values = <String, String>{
+        for (final exprCtrl in exprControls)
+          exprCtrl['controlName'] as String: evalExpression(
+            exprCtrl['expression'] as Map,
+            const <List>[],
+            pageNumber: 1,
+            totalPages: 1,
+            nowDt: nowDt,
+            format: exprCtrl['format'] as String?,
+          ),
+      };
       return responseJson({
         'report': descriptor['name'],
         'key': key,
@@ -1750,8 +2101,8 @@ class AccessReportController {
         'pageSetup': descriptor['pageSetup'],
         'sections': descriptor['sections'],
         'controls': descriptor['controls'],
-        'pages': const [
-          {'pageNumber': 1, 'values': <String, String>{}},
+        'pages': [
+          {'pageNumber': 1, 'values': values},
         ],
         'rowCount': 1,
         'truncated': false,
@@ -1768,7 +2119,47 @@ class AccessReportController {
           await AccessQueryController.executeDescriptor(request, queryDescriptor);
       final rows = (result['rows'] as List).cast<List>();
       final boundControls = (descriptor['boundControls'] as List).cast<Map>();
+      final groupLevels =
+          ((descriptor['groupLevels'] as List?) ?? const []).cast<Map>();
+      if (groupLevels.isNotEmpty) {
+        final sections =
+            ((descriptor['sections'] as List?) ?? const []).cast<Map>();
+        final bands = buildGroupedBands(
+          rows: rows,
+          groupLevels: groupLevels,
+          sections: sections,
+          boundControls: boundControls,
+          exprControls: exprControls,
+          nowDt: nowDt,
+        );
+        return responseJson({
+          'report': descriptor['name'],
+          'key': key,
+          'caption': descriptor['caption'],
+          'recordSource': descriptor['recordSource'],
+          'queryKey': queryKey,
+          'parameters': result['parameters'],
+          'pageSetup': descriptor['pageSetup'],
+          'sections': descriptor['sections'],
+          'controls': descriptor['controls'],
+          'grouped': true,
+          'bands': bands,
+          'pages': rows.isEmpty
+              ? const <Map<String, Object?>>[]
+              : [
+                  {
+                    'pageNumber': 1,
+                    'values': const <String, String>{},
+                    'bands': bands,
+                  }
+                ],
+          'rowCount': rows.length,
+          'truncated': result['truncated'],
+          'readOnly': true,
+        });
+      }
       final pages = <Map<String, Object?>>[];
+      final totalPages = rows.length;
       for (var i = 0; i < rows.length; i++) {
         final row = rows[i];
         final values = <String, String>{};
@@ -1780,6 +2171,18 @@ class AccessReportController {
             control['daoType'] as int,
             control['format'] as String?,
             controlType: control['controlType'] as int?,
+          );
+        }
+        for (final exprCtrl in exprControls) {
+          final secCode = exprCtrl['section'] as int? ?? 0;
+          final scopeRows = secCode == 0 ? [row] : rows;
+          values[exprCtrl['controlName'] as String] = evalExpression(
+            exprCtrl['expression'] as Map,
+            scopeRows,
+            pageNumber: i + 1,
+            totalPages: totalPages,
+            nowDt: nowDt,
+            format: exprCtrl['format'] as String?,
           );
         }
         pages.add({'pageNumber': i + 1, 'values': values});
@@ -1826,6 +2229,201 @@ class AccessReportController {
         'Cache-Control': 'public, max-age=3600',
       },
     );
+  }
+
+  static List<Map<String, Object?>> buildGroupedBands({
+    required List<List> rows,
+    required List<Map> groupLevels,
+    required List<Map> sections,
+    required List<Map> boundControls,
+    required List<Map> exprControls,
+    required DateTime nowDt,
+  }) {
+    if (rows.isEmpty) return const <Map<String, Object?>>[];
+    final sorted = [for (final r in rows) r];
+    sorted.sort((a, b) {
+      for (final gl in groupLevels) {
+        final ord = gl['columnOrdinal'] as int;
+        final desc = gl['descending'] == true;
+        final av = ord < a.length ? a[ord] : null;
+        final bv = ord < b.length ? b[ord] : null;
+        final cmp = _compareGroupValues(av, bv);
+        if (cmp != 0) return desc ? -cmp : cmp;
+      }
+      return 0;
+    });
+
+    Map<int, Map> sectionByCode = {
+      for (final s in sections) s['code'] as int: s,
+    };
+    Map<String, String> valuesForSection(
+      int sectionCode,
+      List row,
+      List<List> scopeRows,
+    ) {
+      final values = <String, String>{};
+      for (final c in boundControls) {
+        if ((c['section'] as int? ?? 0) != sectionCode) continue;
+        final ord = c['columnOrdinal'] as int;
+        final raw = ord < row.length ? row[ord] : null;
+        values[c['controlName'] as String] = _formatCell(
+          raw,
+          c['daoType'] as int,
+          c['format'] as String?,
+          controlType: c['controlType'] as int?,
+        );
+      }
+      for (final e in exprControls) {
+        if ((e['section'] as int? ?? 0) != sectionCode) continue;
+        values[e['controlName'] as String] = evalExpression(
+          e['expression'] as Map,
+          scopeRows,
+          pageNumber: 1,
+          totalPages: 1,
+          nowDt: nowDt,
+          format: e['format'] as String?,
+        );
+      }
+      return values;
+    }
+
+    final bands = <Map<String, Object?>>[];
+    void emitSection(int code, List row, List<List> scopeRows) {
+      final sec = sectionByCode[code];
+      if (sec == null) return;
+      final height = sec['height'] as int? ?? 0;
+      if (height <= 0) return;
+      bands.add({
+        'bandKey': sec['key'] as String,
+        'sectionCode': code,
+        'values': valuesForSection(code, row, scopeRows),
+      });
+    }
+
+    String groupKeyFor(List row, int levelIdx) {
+      final ord = groupLevels[levelIdx]['columnOrdinal'] as int;
+      final v = ord < row.length ? row[ord] : null;
+      return v == null ? '\u0000NULL' : v.toString();
+    }
+
+    final activeLevels = <int>[
+      for (final lvl in const [0, 1])
+        if (lvl < groupLevels.length &&
+            (sectionByCode.containsKey(5 + 2 * lvl) ||
+                sectionByCode.containsKey(6 + 2 * lvl)))
+          lvl,
+    ];
+
+    void emitLevel(int activePos, List<List> slice) {
+      if (activePos >= activeLevels.length) {
+        for (final row in slice) {
+          emitSection(0, row, [row]);
+        }
+        return;
+      }
+      final lvl = activeLevels[activePos];
+      final headerCode = 5 + 2 * lvl;
+      final footerCode = 6 + 2 * lvl;
+      var start = 0;
+      while (start < slice.length) {
+        final key = groupKeyFor(slice[start], lvl);
+        var end = start + 1;
+        while (end < slice.length && groupKeyFor(slice[end], lvl) == key) {
+          end++;
+        }
+        final groupSlice = slice.sublist(start, end);
+        emitSection(headerCode, groupSlice.first, groupSlice);
+        emitLevel(activePos + 1, groupSlice);
+        emitSection(footerCode, groupSlice.first, groupSlice);
+        start = end;
+      }
+    }
+
+    emitSection(1, sorted.first, sorted);
+    emitSection(3, sorted.first, sorted);
+    emitLevel(0, sorted);
+    emitSection(2, sorted.first, sorted);
+    emitSection(4, sorted.first, sorted);
+    return bands;
+  }
+
+  static int _compareGroupValues(Object? a, Object? b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return -1;
+    if (b == null) return 1;
+    if (a is num && b is num) return a.compareTo(b);
+    if (a is bool && b is bool) return (a ? 1 : 0).compareTo(b ? 1 : 0);
+    return a.toString().toLowerCase().compareTo(b.toString().toLowerCase());
+  }
+
+  static String evalExpression(
+    Map expression,
+    List<List> scopeRows, {
+    required int pageNumber,
+    required int totalPages,
+    required DateTime nowDt,
+    String? format,
+  }) {
+    final op = expression['op'] as String?;
+    String pad2(int n) => n.toString().padLeft(2, '0');
+    switch (op) {
+      case 'date':
+        return '${pad2(nowDt.day)}/${pad2(nowDt.month)}/${nowDt.year}';
+      case 'now':
+        final fmtLower = (format ?? '').trim().toLowerCase();
+        if (fmtLower == 'short date' || fmtLower == 'long date' || fmtLower == 'dd/mm/yyyy') {
+          return '${pad2(nowDt.day)}/${pad2(nowDt.month)}/${nowDt.year}';
+        }
+        return '${pad2(nowDt.day)}/${pad2(nowDt.month)}/${nowDt.year} ${pad2(nowDt.hour)}:${pad2(nowDt.minute)}';
+      case 'count':
+        final ord = expression['columnOrdinal'] as int?;
+        if (ord == null) return '${scopeRows.length}';
+        var count = 0;
+        for (final row in scopeRows) {
+          if (ord < row.length && row[ord] != null) count++;
+        }
+        return '$count';
+      case 'sum':
+        final ord = expression['columnOrdinal'] as int;
+        final daoType = expression['daoType'] as int;
+        final sign = (expression['sign'] as int?) ?? 1;
+        num total = 0;
+        for (final row in scopeRows) {
+          if (ord >= row.length || row[ord] == null) continue;
+          final cell = row[ord];
+          if (daoType == 1 && cell is bool) {
+            total += cell ? -1 : 0;
+          } else if (cell is num) {
+            total += cell;
+          } else {
+            final parsed = num.tryParse(cell.toString().trim().replaceAll(',', '.'));
+            if (parsed != null) total += parsed;
+          }
+        }
+        total = total * sign;
+        if (total == total.roundToDouble() && daoType != 5) {
+          return '${total.toInt()}';
+        }
+        if (daoType == 5) {
+          return total.toStringAsFixed(2);
+        }
+        return '$total';
+      case 'concat':
+        final parts = (expression['parts'] as List).cast<Map>();
+        final buf = StringBuffer();
+        for (final p in parts) {
+          if (p['literal'] != null) {
+            buf.write(p['literal']);
+          } else if (p['var'] == 'page') {
+            buf.write(pageNumber);
+          } else if (p['var'] == 'pages') {
+            buf.write(totalPages);
+          }
+        }
+        return buf.toString();
+      default:
+        return '';
+    }
   }
 
   static String _formatCell(
@@ -1902,6 +2500,7 @@ String _buildAccessReportViewerDartSource(List<CompiledReportSpec> reports) {
         'recordSource': report.recordSource,
         'parameters': report.parameters,
         'controlsCount': report.controls.length,
+        'grouped': report.isGrouped,
       },
   ];
   return _accessReportViewerDartTemplate.replaceFirst(
@@ -2039,6 +2638,28 @@ class AccessReportViewer implements OnInit {
 
   bool pageChecked(Map<String, dynamic> page, String controlName) =>
       pageValue(page, controlName) == 'true';
+
+  List<Map<String, dynamic>> groupedBands(Map<String, dynamic> page) {
+    final raw = page['bands'];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList(growable: false);
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  String bandValue(Map<String, dynamic> band, String controlName) {
+    final values = band['values'];
+    if (values is Map) {
+      return values[controlName]?.toString() ?? '';
+    }
+    return '';
+  }
+
+  bool bandChecked(Map<String, dynamic> band, String controlName) =>
+      bandValue(band, controlName) == 'true';
 }
 ''';
 
@@ -2083,56 +2704,84 @@ String _buildAccessReportViewerHtml(List<CompiledReportSpec> reports) {
   buffer.writeln('    </div>');
   buffer.writeln('  </div>');
 
+  void writeControlHtml(CompiledReportSpec report, CompiledReportControl ctrl,
+      {required bool isBand}) {
+    final ctrlNameExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(ctrl.name));
+    final ctrlTypeExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(ctrl.type));
+    final cssClass = 'access-report-ctrl-${report.key}-${ctrl.index}';
+    final valueHelper = isBand ? 'bandValue(band,' : 'pageValue(page,';
+    final checkedHelper = isBand ? 'bandChecked(band,' : 'pageChecked(page,';
+    switch (ctrl.type) {
+      case 'Label':
+        final text = _ngDartHtmlText(ctrl.caption ?? '');
+        buffer.writeln(
+            '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$text</div>');
+        break;
+      case 'TextBox':
+      case 'ComboBox':
+        if (ctrl.columnOrdinal == null &&
+            ctrl.expression == null &&
+            ctrl.caption != null) {
+          final captionHtml = _ngDartHtmlText(ctrl.caption!);
+          buffer.writeln(
+              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$captionHtml</div>');
+        } else {
+          final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
+          buffer.writeln(
+              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ $valueHelper $nameArg) }}</div>');
+        }
+        break;
+      case 'Rectangle':
+      case 'Line':
+      case 'Attachment':
+      case 'EmptyCell':
+        buffer.writeln(
+            '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"></div>');
+        break;
+      case 'CheckBox':
+        final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
+        buffer.writeln(
+            '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr" [attr.data-access-checked]="$valueHelper $nameArg)"><input type="checkbox" disabled [checked]="$checkedHelper $nameArg)"></div>');
+        break;
+      case 'Image':
+        final src = _htmlTextLiteral(
+            '/api/v1/access-reports/${report.key}/assets/${ctrl.assetName}');
+        final alt = _htmlTextLiteral(ctrl.picture ?? ctrl.name);
+        buffer.writeln(
+            '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"><img src="$src" alt="$alt"></div>');
+        break;
+    }
+  }
+
   for (final report in reports) {
     final keyExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(report.key));
     buffer.writeln('  <div *ngIf="activeReportKey == $keyExpr">');
-    buffer.writeln('    <div *ngFor="let page of pages" class="access-report-paper-${report.key}">');
-    buffer.writeln('      <div class="access-report-sheet-${report.key}" [attr.data-access-report]="$keyExpr">');
-    for (final ctrl in report.controls) {
-      final ctrlNameExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(ctrl.name));
-      final ctrlTypeExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(ctrl.type));
-      final cssClass = 'access-report-ctrl-${report.key}-${ctrl.index}';
-      switch (ctrl.type) {
-        case 'Label':
-          final text = _ngDartHtmlText(ctrl.caption ?? '');
-          buffer.writeln(
-              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$text</div>');
-          break;
-        case 'TextBox':
-        case 'ComboBox':
-          if (ctrl.columnOrdinal == null && ctrl.caption != null) {
-            final captionHtml = _ngDartHtmlText(ctrl.caption!);
-            buffer.writeln(
-                '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$captionHtml</div>');
-          } else {
-            final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
-            buffer.writeln(
-                '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ pageValue(page, $nameArg) }}</div>');
-          }
-          break;
-        case 'Rectangle':
-        case 'Line':
-        case 'Attachment':
-        case 'EmptyCell':
-          buffer.writeln(
-              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"></div>');
-          break;
-        case 'CheckBox':
-          final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
-          buffer.writeln(
-              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr" [attr.data-access-checked]="pageValue(page, $nameArg)"><input type="checkbox" disabled [checked]="pageChecked(page, $nameArg)"></div>');
-          break;
-        case 'Image':
-          final src = _htmlTextLiteral(
-              '/api/v1/access-reports/${report.key}/assets/${ctrl.assetName}');
-          final alt = _htmlTextLiteral(ctrl.picture ?? ctrl.name);
-          buffer.writeln(
-              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"><img src="$src" alt="$alt"></div>');
-          break;
+    if (report.isGrouped) {
+      buffer.writeln('    <div *ngIf="pages.isNotEmpty" class="access-report-paper-${report.key}">');
+      buffer.writeln('      <div class="access-report-grouped-${report.key}" [attr.data-access-report]="$keyExpr">');
+      buffer.writeln('        <ng-container *ngFor="let band of groupedBands(pages.first)">');
+      for (final sec in report.sections) {
+        if (sec.height <= 0) continue;
+        final secKeyExpr = _htmlTextLiteral(_ngDartSingleQuotedExpr(sec.key));
+        buffer.writeln('          <div *ngIf="band[\'bandKey\'] == $secKeyExpr" class="access-report-band-${report.key}-${sec.key}">');
+        for (final ctrl in report.controls) {
+          if (ctrl.section != sec.code) continue;
+          writeControlHtml(report, ctrl, isBand: true);
+        }
+        buffer.writeln('          </div>');
       }
+      buffer.writeln('        </ng-container>');
+      buffer.writeln('      </div>');
+      buffer.writeln('    </div>');
+    } else {
+      buffer.writeln('    <div *ngFor="let page of pages" class="access-report-paper-${report.key}">');
+      buffer.writeln('      <div class="access-report-sheet-${report.key}" [attr.data-access-report]="$keyExpr">');
+      for (final ctrl in report.controls) {
+        writeControlHtml(report, ctrl, isBand: false);
+      }
+      buffer.writeln('      </div>');
+      buffer.writeln('    </div>');
     }
-    buffer.writeln('      </div>');
-    buffer.writeln('    </div>');
     buffer.writeln('  </div>');
   }
   buffer.writeln('</section>');
@@ -2182,6 +2831,20 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
   overflow: hidden;
 }
 ''');
+    if (report.isGrouped) {
+      for (final sec in report.sections) {
+        if (sec.height <= 0) continue;
+        buffer.writeln('''
+.access-report-band-${report.key}-${sec.key} {
+  position: relative;
+  width: ${_twipsToPx(widthTwips)}px;
+  height: ${_twipsToPx(sec.height)}px;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+''');
+      }
+    }
     for (final ctrl in report.controls) {
       final isLine = ctrl.type == 'Line';
       final isCheck = ctrl.type == 'CheckBox';
@@ -2199,7 +2862,8 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
       buffer.writeln('.$cls {');
       buffer.writeln('  position: absolute;');
       buffer.writeln('  left: ${_twipsToPx(ctrl.left)}px;');
-      buffer.writeln('  top: ${_twipsToPx(ctrl.sheetTop)}px;');
+      final topTwips = report.isGrouped ? ctrl.top : ctrl.sheetTop;
+      buffer.writeln('  top: ${_twipsToPx(topTwips)}px;');
       buffer.writeln('  width: ${cssWidth}px;');
       buffer.writeln('  height: ${cssHeight}px;');
       buffer.writeln('  background-color: $bg;');
@@ -2232,7 +2896,7 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
         buffer.writeln('  font-size: ${ctrl.fontSize ?? 11}pt;');
         buffer.writeln('  font-weight: ${ctrl.fontWeight ?? 400};');
         buffer.writeln('  text-align: $align;');
-        buffer.writeln('  line-height: 1.12;');
+        buffer.writeln('  line-height: 1.08;');
         buffer.writeln('  white-space: pre-wrap;');
         buffer.writeln('  padding: 0;');
       }

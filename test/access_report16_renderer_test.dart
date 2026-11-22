@@ -284,7 +284,7 @@ void main() {
           'sourceSha256': sourceHash,
           'properties': {'Width': '11022'},
           'groupLevels': [
-            {'controlSource': 'CodFam'}
+            {'controlSource': 'CodFam', 'groupOn': '3'}
           ],
         },
         {
@@ -1248,6 +1248,308 @@ void main() {
     ).readAsString();
     expect(viewerHtml, contains('>1</div>'));
     expect(viewerHtml, contains('data-access-control-type'));
+  });
+
+  test(
+      'compiles grouped reports with BreakLevel, BreakHeader, BreakFooter and read-only aggregate/date/page expressions',
+      () async {
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    final temp = await Directory.systemTemp.createTemp('phase3_grouped_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    final analysis = _buildCspront1Analysis(reports: [
+      {
+        'name': 'GroupedSummaryReport',
+        'recordSource': 'GroupedSql',
+        'sourceSha256': sourceHash,
+        'properties': {'Width': '6000', 'RecordSource': 'GroupedSql'},
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'groupLevels': [
+          {
+            'controlSource': 'CodFam',
+            'groupHeader': 'NotDefault',
+            'groupFooter': 'NotDefault',
+          },
+          {
+            'controlSource': 'NOME',
+            'sortOrder': 'NotDefault',
+          },
+        ],
+        'sections': [
+          {
+            'type': 'PageHeader',
+            'name': 'PageHeaderSection',
+            'height': 300,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'DateBox',
+                'controlSource': '=Date()',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '1500',
+                  'Height': '250',
+                  'ControlSource': '=Date()',
+                },
+              },
+            ],
+          },
+          {
+            'type': 'BreakHeader',
+            'name': 'GroupHeader0',
+            'height': 300,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'FamHeader',
+                'controlSource': 'CodFam',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '1500',
+                  'Height': '250',
+                  'ControlSource': 'CodFam',
+                },
+              },
+            ],
+          },
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 300,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'NomeDetalhe',
+                'controlSource': 'NOME',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '2500',
+                  'Height': '250',
+                  'ControlSource': 'NOME',
+                },
+              },
+            ],
+          },
+          {
+            'type': 'BreakFooter',
+            'name': 'RodapeDoGrupo0',
+            'height': 300,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'GrpCount',
+                'controlSource': '=Count(*)',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '1000',
+                  'Height': '250',
+                  'ControlSource': '=Count(*)',
+                },
+              },
+              {
+                'type': 'TextBox',
+                'name': 'GrpSumFam',
+                'controlSource': '=Sum([CodFam])',
+                'properties': {
+                  'Left': '1100',
+                  'Top': '0',
+                  'Width': '1000',
+                  'Height': '250',
+                  'ControlSource': '=Sum([CodFam])',
+                },
+              },
+              {
+                'type': 'TextBox',
+                'name': 'GrpNegBoolSum',
+                'controlSource': '=-Sum([CRAS])',
+                'properties': {
+                  'Left': '2200',
+                  'Top': '0',
+                  'Width': '1000',
+                  'Height': '250',
+                  'ControlSource': '=-Sum([CRAS])',
+                },
+              },
+            ],
+          },
+          {
+            'type': 'PageFooter',
+            'name': 'PageFooterSection',
+            'height': 300,
+            'controls': [
+              {
+                'type': 'TextBox',
+                'name': 'NowBox',
+                'controlSource': '=Now()',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '1800',
+                  'Height': '250',
+                  'ControlSource': '=Now()',
+                },
+              },
+              {
+                'type': 'TextBox',
+                'name': 'PageBox',
+                'controlSource': '="Página " & [Page] & " de " & [Pages]',
+                'properties': {
+                  'Left': '2000',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '250',
+                  'ControlSource': '="Página " & [Page] & " de " & [Pages]',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ], includeHabitColumns: true);
+    (analysis['queries'] as List).add({
+      'name': 'GroupedSql',
+      'sqlText':
+          'SELECT CadResidencia.CodFam, TbPessoa.NOME, CadResidencia.CRAS FROM CadResidencia INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam;',
+    });
+
+    final analysisFile = File('${temp.path}/analysis.json');
+    await analysisFile.writeAsString(jsonEncode(analysis));
+
+    final appDir = Directory('${temp.path}/app');
+    final err = StringBuffer();
+    expect(
+      await run(
+        ['generate', '--analysis', analysisFile.path, '--output', appDir.path],
+        out: StringBuffer(),
+        err: err,
+      ),
+      0,
+      reason: '$err',
+    );
+    final inventory = jsonDecode(
+      await File('${appDir.path}/access-reports.json').readAsString(),
+    ) as Map<String, dynamic>;
+    final compiled = (inventory['compiled_reports'] as List).single as Map;
+    expect(compiled['name'], 'GroupedSummaryReport');
+    expect((compiled['groupLevels'] as List), hasLength(2));
+    final secCodes =
+        (compiled['sections'] as List).cast<Map>().map((s) => s['code']).toList();
+    expect(secCodes, [3, 5, 0, 6, 4]);
+    final exprNames = (compiled['expressionControls'] as List)
+        .cast<Map>()
+        .map((c) => c['controlName'])
+        .toList();
+    expect(exprNames, ['DateBox', 'GrpCount', 'GrpSumFam', 'GrpNegBoolSum', 'NowBox', 'PageBox']);
+
+    final viewerHtml = await File(
+      '${appDir.path}/frontend/lib/src/shared/components/access_report_viewer.html',
+    ).readAsString();
+    expect(viewerHtml, contains('groupedBands(pages.first)'));
+    expect(viewerHtml, contains("band['bandKey'] == 'group_header_0'"));
+    expect(viewerHtml, isNot(contains('[ngSwitch]')));
+    expect(viewerHtml, contains('access-report-band-grouped_summary_report-group_header_0'));
+
+    final viewerScss = await File(
+      '${appDir.path}/frontend/lib/src/shared/components/access_report_viewer.scss',
+    ).readAsString();
+    expect(viewerScss, contains('.access-report-band-grouped_summary_report-group_footer_0'));
+    expect(viewerScss, contains('line-height: 1.08;'));
+
+    final reportsDart = await File(
+      '${appDir.path}/backend/lib/src/shared/access_reports.dart',
+    ).readAsString();
+    expect(reportsDart, contains('static List<Map<String, Object?>> buildGroupedBands('));
+    expect(reportsDart, contains('static String evalExpression('));
+    expect(reportsDart, contains('total += cell ? -1 : 0;'));
+
+    final backendDir = Directory('${appDir.path}/backend');
+    final pubGet = await Process.run(
+      'dart',
+      ['pub', 'get', '--offline'],
+      workingDirectory: backendDir.path,
+    );
+    expect(pubGet.exitCode, 0, reason: '${pubGet.stdout}\n${pubGet.stderr}');
+
+    final probe = File('${backendDir.path}/bin/grouped_probe.dart');
+    await probe.writeAsString(r'''
+import 'dart:convert';
+import 'package:shelf/shelf.dart';
+import '../lib/src/shared/access_reports.dart';
+
+void main() {
+  final spec = AccessReportController.specifications['grouped_summary_report'] as Map;
+  final bands = AccessReportController.buildGroupedBands(
+    rows: [
+      [20, 'Ana', true],
+      [10, 'Bruno', false],
+      [10, 'Carla', true],
+    ],
+    groupLevels: (spec['groupLevels'] as List).cast<Map>(),
+    sections: (spec['sections'] as List).cast<Map>(),
+    boundControls: (spec['boundControls'] as List).cast<Map>(),
+    exprControls: (spec['expressionControls'] as List).cast<Map>(),
+    nowDt: DateTime(2026, 11, 22, 9, 5),
+  );
+  print(jsonEncode(bands));
+  // Keep import referenced if unused warning checked.
+  if (Request('GET', Uri.parse('http://localhost/')).method != 'GET') {
+    throw StateError('bad request');
+  }
+}
+''');
+    final probeRun = await Process.run(
+      Platform.resolvedExecutable,
+      ['run', probe.path],
+      workingDirectory: backendDir.path,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    expect(probeRun.exitCode, 0, reason: '${probeRun.stdout}\n${probeRun.stderr}');
+    final bands = (jsonDecode(probeRun.stdout as String) as List).cast<Map>();
+    expect(
+      bands.map((b) => b['bandKey']).toList(),
+      [
+        'page_header',
+        'group_header_0',
+        'detail',
+        'detail',
+        'group_footer_0',
+        'group_header_0',
+        'detail',
+        'group_footer_0',
+        'page_footer',
+      ],
+    );
+    // Group 0 sorted ascending (10 then 20), Group 1 sorted descending (Carla before Bruno).
+    expect((bands[0]['values'] as Map)['DateBox'], '22/11/2026');
+    expect((bands[1]['values'] as Map)['FamHeader'], '10');
+    expect((bands[2]['values'] as Map)['NomeDetalhe'], 'Carla');
+    expect((bands[3]['values'] as Map)['NomeDetalhe'], 'Bruno');
+    expect((bands[4]['values'] as Map)['GrpCount'], '2');
+    expect((bands[4]['values'] as Map)['GrpSumFam'], '20');
+    expect((bands[4]['values'] as Map)['GrpNegBoolSum'], '1');
+    expect((bands[5]['values'] as Map)['FamHeader'], '20');
+    expect((bands[6]['values'] as Map)['NomeDetalhe'], 'Ana');
+    expect((bands[7]['values'] as Map)['GrpCount'], '1');
+    expect((bands[7]['values'] as Map)['GrpSumFam'], '20');
+    expect((bands[7]['values'] as Map)['GrpNegBoolSum'], '1');
+    expect((bands[8]['values'] as Map)['NowBox'], '22/11/2026 09:05');
+    expect((bands[8]['values'] as Map)['PageBox'], 'Página 1 de 1');
   });
 }
 
