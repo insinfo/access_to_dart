@@ -45,6 +45,7 @@ String _buildFrontendShellHtml({
   required String projectName,
   required Iterable<Map<String, Object?>> modules,
   bool hasReports = false,
+  bool hasQueries = false,
 }) {
   return _renderTemplateAsset(
     'frontend/app_component.html.mustache',
@@ -52,6 +53,7 @@ String _buildFrontendShellHtml({
       'projectName': projectName,
       'modules': modules.toList(growable: false),
       'hasReports': hasReports,
+      'hasQueries': hasQueries,
     },
   );
 }

@@ -18,6 +18,7 @@ export 'components/datatable.dart';
 export 'components/access_subform_panel.dart';
 export 'components/access_multivalue_panel.dart';
 export 'components/access_report_viewer.dart';
+export 'components/access_query_viewer.dart';
 export 'components/modal.dart';
 export 'services/api_http_service.dart';
 export 'services/rest_service.dart';
@@ -35,6 +36,14 @@ export 'utils/dialogs.dart';
         .writeAsString(_buildAccessReportViewerHtml(compiledReports));
     await File(p.join(sharedDir.path, 'components', 'access_report_viewer.scss'))
         .writeAsString(_buildAccessReportViewerScss(compiledReports));
+
+    final catalogQueries = _catalogQueryDescriptors(project);
+    await File(p.join(sharedDir.path, 'components', 'access_query_viewer.dart'))
+        .writeAsString(_buildAccessQueryViewerDartSource(catalogQueries));
+    await File(p.join(sharedDir.path, 'components', 'access_query_viewer.html'))
+        .writeAsString(_buildAccessQueryViewerHtml());
+    await File(p.join(sharedDir.path, 'components', 'access_query_viewer.scss'))
+        .writeAsString(_buildAccessQueryViewerScss());
 
     await File(p.join(sharedDir.path, 'services', 'api_http_service.dart'))
         .writeAsString(_buildApiHttpServiceSource());

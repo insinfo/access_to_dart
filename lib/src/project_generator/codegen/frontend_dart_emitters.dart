@@ -796,24 +796,32 @@ String _buildFrontendShellDartSource({
   required String initialModule,
   required Iterable<Map<String, Object?>> modules,
   List<String> compiledReportKeys = const [],
+  List<String> compiledQueryKeys = const [],
 }) {
   final hasReports = compiledReportKeys.isNotEmpty;
+  final hasQueries = compiledQueryKeys.isNotEmpty;
   final importLines = [
     ...modules.map((module) =>
         "import 'src/modules/${module['nameSnake']}/pages/${module['nameSnake']}_page_component.dart';"),
     if (hasReports)
       "import 'src/shared/components/access_report_viewer.dart';",
+    if (hasQueries)
+      "import 'src/shared/components/access_query_viewer.dart';",
   ].join('\n');
   final directives = [
     ...modules.map((module) => '${module['namePascal']}PageComponent'),
     if (hasReports) 'AccessReportViewer',
+    if (hasQueries) 'AccessQueryViewer',
   ].join(', ');
   final routeList = [
     ...modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)),
     if (hasReports) _dartStringLiteral('access-reports'),
+    if (hasQueries) _dartStringLiteral('access-queries'),
   ];
   final reportRoutes =
       compiledReportKeys.map(_dartStringLiteral).join(', ');
+  final queryRoutes =
+      compiledQueryKeys.map(_dartStringLiteral).join(', ');
   return _renderTemplate(
     '''
 import 'dart:async';
@@ -832,8 +840,10 @@ class AppComponent implements OnInit, OnDestroy {
   StreamSubscription<html.Event>? _hashSubscription;
   String? accessNavigationNotice;
   String? selectedReportKey;
+  String? selectedQueryKey;
   static const Set<String> _moduleRoutes = {{{moduleRoutes}}};
   static const Set<String> _reportRoutes = {{{reportRoutes}}};
+  static const Set<String> _queryRoutes = {{{queryRoutes}}};
   String activeModule = '{{initialModule}}';
 
   @override
@@ -854,6 +864,16 @@ class AppComponent implements OnInit, OnDestroy {
       if (!_reportRoutes.contains(reportKey)) return;
       selectedReportKey = reportKey;
       activeModule = 'access-reports';
+      accessNavigationNotice = null;
+      return;
+    }
+    if (hash.startsWith('#/access-query/')) {
+      String queryKey;
+      try { queryKey = Uri.decodeComponent(hash.substring('#/access-query/'.length)); }
+      on FormatException { return; }
+      if (!_queryRoutes.contains(queryKey)) return;
+      selectedQueryKey = queryKey;
+      activeModule = 'access-queries';
       accessNavigationNotice = null;
       return;
     }
@@ -881,6 +901,7 @@ class AppComponent implements OnInit, OnDestroy {
     <String, Object?>{
       'moduleRoutes': '<String>{${routeList.join(', ')}}',
       'reportRoutes': '<String>{$reportRoutes}',
+      'queryRoutes': '<String>{$queryRoutes}',
       'initialModule': initialModule.replaceAll("'", "\\'"),
       'importLines': importLines,
       'directives': directives,

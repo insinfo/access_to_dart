@@ -55,7 +55,9 @@
         [navigationRecords]="items"
         [navigationReady]="!loading && errorMessage == null"
         [modoAlterar]="selectedItem != null"
-        (onUpdateEntity)="onUpdateEntity($event)">
+        (onUpdateEntity)="onUpdateEntity($event)"
+        (onCloseForm)="closeForm()"
+        (onDeleteEntity)="onDeleteEntity()">
       </incluir-<%moduleNameKebab%>-page>
     </div>
   </div>

@@ -246,6 +246,7 @@ import '../shared/access_reports.dart';
 
 void setupApiRoutes(Router app) {
   final basePath = '/api/v1';
+  app.get('/api/v1/access-queries', AccessQueryController.list);
   app.get('/api/v1/access-queries/<key>', AccessQueryController.run);
   app.get('/api/v1/access-reports', AccessReportController.list);
   app.get('/api/v1/access-reports/<key>', AccessReportController.run);
@@ -279,6 +280,7 @@ import '../../../shared/access_reports.dart';
 
 void setupRoutes(Router app) {
   final basePath = '/api/v1';
+  app.get('/api/v1/access-queries', AccessQueryController.list);
   app.get('/api/v1/access-queries/<key>', AccessQueryController.run);
   app.get('/api/v1/access-reports', AccessReportController.list);
   app.get('/api/v1/access-reports/<key>', AccessReportController.run);

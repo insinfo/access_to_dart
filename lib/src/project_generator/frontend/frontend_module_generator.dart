@@ -3,6 +3,50 @@ part of '../project_generator.dart';
 extension _FrontendModuleGenerator on ProjectGenerator {
   // Only resolve a target to the exact form selected for a generated module.
   // This is partial internal navigation, not execution of Access lifecycle code.
+  ({String? href, String? reason}) _resolveCleanOpenFormDestination(
+    AnalysisProject project,
+    Map? Function(String name) rawFormLookup,
+    String destination,
+  ) {
+    final target = rawFormLookup(destination);
+    final matchingTables = scaffoldTables(project)
+        .where((candidate) =>
+            _resolveFrontendForm(project, candidate)?.name.toLowerCase() ==
+            destination.toLowerCase())
+        .toList();
+    if (target == null || matchingTables.length != 1) {
+      return (
+        href: null,
+        reason: 'Formulário de destino ainda sem cadastro gerado correspondente.',
+      );
+    }
+    final properties = target['properties'] as Map?;
+    if (properties == null) {
+      return (
+        href: null,
+        reason: 'Propriedades de abertura do destino ainda não disponíveis.',
+      );
+    }
+    if ((properties['Filter']?.toString() ?? '').trim().isNotEmpty ||
+        (properties['OrderBy']?.toString() ?? '').trim().isNotEmpty ||
+        ['DataEntry', 'Modal'].any((key) =>
+            properties[key] != null &&
+            !const ['0', 'False'].contains(properties[key])) ||
+        ['AllowEdits', 'AllowAdditions', 'AllowDeletions']
+            .any((key) => properties[key] != null)) {
+      // Defaults are not synthesized from an incomplete source overlay.
+      return (
+        href: null,
+        reason: 'Destino possui filtro, restrições ou abertura especial ainda não migrados.',
+      );
+    }
+    return (
+      href:
+          '#/access-form/${Uri.encodeComponent(tableRouteSegment(matchingTables.single))}',
+      reason: null,
+    );
+  }
+
   List<Map<String, Object?>> _buildAccessCommands(
       AnalysisProject project, AnalysisTable table) {
     final selected = _resolveFrontendForm(project, table);
@@ -15,6 +59,16 @@ extension _FrontendModuleGenerator on ProjectGenerator {
     }
     final source = rawForm(selected.name);
     if (source == null) return const [];
+    final compiledReportKeyByLowerName = <String, String>{
+      for (final report in compileEligibleReports(project).reports)
+        report.name.toLowerCase(): report.key,
+    };
+    final compiledQueryKeyByLowerName =
+        _compileCatalogQueries(project).catalogKeyByLowerName;
+    final rawVbaCode = (source['rawVbaCode'] as String?) ??
+        project.canonicalFormForTable(table)?.rawVbaCode ??
+        '';
+    final vbaSubs = _extractVbaSubBodies(rawVbaCode);
     final commands = <Map<String, Object?>>[];
     for (final control in ((source['controls'] as List?) ?? const []).whereType<Map>()) {
       if (control['type'] != 'CommandButton') continue;
@@ -65,15 +119,12 @@ extension _FrontendModuleGenerator on ProjectGenerator {
         });
         continue;
       }
-      String? reason;
-      String? destination;
-      String? href;
-      final steps = ((control['macroDefinitions'] as Map?)?['OnClickEmMacro'] as List?);
-      final actions = <Map>[];
-      if (steps == null) {
-        reason = 'Evento de clique ainda não migrado.';
-      } else {
-        for (final step in steps.whereType<Map>()) {
+      if (rawSteps != null && rawSteps.whereType<Map>().any((step) => step['action'] == 'OpenForm')) {
+        String? reason;
+        String? destination;
+        String? href;
+        final actions = <Map>[];
+        for (final step in rawSteps.whereType<Map>()) {
           final children = (step['children'] as List?) ?? const [];
           final condition = step['condition']?.toString() ?? '';
           final properties = (step['properties'] as Map?) ?? const {};
@@ -86,44 +137,168 @@ extension _FrontendModuleGenerator on ProjectGenerator {
         if (actions.length != 1 || actions.single['action'] != 'OpenForm') {
           reason ??= 'Ação do Access ainda não migrada.';
         }
-      }
-      if (reason == null) {
-        final arguments = ((actions.single['arguments'] as List?) ?? const []).map((v) => v.toString()).toList();
-        if (arguments.length != 6 || arguments[1] != '0' ||
-            arguments[2].isNotEmpty || arguments[3].isNotEmpty ||
-            arguments[4] != '-1' || arguments[5] != '0') {
-          reason = 'Abertura com filtro ou modo especial ainda não migrada.';
-        } else {
-          destination = arguments.first;
-          final target = rawForm(destination);
-          final matchingTables = scaffoldTables(project).where((candidate) =>
-              _resolveFrontendForm(project, candidate)?.name.toLowerCase() == destination!.toLowerCase()).toList();
-          if (target == null || matchingTables.length != 1) {
-            reason = 'Formulário de destino ainda sem cadastro gerado correspondente.';
+        if (reason == null) {
+          final arguments = ((actions.single['arguments'] as List?) ?? const []).map((v) => v.toString()).toList();
+          if (arguments.length != 6 || arguments[1] != '0' ||
+              arguments[2].isNotEmpty || arguments[3].isNotEmpty ||
+              arguments[4] != '-1' || arguments[5] != '0') {
+            reason = 'Abertura com filtro ou modo especial ainda não migrada.';
           } else {
-            final properties = target['properties'] as Map?;
-            if (properties == null) {
-              reason = 'Propriedades de abertura do destino ainda não disponíveis.';
-            } else if ((properties['Filter']?.toString() ?? '').trim().isNotEmpty ||
-                (properties['OrderBy']?.toString() ?? '').trim().isNotEmpty ||
-                ['DataEntry', 'Modal'].any((key) => properties[key] != null &&
-                    !const ['0', 'False'].contains(properties[key])) ||
-                ['AllowEdits', 'AllowAdditions', 'AllowDeletions'].any((key) => properties[key] != null)) {
-              // Defaults are not synthesized from an incomplete source overlay.
-              reason = 'Destino possui filtro, restrições ou abertura especial ainda não migrados.';
-            } else {
-              href = '#/access-form/${Uri.encodeComponent(tableRouteSegment(matchingTables.single))}';
-            }
+            destination = arguments.first;
+            final resolved = _resolveCleanOpenFormDestination(project, rawForm, destination);
+            href = resolved.href;
+            reason = resolved.reason;
           }
         }
+        commands.add({
+          'control': control['name'],
+          'label': label,
+          'destination': destination,
+          'href': href,
+          'status': href == null ? 'unsupported' : 'partial_navigation',
+          'notice': reason ?? 'Abre o cadastro gerado. Eventos de abertura e janela original ainda não reproduzidos.',
+        });
+        continue;
       }
+      if (rawSteps != null) {
+        String? reason;
+        String? destination;
+        String? href;
+        String? uiOperation;
+        String? customNotice;
+        final actions = <Map>[];
+        var malformed = false;
+        for (final step in rawSteps.whereType<Map>()) {
+          final children = (step['children'] as List?) ?? const [];
+          final properties = (step['properties'] as Map?) ?? const {};
+          if (children.isNotEmpty ||
+              properties.keys.any((key) => key != 'Comment')) {
+            malformed = true;
+          }
+          if (step['action'] != null) actions.add(step);
+        }
+        final wizardWrapper = actions.length == 3 &&
+            actions[0]['action'] == 'OnError' &&
+            _exactMacroArguments(actions[0], const ['0']) &&
+            actions[2]['action'] == 'MsgBox' &&
+            actions[2]['condition'] == '[MacroError]<>0' &&
+            _exactMacroArguments(actions[2], const ['=[MacroError].[Description]', '-1', '0']);
+        final Map? coreAction = wizardWrapper
+            ? actions[1]
+            : (actions.length == 1 ? actions.single : null);
+        final cleanConditions = !malformed &&
+            rawSteps.whereType<Map>().every((step) =>
+                (step['condition']?.toString() ?? '').trim().isEmpty ||
+                (wizardWrapper && identical(step, actions[2])));
+        if (!cleanConditions || coreAction == null) {
+          reason = malformed
+              ? 'Macro com condição ou sequência ainda não migrada.'
+              : 'Ação do Access ainda não migrada.';
+        } else {
+          final actionName = coreAction['action']?.toString() ?? '';
+          final args = ((coreAction['arguments'] as List?) ?? const [])
+              .map((v) => v.toString().trim())
+              .toList();
+          if (actionName == 'OpenReport') {
+            if (args.isEmpty ||
+                args[0].isEmpty ||
+                (args.length > 2 && args[2].isNotEmpty) ||
+                (args.length > 3 && args[3].isNotEmpty)) {
+              reason = 'Abertura de relatório com filtro ainda não migrada.';
+            } else {
+              destination = args[0];
+              final reportKey = compiledReportKeyByLowerName[destination.toLowerCase()];
+              if (reportKey == null) {
+                reason = 'Relatório de destino ainda não compilado.';
+              } else {
+                href = '#/access-report/${Uri.encodeComponent(reportKey)}';
+                customNotice = 'Abre o relatório compilado gerado.';
+              }
+            }
+          } else if (actionName == 'OpenQuery') {
+            if (args.isEmpty || args[0].isEmpty) {
+              reason = 'Ação OpenQuery sem consulta de destino.';
+            } else {
+              destination = args[0];
+              final queryKey = compiledQueryKeyByLowerName[destination.toLowerCase()];
+              if (queryKey == null) {
+                reason = 'Consulta de destino ainda não compilada.';
+              } else {
+                href = '#/access-query/${Uri.encodeComponent(queryKey)}';
+                customNotice = 'Abre a consulta compilada gerada.';
+              }
+            }
+          } else if (actionName == 'Close') {
+            uiOperation = 'close';
+            customNotice = _uiOperationNotice('close');
+          } else if (actionName == 'RunCommand') {
+            final op = args.isEmpty ? null : _mapMacroRunCommand(args.first);
+            if (op == null) {
+              reason = 'Comando RunCommand do Access ainda não migrado.';
+            } else {
+              uiOperation = op;
+              customNotice = _uiOperationNotice(op);
+            }
+          } else {
+            reason = 'Ação do Access ainda não migrada.';
+          }
+        }
+        final status = href != null
+            ? 'partial_navigation'
+            : (uiOperation != null ? 'partial_ui_action' : 'unsupported');
+        commands.add({
+          'control': control['name'],
+          'label': label,
+          'destination': destination,
+          'href': href,
+          if (uiOperation != null) 'uiOperation': uiOperation,
+          'status': status,
+          'notice': customNotice ?? reason ?? 'Ação do Access ainda não migrada.',
+        });
+        continue;
+      }
+
+      // VBA OnClick fallback (supports both binary_only MS-OVBA and --src .cls)
+      final clickEvent = ((control['events'] as Map?)?['OnClick']?.toString() ?? '').trim();
+      final rawCtrlName = (control['name']?.toString() ?? '');
+      final normCtrlName = rawCtrlName
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+      final vbaBody = (clickEvent.isEmpty || clickEvent == '[Event Procedure]')
+          ? (vbaSubs['${rawCtrlName.toLowerCase()}_click'] ??
+              vbaSubs['${normCtrlName}_click'])
+          : null;
+      if (vbaBody != null) {
+        final parsed = _parseVbaClickCommand(
+          body: vbaBody,
+          currentFormName: selected.name,
+          compiledReportKeyByLowerName: compiledReportKeyByLowerName,
+          compiledQueryKeyByLowerName: compiledQueryKeyByLowerName,
+          resolveOpenForm: (dest) =>
+              _resolveCleanOpenFormDestination(project, rawForm, dest),
+        );
+        if (parsed != null) {
+          commands.add({
+            'control': control['name'],
+            'label': label,
+            'destination': parsed['destination'],
+            'href': parsed['href'],
+            if (parsed['uiOperation'] != null) 'uiOperation': parsed['uiOperation'],
+            'status': parsed['status'],
+            'notice': parsed['notice'],
+          });
+          continue;
+        }
+      }
+
       commands.add({
         'control': control['name'],
         'label': label,
-        'destination': destination,
-        'href': href,
-        'status': href == null ? 'unsupported' : 'partial_navigation',
-        'notice': reason ?? 'Abre o cadastro gerado. Eventos de abertura e janela original ainda não reproduzidos.',
+        'destination': null,
+        'href': null,
+        'status': 'unsupported',
+        'notice': 'Evento de clique ainda não migrado.',
       });
     }
     return commands;
@@ -238,6 +413,16 @@ class Consultar${namePascal}Page implements OnInit {
 
   Future<void> onUpdateEntity($namePascal row) async {
     selectedItem = row;
+    showForm = false;
+    await load();
+  }
+
+  void closeForm() {
+    showForm = false;
+  }
+
+  Future<void> onDeleteEntity() async {
+    selectedItem = null;
     showForm = false;
     await load();
   }
@@ -371,7 +556,10 @@ class Consultar${namePascal}Page implements OnInit {
         'notice': _htmlTextLiteral(command['notice'] as String),
         'href': command['href'],
         'supported': command['href'] != null,
-        'unsupported': command['href'] == null && command['recordOperation'] == null,
+        'uiOperation': command['uiOperation'],
+        'unsupported': command['href'] == null &&
+            command['recordOperation'] == null &&
+            command['uiOperation'] == null,
         'recordOperation': command['recordOperation'],
         'alertMacroError': command['errorPolicy'] == 'alert_macro_error' ? 'true' : 'false',
       }).toList(),
@@ -556,6 +744,95 @@ $attachmentPresentationSource;
 
   @Output('onUpdateEntity')
   Stream<$namePascal> get onUpdateEntity => _updateEntityController.stream;
+
+  final _closeFormController = StreamController<void>.broadcast();
+
+  @Output('onCloseForm')
+  Stream<void> get onCloseForm => _closeFormController.stream;
+
+  final _deleteEntityController = StreamController<void>.broadcast();
+
+  @Output('onDeleteEntity')
+  Stream<void> get onDeleteEntity => _deleteEntityController.stream;
+
+  bool isUiOperationDisabled(String operation) {
+    switch (operation) {
+      case 'save':
+        return !canSaveCurrentRecord || navigationSaving;
+      case 'delete':
+        return !allowDelete ||
+            !modoAlterar ||
+            _currentEntityIdOrNull() == null ||
+            navigationSaving;
+      default:
+        return navigationSaving;
+    }
+  }
+
+  Future<void> executeUiOperation(String operation) async {
+    switch (operation) {
+      case 'save':
+        await salvar();
+        return;
+      case 'delete':
+        if (!allowDelete || !modoAlterar || navigationSaving) return;
+        final id = _currentEntityIdOrNull();
+        if (id == null) return;
+        if (!SimpleDialogComponent.showConfirm(
+            'Confirma a exclusao definitiva deste registro?')) return;
+        navigationSaving = true;
+        final loading = SimpleLoading();
+        try {
+          loading.show();
+          await _service.deleteRow(id);
+          _deleteEntityController.add(null);
+        } catch (e, s) {
+          SimpleDialogComponent.showAlert(
+            StatusMessage.errorGeneric,
+            subMessage: '\$e \$s',
+          );
+        } finally {
+          navigationSaving = false;
+          loading.hide();
+        }
+        return;
+      case 'undo':
+        if (navigationSaving) return;
+        final saved = _navigationSavedEntity;
+        modoAlterar = saved != null;
+        _draft
+          ..clear()
+          ..addAll(saved?.toMap() ?? $namePascal.defaultValues());
+        _navigationBaseline = ${accessCommands.any((command) => command['recordOperation'] != null) ? '_draftFingerprint()' : 'null'};
+        _attachmentDraftsByField.clear();
+        _attachmentSelectedFilesByField.clear();
+        _collectionPendingFields.clear();
+        collectionResetVersion++;
+        validationErrors.clear();
+        navigationError = null;
+        pendingRecordNavigation = null;
+        return;
+      case 'refresh':
+        if (navigationSaving) return;
+        final saved = _navigationSavedEntity;
+        modoAlterar = saved != null;
+        _draft
+          ..clear()
+          ..addAll(saved?.toMap() ?? $namePascal.defaultValues());
+        _navigationBaseline = ${accessCommands.any((command) => command['recordOperation'] != null) ? '_draftFingerprint()' : 'null'};
+        validationErrors.clear();
+        navigationError = null;
+        await _loadLookupOptions();
+        await _loadAttachmentSubresources();
+        return;
+      case 'close':
+        _closeFormController.add(null);
+        return;
+      case 'print':
+        html.window.print();
+        return;
+    }
+  }
 
   @override
   void ngOnInit() {
@@ -1516,6 +1793,421 @@ String _angularStringContents(String value) {
 }
 
 // Exact finite grammar, not an evaluator for arbitrary Access expressions.
+String? _mapMacroRunCommand(String code) {
+  switch (code.trim()) {
+    case '97':
+      return 'save';
+    case '223':
+      return 'delete';
+    case '292':
+      return 'undo';
+    case '18':
+    case '37':
+      return 'refresh';
+    case '340':
+      return 'print';
+    case '58':
+      return 'close';
+    default:
+      return null;
+  }
+}
+
+String _uiOperationNotice(String op) {
+  switch (op) {
+    case 'save':
+      return 'Salva o registro atual.';
+    case 'delete':
+      return 'Exclui o registro atual após confirmação.';
+    case 'undo':
+      return 'Desfaz alterações não salvas no formulário.';
+    case 'refresh':
+      return 'Recarrega listas e dados do registro atual.';
+    case 'close':
+      return 'Fecha o formulário atual.';
+    case 'print':
+      return 'Abre a impressão da página atual.';
+    default:
+      return 'Executa ação do formulário.';
+  }
+}
+
+Map<String, String> _extractVbaSubBodies(String source) {
+  if (source.trim().isEmpty) return const <String, String>{};
+  final normalized = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  final map = <String, String>{};
+  final subReg = RegExp(
+    r'^\s*(?:(?:Private|Public|Friend)\s+)?Sub\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\n(.*?)^\s*End\s+Sub\b',
+    multiLine: true,
+    dotAll: true,
+    caseSensitive: false,
+  );
+  for (final m in subReg.allMatches(normalized)) {
+    final name = m.group(1)!.toLowerCase();
+    final params = (m.group(2) ?? '').trim();
+    if (params.isEmpty || name.endsWith('_click')) {
+      map[name] = m.group(3) ?? '';
+    }
+  }
+  return map;
+}
+
+String _stripVbaInlineComment(String line) {
+  var inString = false;
+  for (var i = 0; i < line.length; i++) {
+    final ch = line[i];
+    if (ch == '"') {
+      if (inString && i + 1 < line.length && line[i + 1] == '"') {
+        i++;
+        continue;
+      }
+      inString = !inString;
+    } else if (!inString && ch == "'") {
+      return line.substring(0, i);
+    }
+  }
+  return line;
+}
+
+List<String> _splitVbaColonStatements(String line) {
+  final parts = <String>[];
+  var inString = false;
+  var start = 0;
+  for (var i = 0; i < line.length; i++) {
+    final ch = line[i];
+    if (ch == '"') {
+      if (inString && i + 1 < line.length && line[i + 1] == '"') {
+        i++;
+        continue;
+      }
+      inString = !inString;
+    } else if (!inString && ch == ':') {
+      final segment = line.substring(start, i).trim();
+      if (segment.isNotEmpty) parts.add(segment);
+      start = i + 1;
+    }
+  }
+  final tail = line.substring(start).trim();
+  if (tail.isNotEmpty) parts.add(tail);
+  return parts;
+}
+
+List<String> _splitCsvOutsideQuotes(String input) {
+  final out = <String>[];
+  var inString = false;
+  var parenDepth = 0;
+  var start = 0;
+  for (var i = 0; i < input.length; i++) {
+    final ch = input[i];
+    if (ch == '"') {
+      if (inString && i + 1 < input.length && input[i + 1] == '"') {
+        i++;
+        continue;
+      }
+      inString = !inString;
+    } else if (!inString) {
+      if (ch == '(') parenDepth++;
+      if (ch == ')' && parenDepth > 0) parenDepth--;
+      if (ch == ',' && parenDepth == 0) {
+        out.add(input.substring(start, i).trim());
+        start = i + 1;
+      }
+    }
+  }
+  out.add(input.substring(start).trim());
+  return out;
+}
+
+String _unquoteVbaString(String value) {
+  final t = value.trim();
+  if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
+    return t.substring(1, t.length - 1).replaceAll('""', '"');
+  }
+  return t;
+}
+
+Map<String, Object?>? _parseVbaClickCommand({
+  required String body,
+  required String currentFormName,
+  required Map<String, String> compiledReportKeyByLowerName,
+  required Map<String, String> compiledQueryKeyByLowerName,
+  required ({String? href, String? reason}) Function(String destination) resolveOpenForm,
+}) {
+  final joined = body.replaceAll(RegExp(r' _\n'), ' ');
+  final errLabelMatch = RegExp(
+    r'^\s*On\s+Error\s+GoTo\s+([A-Za-z_][A-Za-z0-9_]*)\s*$',
+    multiLine: true,
+    caseSensitive: false,
+  ).firstMatch(joined);
+  final errLabel = errLabelMatch?.group(1)?.toLowerCase();
+
+  final statements = <String>[];
+  for (final rawLine in joined.split('\n')) {
+    final noComment = _stripVbaInlineComment(rawLine).trim();
+    if (noComment.isEmpty) continue;
+    if (RegExp(r'^Rem\b', caseSensitive: false).hasMatch(noComment)) continue;
+    final labelMatch =
+        RegExp(r'^([A-Za-z_][A-Za-z0-9_]*):(.*)$').firstMatch(noComment);
+    if (labelMatch != null) {
+      final lbl = labelMatch.group(1)!.toLowerCase();
+      if (errLabel != null && lbl == errLabel) {
+        break;
+      }
+      if (lbl.startsWith('exit_') || lbl.startsWith('err_')) {
+        final rest = labelMatch.group(2)!.trim();
+        if (rest.isEmpty ||
+            RegExp(r'^Exit\s+Sub\b', caseSensitive: false).hasMatch(rest)) {
+          continue;
+        }
+      }
+    }
+    for (final stmt in _splitVbaColonStatements(noComment)) {
+      if (RegExp(
+        r'^(?:On\s+Error\b|DoCmd\.SetWarnings\b|Exit\s+Sub\b|Resume\b)',
+        caseSensitive: false,
+      ).hasMatch(stmt)) {
+        continue;
+      }
+      statements.add(stmt);
+    }
+  }
+  if (statements.isEmpty) return null;
+
+  // Pattern: confirmation MsgBox + DoCmd.RunCommand acCmdDeleteRecord
+  if (statements.length >= 2 &&
+      RegExp(
+        r'^If\s+MsgBox\s*\(.*\)\s*=\s*vbYes\s+Then$',
+        caseSensitive: false,
+      ).hasMatch(statements.first) &&
+      RegExp(r'^End\s+If$', caseSensitive: false).hasMatch(statements.last)) {
+    final inner = statements
+        .sublist(1, statements.length - 1)
+        .where((s) => !RegExp(r'^Else$', caseSensitive: false).hasMatch(s))
+        .toList();
+    if (inner.length == 1 &&
+        RegExp(
+          r'^DoCmd\.RunCommand\s+(?:acCmdDeleteRecord|223)$',
+          caseSensitive: false,
+        ).hasMatch(inner.single)) {
+      return <String, Object?>{
+        'destination': null,
+        'href': null,
+        'uiOperation': 'delete',
+        'status': 'partial_ui_action',
+        'notice': _uiOperationNotice('delete'),
+      };
+    }
+  }
+
+  if (statements.length != 1) return null;
+  final stmt = statements.single;
+
+  // DoCmd.Close [acForm, "<currentForm>"]
+  final closeMatch = RegExp(
+    r'^DoCmd\.Close(?:\s+(.*))?$',
+    caseSensitive: false,
+  ).firstMatch(stmt);
+  if (closeMatch != null) {
+    final tail = (closeMatch.group(1) ?? '').trim();
+    if (tail.isEmpty) {
+      return <String, Object?>{
+        'destination': null,
+        'href': null,
+        'uiOperation': 'close',
+        'status': 'partial_ui_action',
+        'notice': _uiOperationNotice('close'),
+      };
+    }
+    final args = _splitCsvOutsideQuotes(tail);
+    if (args.isNotEmpty &&
+        (args[0].isEmpty || args[0].toLowerCase() == 'acform')) {
+      final obj = args.length >= 2 ? _unquoteVbaString(args[1]) : '';
+      if (obj.isEmpty ||
+          obj.toLowerCase() == currentFormName.toLowerCase() ||
+          obj.toLowerCase() == 'me.name') {
+        return <String, Object?>{
+          'destination': null,
+          'href': null,
+          'uiOperation': 'close',
+          'status': 'partial_ui_action',
+          'notice': _uiOperationNotice('close'),
+        };
+      }
+    }
+    return null;
+  }
+
+  if (RegExp(
+    r'^DoCmd\.RunCommand\s+(?:acCmdDeleteRecord|223)$',
+    caseSensitive: false,
+  ).hasMatch(stmt)) {
+    return <String, Object?>{
+      'destination': null,
+      'href': null,
+      'uiOperation': 'delete',
+      'status': 'partial_ui_action',
+      'notice': _uiOperationNotice('delete'),
+    };
+  }
+  if (RegExp(
+    r'^DoCmd\.RunCommand\s+(?:acCmdSaveRecord|acCmdSave|97)$',
+    caseSensitive: false,
+  ).hasMatch(stmt)) {
+    return <String, Object?>{
+      'destination': null,
+      'href': null,
+      'uiOperation': 'save',
+      'status': 'partial_ui_action',
+      'notice': _uiOperationNotice('save'),
+    };
+  }
+  if (RegExp(
+    r'^(?:DoCmd\.RunCommand\s+(?:acCmdUndo|292)|Me\.Undo)$',
+    caseSensitive: false,
+  ).hasMatch(stmt)) {
+    return <String, Object?>{
+      'destination': null,
+      'href': null,
+      'uiOperation': 'undo',
+      'status': 'partial_ui_action',
+      'notice': _uiOperationNotice('undo'),
+    };
+  }
+  if (RegExp(
+    r'^(?:DoCmd\.RefreshRecord|Me\.Refresh|Me\.Requery|DoCmd\.RunCommand\s+(?:acCmdRefresh|18|37))$',
+    caseSensitive: false,
+  ).hasMatch(stmt)) {
+    return <String, Object?>{
+      'destination': null,
+      'href': null,
+      'uiOperation': 'refresh',
+      'status': 'partial_ui_action',
+      'notice': _uiOperationNotice('refresh'),
+    };
+  }
+  if (RegExp(
+    r'^(?:DoCmd\.PrintOut(?:\s+.*)?|DoCmd\.RunCommand\s+(?:acCmdPrint|340))$',
+    caseSensitive: false,
+  ).hasMatch(stmt)) {
+    return <String, Object?>{
+      'destination': null,
+      'href': null,
+      'uiOperation': 'print',
+      'status': 'partial_ui_action',
+      'notice': _uiOperationNotice('print'),
+    };
+  }
+
+  // DoCmd.OpenReport "<Name>"[, view[, filter[, where]]]
+  final openReportMatch = RegExp(
+    r'^DoCmd\.OpenReport\s+(.+)$',
+    caseSensitive: false,
+  ).firstMatch(stmt);
+  if (openReportMatch != null) {
+    final args = _splitCsvOutsideQuotes(openReportMatch.group(1)!);
+    if (args.isNotEmpty && args[0].startsWith('"')) {
+      final reportName = _unquoteVbaString(args[0]);
+      final filterArg = args.length > 2 ? _unquoteVbaString(args[2]) : '';
+      final whereArg = args.length > 3 ? _unquoteVbaString(args[3]) : '';
+      if (filterArg.isNotEmpty || whereArg.isNotEmpty) {
+        return <String, Object?>{
+          'destination': reportName,
+          'href': null,
+          'status': 'unsupported',
+          'notice': 'Abertura de relatório com filtro ainda não migrada.',
+        };
+      }
+      final reportKey = compiledReportKeyByLowerName[reportName.toLowerCase()];
+      if (reportKey != null) {
+        return <String, Object?>{
+          'destination': reportName,
+          'href': '#/access-report/${Uri.encodeComponent(reportKey)}',
+          'status': 'partial_navigation',
+          'notice': 'Abre o relatório compilado gerado.',
+        };
+      }
+      return <String, Object?>{
+        'destination': reportName,
+        'href': null,
+        'status': 'unsupported',
+        'notice': 'Relatório de destino ainda não compilado.',
+      };
+    }
+  }
+
+  // DoCmd.OpenQuery "<Name>"
+  final openQueryMatch = RegExp(
+    r'^DoCmd\.OpenQuery\s+(.+)$',
+    caseSensitive: false,
+  ).firstMatch(stmt);
+  if (openQueryMatch != null) {
+    final args = _splitCsvOutsideQuotes(openQueryMatch.group(1)!);
+    if (args.isNotEmpty && args[0].startsWith('"')) {
+      final queryName = _unquoteVbaString(args[0]);
+      final queryKey = compiledQueryKeyByLowerName[queryName.toLowerCase()];
+      if (queryKey != null) {
+        return <String, Object?>{
+          'destination': queryName,
+          'href': '#/access-query/${Uri.encodeComponent(queryKey)}',
+          'status': 'partial_navigation',
+          'notice': 'Abre a consulta compilada gerada.',
+        };
+      }
+      return <String, Object?>{
+        'destination': queryName,
+        'href': null,
+        'status': 'unsupported',
+        'notice': 'Consulta de destino ainda não compilada.',
+      };
+    }
+  }
+
+  // DoCmd.OpenForm "<Name>"[, acNormal] (no filter/where/read-only)
+  final openFormMatch = RegExp(
+    r'^DoCmd\.OpenForm\s+(.+)$',
+    caseSensitive: false,
+  ).firstMatch(stmt);
+  if (openFormMatch != null) {
+    final args = _splitCsvOutsideQuotes(openFormMatch.group(1)!);
+    if (args.isNotEmpty && args[0].startsWith('"')) {
+      final dest = _unquoteVbaString(args[0]);
+      final view = args.length > 1 ? args[1].trim().toLowerCase() : '';
+      final filterArg = args.length > 2 ? _unquoteVbaString(args[2]) : '';
+      final whereArg = args.length > 3 ? _unquoteVbaString(args[3]) : '';
+      final dataMode = args.length > 4 ? args[4].trim().toLowerCase() : '';
+      final windowMode = args.length > 5 ? args[5].trim().toLowerCase() : '';
+      final cleanView = view.isEmpty || view == 'acnormal' || view == '0';
+      final cleanDataMode =
+          dataMode.isEmpty || dataMode == 'acformedit' || dataMode == '1' || dataMode == '-1' || dataMode == 'acformpropertySettings'.toLowerCase();
+      final cleanWindowMode = windowMode.isEmpty ||
+          windowMode == 'acwindownormal' ||
+          windowMode == '0';
+      if (!cleanView ||
+          filterArg.isNotEmpty ||
+          whereArg.isNotEmpty ||
+          !cleanDataMode ||
+          !cleanWindowMode) {
+        return <String, Object?>{
+          'destination': dest,
+          'href': null,
+          'status': 'unsupported',
+          'notice': 'Abertura com filtro ou modo especial ainda não migrada.',
+        };
+      }
+      final resolved = resolveOpenForm(dest);
+      return <String, Object?>{
+        'destination': dest,
+        'href': resolved.href,
+        'status': resolved.href == null ? 'unsupported' : 'partial_navigation',
+        'notice': resolved.reason ??
+            'Abre o cadastro gerado. Eventos de abertura e janela original ainda não reproduzidos.',
+      };
+    }
+  }
+
+  return null;
+}
+
 bool _exactMacroArguments(Map action, List<String> expected) {
   final arguments = action['arguments'];
   return arguments is List && arguments.length == expected.length &&

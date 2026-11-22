@@ -17,6 +17,9 @@
 <%#recordOperation%>
     <button type="button" class="btn btn-outline-primary" [disabled]="navigationSaving || !navigationReady" (click)="navigateRecord('<%recordOperation%>', alertMacroError: <%alertMacroError%>)"><%label%></button>
 <%/recordOperation%>
+<%#uiOperation%>
+    <button type="button" class="btn btn-outline-primary" [disabled]="isUiOperationDisabled('<%uiOperation%>')" (click)="executeUiOperation('<%uiOperation%>')"><%label%></button>
+<%/uiOperation%>
 <%#unsupported%>
     <button type="button" class="btn btn-outline-secondary" disabled><%label%></button>
 <%/unsupported%>

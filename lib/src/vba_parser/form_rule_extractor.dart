@@ -43,11 +43,13 @@ class AccessFormValidationOccurrence {
   final String message;
   final Set<String> controls;
   final bool cancelsEvent;
+  final bool hasEmptyCheck;
 
   const AccessFormValidationOccurrence({
     required this.message,
     required this.controls,
     required this.cancelsEvent,
+    this.hasEmptyCheck = false,
   });
 }
 
@@ -171,6 +173,7 @@ class AccessFormRuleExtractor {
             eventControlName: procedure.eventControlName,
             referencedControls: occurrence.controls.toList(),
             messages: <String>[occurrence.message],
+            hasEmptyCheck: occurrence.hasEmptyCheck,
           );
           if (kinds.isEmpty && key.isEmpty) {
             continue;
@@ -250,6 +253,7 @@ class AccessFormRuleExtractor {
     required String? eventControlName,
     required List<String> referencedControls,
     required List<String> messages,
+    bool hasEmptyCheck = false,
   }) {
     final key = <String>[
       procedureName,
@@ -259,7 +263,15 @@ class AccessFormRuleExtractor {
     ].map(_lookupKey).join(' ');
 
     final kinds = <AccessFormFieldRuleKind>{};
-    if (key.contains('informe') || key.contains('obrigat')) {
+    if (hasEmptyCheck ||
+        key.contains('informe') ||
+        key.contains('obrigat') ||
+        key.contains('preench') ||
+        key.contains('vazio') ||
+        key.contains('branco') ||
+        key.contains('required') ||
+        key.contains('blank') ||
+        key.contains('empty')) {
       kinds.add(AccessFormFieldRuleKind.required);
     }
     if (key.contains('cpf')) {
@@ -297,13 +309,19 @@ class AccessFormRuleExtractor {
       final endIndex = _findIfBlockEnd(tokens, thenIndex + 1);
       final conditionTokens = tokens.sublist(index + 1, thenIndex);
       final blockTokens = tokens.sublist(thenIndex + 1, endIndex);
-      final message = _firstValidationMessage(blockTokens);
+      final cancels = _containsCancelAssignment(blockTokens);
+      final hasEmptyCheck = _hasEmptyOrNullCondition(conditionTokens);
+      final message = _firstValidationMessage(
+        blockTokens,
+        allowAnyMsgBox: cancels || hasEmptyCheck,
+      );
       if (message != null) {
         occurrences.add(
           AccessFormValidationOccurrence(
             message: message,
             controls: _extractReferencedControls(conditionTokens),
-            cancelsEvent: _containsCancelAssignment(blockTokens),
+            cancelsEvent: cancels,
+            hasEmptyCheck: hasEmptyCheck,
           ),
         );
       }
@@ -359,13 +377,48 @@ class AccessFormRuleExtractor {
     return messages;
   }
 
-  static String? _firstValidationMessage(List<Token> tokens) {
+  static bool _hasEmptyOrNullCondition(List<Token> conditionTokens) {
+    var hasInStr = false;
+    var hasIsNull = false;
+    var hasTrim = false;
+    var hasLen = false;
+    var comparesToEmpty = false;
+    for (var i = 0; i < conditionTokens.length; i++) {
+      final tok = conditionTokens[i];
+      if (tok.type == TokenType.identifier) {
+        final lower = tok.lexeme.toLowerCase();
+        if (lower == 'instr') hasInStr = true;
+        if (lower == 'isnull') hasIsNull = true;
+        if (lower == 'trim' || lower == 'trim\$') hasTrim = true;
+        if (lower == 'len') hasLen = true;
+        if (lower == 'vbnullstring' || lower == 'empty') {
+          comparesToEmpty = true;
+        }
+      } else if (tok.type == TokenType.equal &&
+          i + 1 < conditionTokens.length) {
+        final next = conditionTokens[i + 1];
+        if (next.type == TokenType.stringLiteral && next.lexeme.isEmpty) {
+          comparesToEmpty = true;
+        }
+      }
+    }
+    if (hasIsNull) return true;
+    if (!hasInStr && comparesToEmpty) return true;
+    if (!hasInStr && hasLen && hasTrim) return true;
+    return false;
+  }
+
+  static String? _firstValidationMessage(
+    List<Token> tokens, {
+    bool allowAnyMsgBox = false,
+  }) {
     for (var index = 0; index < tokens.length; index++) {
       if (tokens[index].type != TokenType.kwMsgBox) {
         continue;
       }
       final message = _firstStringLiteral(tokens, index + 1);
-      if (message != null && _isValidationMessage(message)) {
+      if (message != null &&
+          (allowAnyMsgBox || _isValidationMessage(message))) {
         return message;
       }
     }
@@ -414,7 +467,16 @@ class AccessFormRuleExtractor {
     return key.contains('informe') ||
         key.contains('inval') ||
         key.contains('obrigat') ||
-        key.contains('erro');
+        key.contains('erro') ||
+        key.contains('preench') ||
+        key.contains('vazio') ||
+        key.contains('branco') ||
+        key.contains('digite') ||
+        key.contains('selecione') ||
+        key.contains('faltando') ||
+        key.contains('required') ||
+        key.contains('blank') ||
+        key.contains('empty');
   }
 
   static bool _isModifier(Token token) {

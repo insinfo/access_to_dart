@@ -9,6 +9,9 @@
 <%#hasReports%>
       <button type="button" class="nav-link" [class.is-active]="activeModule == 'access-reports'" (click)="setActiveModule('access-reports')">Relatórios</button>
 <%/hasReports%>
+<%#hasQueries%>
+      <button type="button" class="nav-link" [class.is-active]="activeModule == 'access-queries'" (click)="setActiveModule('access-queries')">Consultas</button>
+<%/hasQueries%>
     </nav>
   </aside>
   <main class="content-area">
@@ -19,5 +22,8 @@
 <%#hasReports%>
     <access-report-viewer *ngIf="activeModule == 'access-reports'" [selectedKey]="selectedReportKey"></access-report-viewer>
 <%/hasReports%>
+<%#hasQueries%>
+    <access-query-viewer *ngIf="activeModule == 'access-queries'" [selectedKey]="selectedQueryKey"></access-query-viewer>
+<%/hasQueries%>
   </main>
 </div>

@@ -63,5 +63,57 @@ End Sub
       byControl['txtEmail']!.kinds.contains(AccessFormFieldRuleKind.email),
       isTrue,
     );
+    expect(
+      byControl['txtEmail']!.kinds.contains(AccessFormFieldRuleKind.required),
+      isFalse,
+    );
+  });
+
+  test('detects required rules from IsNull, empty comparison and Len(Trim) conditions', () {
+    final source = r'''
+Private Sub txtObservacao_BeforeUpdate(Cancel As Integer)
+    If IsNull(Me.txtObservacao) Then
+        MsgBox "Valor ausente neste campo.", vbExclamation
+        Cancel = True
+    End If
+End Sub
+
+Private Sub cmdConfirmar_Click()
+    If Trim$(Me.txtSigla.Value) = "" Then
+        MsgBox "Dado nao pode ficar em branco.", vbExclamation
+        Exit Sub
+    End If
+    If Len(Trim$(Me.txtCodigo)) = 0 Then
+        MsgBox "Preencha este item.", vbExclamation
+        Cancel = True
+    End If
+End Sub
+''';
+    final ruleSet = AccessFormRuleExtractor.extract(source);
+    final byControl = <String, AccessFormFieldRule>{
+      for (final rule in ruleSet.fieldRules) rule.controlName: rule,
+    };
+
+    expect(byControl['txtObservacao'], isNotNull);
+    expect(
+      byControl['txtObservacao']!.kinds.contains(AccessFormFieldRuleKind.required),
+      isTrue,
+    );
+    expect(
+      byControl['txtObservacao']!.messages,
+      contains('Valor ausente neste campo.'),
+    );
+
+    expect(byControl['txtSigla'], isNotNull);
+    expect(
+      byControl['txtSigla']!.kinds.contains(AccessFormFieldRuleKind.required),
+      isTrue,
+    );
+
+    expect(byControl['txtCodigo'], isNotNull);
+    expect(
+      byControl['txtCodigo']!.kinds.contains(AccessFormFieldRuleKind.required),
+      isTrue,
+    );
   });
 }

@@ -113,8 +113,14 @@ extension _CompiledQueryBackend on ProjectGenerator {
     });
   }
 
-  Future<void> _generateQueryBackend(
-      AnalysisProject project, Directory backendDir) async {
+  ({
+    Map<String, Map<String, Object?>> specifications,
+    List<Map<String, Object?>> diagnostics,
+    List<Map<String, Object?>> extendedDiagnostics,
+    Map<String, String> catalogKeyByLowerName,
+  }) _compileCatalogQueries(AnalysisProject project) {
+    final cached = _compiledQueriesCache[project];
+    if (cached != null) return cached;
     final compiled = _compileQuerySpecifications(project);
     final rawQueries =
         (project.raw['queries'] as List? ?? const []).whereType<Map>();
@@ -181,13 +187,37 @@ extension _CompiledQueryBackend on ProjectGenerator {
         });
       }
     }
-    final reportsResult = compileEligibleReports(project);
-    final mergedSpecifications = <String, Map<String, Object?>>{
+    final specs = <String, Map<String, Object?>>{
       ...compiled.specifications,
       ...extendedSpecifications,
+    };
+    final catalogKeyByLowerName = <String, String>{};
+    for (final entry in specs.entries) {
+      final qName = (entry.value['name']?.toString() ?? '').trim();
+      if (qName.isNotEmpty &&
+          !qName.startsWith('~') &&
+          !entry.key.startsWith('_rpt_')) {
+        catalogKeyByLowerName[qName.toLowerCase()] = entry.key;
+      }
+    }
+    final result = (
+      specifications: specs,
+      diagnostics: compiled.diagnostics,
+      extendedDiagnostics: extendedDiagnostics,
+      catalogKeyByLowerName: catalogKeyByLowerName,
+    );
+    _compiledQueriesCache[project] = result;
+    return result;
+  }
+
+  Future<void> _generateQueryBackend(
+      AnalysisProject project, Directory backendDir) async {
+    final catalog = _compileCatalogQueries(project);
+    final reportsResult = compileEligibleReports(project);
+    final mergedSpecifications = <String, Map<String, Object?>>{
+      ...catalog.specifications,
       for (final entry in reportsResult.compiledReportQueries.entries)
-        if (!compiled.specifications.containsKey(entry.key) &&
-            !extendedSpecifications.containsKey(entry.key))
+        if (!catalog.specifications.containsKey(entry.key))
           entry.key: entry.value,
     };
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.dart'))
@@ -196,8 +226,8 @@ extension _CompiledQueryBackend on ProjectGenerator {
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.json'))
         .writeAsString(const JsonEncoder.withIndent('  ').convert({
       'queries': mergedSpecifications,
-      'diagnostics': compiled.diagnostics,
-      'extended_diagnostics': extendedDiagnostics,
+      'diagnostics': catalog.diagnostics,
+      'extended_diagnostics': catalog.extendedDiagnostics,
     }));
   }
 }
@@ -370,6 +400,27 @@ class AccessQueryController {
       for(final row in rows)
         [for(final column in columns) _readValue(row, column)],
     ];
+  }
+
+  static Future<Response> list(Request request) async {
+    final items = <Map<String, Object?>>[];
+    for (final entry in specifications.entries) {
+      if (entry.key.startsWith('_rpt_')) continue;
+      final spec = entry.value as Map;
+      final name = spec['name']?.toString() ?? entry.key;
+      if (name.startsWith('~')) continue;
+      items.add({
+        'key': entry.key,
+        'name': name,
+        'parameters': spec['parameters'] ?? const [],
+        'columns': spec['columns'] ?? const [],
+        'ordering': spec['ordering'] ?? 'unspecified',
+      });
+    }
+    items.sort((a, b) => (a['name'] as String)
+        .toLowerCase()
+        .compareTo((b['name'] as String).toLowerCase()));
+    return responseJson({'queries': items});
   }
 
   static Future<Response> run(Request request,String key) async {

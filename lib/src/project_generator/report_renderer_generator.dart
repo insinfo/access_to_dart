@@ -572,6 +572,8 @@ class _OfficeThemePalette {
 extension _CompiledReportRenderer on ProjectGenerator {
   CompiledReportCompilationResult compileEligibleReports(
       AnalysisProject project) {
+    final cachedResult = _compiledReportsCache[project];
+    if (cachedResult != null) return cachedResult;
     final compiledQueries = _compileQuerySpecifications(project).specifications;
     final queryByLowerName = <String, MapEntry<String, Map<String, Object?>>>{
       for (final entry in compiledQueries.entries)
@@ -690,11 +692,13 @@ extension _CompiledReportRenderer on ProjectGenerator {
       }
     }
 
-    return CompiledReportCompilationResult(
+    final result = CompiledReportCompilationResult(
       reports: reports,
       diagnostics: diagnostics,
       compiledReportQueries: compiledReportQueries,
     );
+    _compiledReportsCache[project] = result;
+    return result;
   }
 
   MapEntry<String, Map<String, Object?>>? _compileReportQueryForRecordSource(
