@@ -49,8 +49,10 @@ const _habitBoolColumns = <String>[
 
 void main() {
   test(
-      'report16 and report4 backend HTTP, compiled NgDart release (with maxlength) and asset parity work end-to-end with PostgreSQL',
+      'report1, report4 and report16 backend HTTP, compiled NgDart release (with maxlength) and asset parity work end-to-end with PostgreSQL',
       () async {
+    const report1Name = 'prontuario1';
+    const report1Key = 'prontuario_1';
     const report16Name = 'prontuario16-REGISTRO-SINTETICO-FR-VERSO';
     const report16Key = 'prontuario_16_registro_sintetico_fr_verso';
     const report4Name = 'prontuario4-Condi-Habit';
@@ -75,6 +77,8 @@ void main() {
     await Directory('${sourceDir.path}/reports').create(recursive: true);
     await Directory('${sourceDir.path}/images').create(recursive: true);
     for (final path in [
+      'reports/$report1Name.bas',
+      'reports/$report1Name.json',
       'reports/$report16Name.bas',
       'reports/$report16Name.json',
       'reports/$report4Name.bas',
@@ -88,7 +92,8 @@ void main() {
     final source = await AccessSrcReader().readDirectory(sourceDir.path);
     final extraSelect =
         'CadResidencia.[Nº Comodos], CadResidencia.[Nº Dormitorios], CadResidencia.[Nº pessoas/Dormitorio], '
-        '${_habitBoolColumns.map((c) => 'CadResidencia.[$c]').join(', ')}';
+        '${_habitBoolColumns.map((c) => 'CadResidencia.[$c]').join(', ')}, '
+        'CadResidencia.CRAS, TbUnidade.[Nº UNIDADE]';
     final querySql =
         'SELECT CadResidencia.CodFam, TbPessoa.NOME, TbUnidade.NOME, $extraSelect FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam WHERE (((CadResidencia.CodFam)=[Formulários]![FormProntuario]![CodFamTxt]) AND ((CadResidencia.DataDesligResid) Is Null) AND ((TbPessoa.DataDesligPes) Is Null) AND ((TbPessoa.Parentesco)="Pessoa de Referencia"))';
     const sourceHash =
@@ -115,6 +120,12 @@ void main() {
               'typeCode': 10,
               'typeName': 'Text',
               'maxLength': 255,
+            },
+            {
+              'name': 'Nº UNIDADE',
+              'typeCode': 10,
+              'typeName': 'Text',
+              'maxLength': 50,
             },
           ],
           'indexes': [
@@ -145,6 +156,7 @@ void main() {
             {'name': 'Nº pessoas/Dormitorio', 'typeCode': 4, 'typeName': 'Long'},
             for (final col in _habitBoolColumns)
               {'name': col, 'typeCode': 1, 'typeName': 'Boolean'},
+            {'name': 'CRAS', 'typeCode': 1, 'typeName': 'Boolean'},
           ],
           'indexes': [
             {
@@ -201,6 +213,7 @@ void main() {
       ],
       'forms': <Object?>[],
       'reports': [
+        {'name': report1Name, 'id': 1},
         {'name': report4Name, 'id': 4},
         {'name': report16Name, 'id': 16},
       ],
@@ -228,6 +241,16 @@ void main() {
           {'ordinal': 5, 'name': 'Nº pessoas/Dormitorio', 'daoType': 4},
           for (var i = 0; i < _habitBoolColumns.length; i++)
             {'ordinal': 6 + i, 'name': _habitBoolColumns[i], 'daoType': 1},
+          {
+            'ordinal': 6 + _habitBoolColumns.length,
+            'name': 'CRAS',
+            'daoType': 1,
+          },
+          {
+            'ordinal': 7 + _habitBoolColumns.length,
+            'name': 'Nº UNIDADE',
+            'daoType': 10,
+          },
         ],
       },
       actualSourceHash: sourceHash,
@@ -285,10 +308,10 @@ void main() {
         .join(', ');
 
     for (final sql in [
-      "INSERT INTO tb_unidade(cod_unidade, nome) VALUES (1, 'UNIDADE SINTETICA')",
-      "INSERT INTO cad_residencia(cod_fam, cras_origem, data_deslig_resid, n_comodos, n_dormitorios, n_pessoas_dormitorio, $boolColSql) VALUES "
-          "(4242, 1, NULL, 5, 2, 2, $boolValsSql), "
-          "(4243, 1, '2025-01-10T00:00:00', 3, 1, 1, $boolValsSql)",
+      "INSERT INTO tb_unidade(cod_unidade, nome, n_unidade) VALUES (1, 'UNIDADE SINTETICA', 'UNIDADE-01')",
+      "INSERT INTO cad_residencia(cod_fam, cras_origem, data_deslig_resid, n_comodos, n_dormitorios, n_pessoas_dormitorio, $boolColSql, cras) VALUES "
+          "(4242, 1, NULL, 5, 2, 2, $boolValsSql, TRUE), "
+          "(4243, 1, '2025-01-10T00:00:00', 3, 1, 1, $boolValsSql, FALSE)",
       "INSERT INTO tb_pessoa(cod_pessoa, cod_fam, nome, parentesco, data_deslig_pes) VALUES "
           "(10, 4242, 'Familia Sintetica - Teste de Fidelidade', 'Pessoa de Referencia', NULL), "
           "(11, 4242, 'Membro Secundario', 'Filho', NULL), "
@@ -398,9 +421,23 @@ void main() {
     final listJson = jsonDecode(listBody) as Map<String, dynamic>;
     final reportKeys =
         (listJson['reports'] as List).map((r) => r['key']).toList();
-    expect(reportKeys, containsAll([report4Key, report16Key]));
+    expect(reportKeys, containsAll([report1Key, report4Key, report16Key]));
 
     final encodedParams = Uri.encodeQueryComponent(jsonEncode({'p0': '4242'}));
+    final (run1Status, run1Body, _, _) =
+        await getRaw('/api/v1/access-reports/$report1Key?parameters=$encodedParams');
+    expect(run1Status, 200, reason: run1Body);
+    final run1Json = jsonDecode(run1Body) as Map<String, dynamic>;
+    expect(run1Json['rowCount'], 1);
+    expect(run1Json['controls'], hasLength(159));
+    final page1Values =
+        ((run1Json['pages'] as List).single as Map)['values'] as Map;
+    expect(page1Values['CodResid'], '4242');
+    expect(page1Values['CRAS'], 'true');
+    expect(page1Values['Nº UNIDADE'], 'UNIDADE-01');
+    expect(page1Values['TbPessoa.Nome'], 'FAMILIA SINTETICA - TESTE DE FIDELIDADE');
+    expect(page1Values['Texto25'], 'FAMILIA SINTETICA - TESTE DE FIDELIDADE');
+
     final (run16Status, run16Body, _, _) =
         await getRaw('/api/v1/access-reports/$report16Key?parameters=$encodedParams');
     expect(run16Status, 200, reason: run16Body);

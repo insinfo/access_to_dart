@@ -184,7 +184,9 @@ class CompiledReportSpec {
 
   List<Map<String, Object?>> get boundControls => [
         for (final control in controls)
-          if ((control.type == 'TextBox' || control.type == 'CheckBox') &&
+          if ((control.type == 'TextBox' ||
+                  control.type == 'ComboBox' ||
+                  control.type == 'CheckBox') &&
               control.columnOrdinal != null)
             {
               'controlName': control.name,
@@ -453,6 +455,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         'Image' => 103,
         'CheckBox' => 106,
         'TextBox' => 109,
+        'ComboBox' => 111,
         _ => null,
       };
       if (controlTypeCode == null || cName.isEmpty) {
@@ -496,7 +499,10 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
       final backStyle = _parseReportInt(cProps['BackStyle'] ??
               defProps['BackStyle']) ??
-          (cType == 'TextBox' || cType == 'Image' || cType == 'Rectangle'
+          (cType == 'TextBox' ||
+                  cType == 'ComboBox' ||
+                  cType == 'Image' ||
+                  cType == 'Rectangle'
               ? 1
               : 0);
       final backColor =
@@ -508,8 +514,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
               defProps['OldBorderStyle']) ??
           (cType == 'Label' || cType == 'Image' ? 0 : 1);
       final borderColor = _resolveReportBorderColor(cType, cProps, defProps);
-      final foreColor =
-          _parseReportInt(cProps['ForeColor'] ?? defProps['ForeColor']) ?? 0;
+      final foreColor = _resolveReportForeColor(cProps, defProps);
 
       String? fontName;
       int? fontSize;
@@ -526,7 +531,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
       int? pictureAlignment;
       String? assetName;
 
-      if (cType == 'Label' || cType == 'TextBox') {
+      if (cType == 'Label' || cType == 'TextBox' || cType == 'ComboBox') {
         fontName =
             (cProps['FontName'] ?? defProps['FontName'])?.toString() ??
                 'Calibri';
@@ -540,25 +545,33 @@ extension _CompiledReportRenderer on ProjectGenerator {
         if (cType == 'Label') {
           caption = (ctrl['caption'] ?? cProps['Caption'])?.toString() ?? '';
         } else {
+          final isCombo = cType == 'ComboBox';
+          if (isCombo && !_isIdentityDisplayComboBox(cProps, defProps)) {
+            return (spec: null, reason: 'unsupported-combobox-lookup:$cName');
+          }
           controlSource =
               (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
+          final typeSlug = isCombo ? 'combobox' : 'textbox';
           if (controlSource != null && controlSource.isNotEmpty) {
             if (controlSource.startsWith('=')) {
-              return (spec: null, reason: 'unsupported-textbox-source:$cName');
+              return (spec: null, reason: 'unsupported-$typeSlug-source:$cName');
             }
             final colMatches =
                 columnsByLower[controlSource.toLowerCase()] ?? const [];
             if (colMatches.length != 1) {
-              return (spec: null, reason: 'unresolved-textbox-column:$cName');
+              return (spec: null, reason: 'unresolved-$typeSlug-column:$cName');
             }
             columnOrdinal = colMatches.single['ordinal'] as int;
             daoType = colMatches.single['daoType'] as int;
           } else {
+            if (isCombo) {
+              return (spec: null, reason: 'unsupported-combobox-source:$cName');
+            }
             controlSource = null;
           }
           format = cProps['Format']?.toString();
           if (format != null && format.isNotEmpty && format != '>') {
-            return (spec: null, reason: 'unsupported-textbox-format:$cName');
+            return (spec: null, reason: 'unsupported-$typeSlug-format:$cName');
           }
         }
       } else if (cType == 'CheckBox') {
@@ -831,6 +844,48 @@ extension _CompiledReportRenderer on ProjectGenerator {
     }
     if (type == 'Label') return 8355711;
     return 10921638;
+  }
+
+  int _resolveReportForeColor(
+    Map<String, dynamic> ctrlProp,
+    Map<String, dynamic> defProp,
+  ) {
+    final explicit =
+        _parseReportInt(ctrlProp['ForeColor'] ?? defProp['ForeColor']);
+    if (explicit != null) return explicit;
+    final themeIndex = (ctrlProp['ForeThemeColorIndex'] ??
+            defProp['ForeThemeColorIndex'])
+        ?.toString()
+        .trim();
+    final shade =
+        (ctrlProp['ForeShade'] ?? defProp['ForeShade'])?.toString().trim();
+    if (themeIndex == '4' && shade == '75.0') return 9917743;
+    if (themeIndex == '9' && shade == '50.0') return 2316088;
+    return 0;
+  }
+
+  bool _isIdentityDisplayComboBox(
+    Map<String, dynamic> ctrlProp,
+    Map<String, dynamic> defProp,
+  ) {
+    final columnCount =
+        _parseReportInt(ctrlProp['ColumnCount'] ?? defProp['ColumnCount']) ?? 1;
+    final boundColumn =
+        _parseReportInt(ctrlProp['BoundColumn'] ?? defProp['BoundColumn']) ?? 1;
+    if (columnCount != 1 || boundColumn != 1) {
+      return false;
+    }
+    final columnWidthsRaw =
+        (ctrlProp['ColumnWidths'] ?? defProp['ColumnWidths'])?.toString().trim();
+    if (columnWidthsRaw != null && columnWidthsRaw.isNotEmpty) {
+      final firstWidth = _parseReportDouble(
+        columnWidthsRaw.split(RegExp(r'[;,]')).first,
+      );
+      if (firstWidth == null || firstWidth <= 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   String _accessBgrToHex(int bgr) {
@@ -1220,6 +1275,7 @@ String _buildAccessReportViewerHtml(List<CompiledReportSpec> reports) {
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">$text</div>');
           break;
         case 'TextBox':
+        case 'ComboBox':
           final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
           buffer.writeln(
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ pageValue(page, $nameArg) }}</div>');
@@ -1310,7 +1366,9 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
       buffer.writeln('  border: $border;');
       buffer.writeln('  box-sizing: border-box;');
       buffer.writeln('  overflow: hidden;');
-      if (ctrl.type == 'Label' || ctrl.type == 'TextBox') {
+      if (ctrl.type == 'Label' ||
+          ctrl.type == 'TextBox' ||
+          ctrl.type == 'ComboBox') {
         final align = switch (ctrl.textAlign) {
           2 => 'center',
           3 => 'right',

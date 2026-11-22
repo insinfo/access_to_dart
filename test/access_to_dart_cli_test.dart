@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:access_to_dart/access_to_dart.dart';
+import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -356,5 +357,88 @@ void main() {
       expect(err.toString(), isEmpty);
     },
     timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'analyze validates --dao-query-shape paths, source hashes and invokes contract verification',
+    () async {
+      final cpfFixture = File.fromUri(
+        Directory.current.uri.resolve('fixtures/cpf_demo.accdb'),
+      );
+      expect(await cpfFixture.exists(), isTrue);
+      final tempDir =
+          await Directory.systemTemp.createTemp('cli_dao_shape_contract_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final missingErr = StringBuffer();
+      final missingCode = await run(
+        <String>[
+          'analyze',
+          '--accdb',
+          cpfFixture.path,
+          '--dao-query-shape',
+          '${tempDir.path}/does_not_exist.json',
+          '--output',
+          '${tempDir.path}/missing_out',
+        ],
+        out: StringBuffer(),
+        err: missingErr,
+      );
+      expect(missingCode, 66);
+      expect(missingErr.toString(), contains('Missing DAO query shape file'));
+
+      final mismatchedShapeFile = File('${tempDir.path}/bad_shape.json');
+      await mismatchedShapeFile.writeAsString(jsonEncode({
+        'sourceSha256': 'f' * 64,
+        'queryName': 'CSPRONT1',
+        'sqlSha256': '0' * 64,
+        'readOnly': true,
+        'parameters': const <Object?>[],
+        'columns': const <Object?>[],
+      }));
+      final badErr = StringBuffer();
+      final badCode = await run(
+        <String>[
+          'analyze',
+          '--accdb',
+          cpfFixture.path,
+          '--dao-query-shape',
+          mismatchedShapeFile.path,
+          '--output',
+          '${tempDir.path}/bad_out',
+        ],
+        out: StringBuffer(),
+        err: badErr,
+      );
+      expect(badCode, 65);
+      expect(badErr.toString(), contains('mismatch'));
+
+      final cpfHash = (await sha256.bind(cpfFixture.openRead()).first).toString();
+      final unknownQueryShape = File('${tempDir.path}/unknown_query.json');
+      await unknownQueryShape.writeAsString(jsonEncode({
+        'sourceSha256': cpfHash,
+        'queryName': 'QueryInexistente',
+        'sqlSha256': '0' * 64,
+        'readOnly': true,
+        'parameters': const <Object?>[],
+        'columns': const <Object?>[],
+      }));
+      final contractErr = StringBuffer();
+      final contractCode = await run(
+        <String>[
+          'analyze',
+          '--accdb',
+          cpfFixture.path,
+          '--dao-query-shape',
+          unknownQueryShape.path,
+          '--output',
+          '${tempDir.path}/unknown_out',
+        ],
+        out: StringBuffer(),
+        err: contractErr,
+      );
+      expect(contractCode, 1);
+      expect(contractErr.toString(), contains('Expected exactly one named query'));
+    },
   );
 }

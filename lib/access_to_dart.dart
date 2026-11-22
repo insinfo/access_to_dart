@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:crypto/crypto.dart';
 import 'package:jackcess_dart/jackcess_dart.dart';
 
 import 'src/accdb_analyzer.dart';
+import 'src/access_query_contract.dart';
 import 'src/complex_collection_rows.dart';
 import 'src/access_table_rows_reader.dart';
 import 'src/analysis_backend_linker.dart';
@@ -225,6 +227,17 @@ Future<int> _runAnalyze(
     ..addOption('backend-password',
         help: 'Optional password for encrypted linked backend .accdb files')
     ..addOption('src', help: 'Optional path to the .accdb.src directory')
+    ..addMultiOption(
+      'dao-query-shape',
+      help:
+          'Optional path(s) to verified DAO query shape JSON file(s) to attach as execution contracts',
+    )
+    ..addFlag(
+      'dao-query-ascii-ci',
+      defaultsTo: true,
+      help:
+          'Whether DAO text comparisons in attached query contracts are ASCII case-insensitive',
+    )
     ..addOption('output',
         abbr: 'o', help: 'Output directory for analysis.json');
 
@@ -247,8 +260,41 @@ Future<int> _runAnalyze(
   final backendAccdbPath = args['backend-accdb'] as String?;
   final backendPassword = args['backend-password'] as String?;
   final srcPath = args['src'] as String?;
+  final daoQueryShapes =
+      (args['dao-query-shape'] as List?)?.cast<String>() ?? const <String>[];
+  final daoQueryAsciiCi = args['dao-query-ascii-ci'] as bool? ?? true;
 
   try {
+    final loadedShapes = <({Map<String, dynamic> shape, String sourceHash})>[];
+    if (daoQueryShapes.isNotEmpty) {
+      final sourceHashes = <String>[
+        (await sha256.bind(File(accdbPath).openRead()).first).toString(),
+        if (backendAccdbPath != null && backendAccdbPath.isNotEmpty)
+          (await sha256.bind(File(backendAccdbPath).openRead()).first)
+              .toString(),
+      ];
+      for (final shapePath in daoQueryShapes) {
+        final shapeFile = File(shapePath);
+        if (!await shapeFile.exists()) {
+          err.writeln('Missing DAO query shape file: $shapePath');
+          return 66;
+        }
+        final decoded = jsonDecode(await shapeFile.readAsString());
+        if (decoded is! Map) {
+          err.writeln('Invalid DAO query shape JSON: $shapePath');
+          return 65;
+        }
+        final shape = decoded.cast<String, dynamic>();
+        final claimedHash = shape['sourceSha256'];
+        if (shape['readOnly'] != true ||
+            !sourceHashes.contains(claimedHash)) {
+          err.writeln('DAO source hash/read-only contract mismatch');
+          return 65;
+        }
+        loadedShapes.add((shape: shape, sourceHash: claimedHash as String));
+      }
+    }
+
     final database =
         await AccessDatabase.openPath(accdbPath, password: password);
     try {
@@ -292,6 +338,16 @@ Future<int> _runAnalyze(
         } finally {
           await backendDatabase.close();
         }
+      }
+
+      for (final item in loadedShapes) {
+        attachDaoQueryContract(
+          analysis,
+          item.shape,
+          actualSourceHash: item.sourceHash,
+          asciiCaseInsensitiveText: daoQueryAsciiCi,
+        );
+        out.writeln('  Query contract: ${item.shape['queryName']}');
       }
 
       final outDir = Directory(outputDir);
@@ -943,7 +999,7 @@ void _writeUsage(StringSink sink) {
     '  inspect-accdb --accdb <path-to.accdb> [--password <pwd>] [--json] [-v]   Inspect and list all objects',
   );
   sink.writeln(
-    '  analyze       --accdb <path-to.accdb> [--password <pwd>] [-o <outdir>]    Produce analysis.json',
+    '  analyze       --accdb <path-to.accdb> [--password <pwd>] [--backend-accdb <file.accdb>] [--backend-password <pwd>] [--src <dir>] [--dao-query-shape <file.json>] [-o <outdir>]    Produce analysis.json',
   );
   sink.writeln(
     '  read-src      --src <path.accdb.src>                Parse exported source dir',

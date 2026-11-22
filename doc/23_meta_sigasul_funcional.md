@@ -151,11 +151,15 @@ validação integrada foram encerrados, com remoção do banco conferida.
 - Doc56: corrigido o binding `[maxlength]="<%maxLength%>"` em
   `incluir_page.html.mustache` para atender `MaxLengthValidator` (`int`) do `ngforms`
   e compilar via `dart2js` em tabelas com `maxLength` definido.
-- Doc57: renderer estendido para todos os 14 relatórios `CSPRONT1` elegíveis
-  (`1.806` controles, `CheckBox` booleano, `TextBox` sem vínculo, coordenadas
-  omitidas na origem zero / `LayoutCached*` e default opaco de `Rectangle`),
-  confrontado com oráculo nativo de 507 controles e validado em PostgreSQL +
-  Chrome/Playwright (`prontuario16` e `prontuario4-Condi-Habit`).
+- Doc57: renderer estendido para todos os **15/15** relatórios `CSPRONT1`
+  (`1.965` controles: `CheckBox` booleano, `ComboBox` de 1 coluna com exibição
+  direta `ControlType=111`, `TextBox` sem vínculo, coordenadas omitidas na
+  origem zero / `LayoutCached*`, default opaco de `Rectangle`/`ComboBox` e
+  cores de tema `ForeThemeColorIndex`/`ForeShade`), confrontado com oráculo
+  nativo de **666 controles** em 5 relatórios (`prontuario1`, `4`, `6`, `11`,
+  `16`), `--dao-query-shape` em `access_to_dart analyze`, validado em
+  PostgreSQL + Chrome/Playwright e na compilação integral do `SIGAsul`
+  (`45` tabelas, `core`/`backend`/`frontend` + `server.exe` + `build_release.dart`).
 
 Nenhuma dessas provas encerra a meta de reproduzir os 97 formulários, 165
 relatórios e todos os fluxos/regras do sistema.

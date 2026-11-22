@@ -1,6 +1,6 @@
 ﻿param([string]$SourceDirectory='fixtures/SIGAsul.accdb.src',[Parameter(Mandatory=$true)][string]$OutputDirectory)
 $ErrorActionPreference='Stop'
-$reportNames=@('prontuario4-Condi-Habit','prontuario6-Condi-SAUDE-TEXTO','prontuario11-violenc-violacoes-fr-verso','prontuario16-REGISTRO-SINTETICO-FR-VERSO')
+$reportNames=@('prontuario1','prontuario4-Condi-Habit','prontuario6-Condi-SAUDE-TEXTO','prontuario11-violenc-violacoes-fr-verso','prontuario16-REGISTRO-SINTETICO-FR-VERSO')
 $imagePath=(Resolve-Path (Join-Path $SourceDirectory 'images/logo-SUAS-ICON.png')).Path
 $themePath=(Resolve-Path (Join-Path $SourceDirectory 'themes/Tema do Office.thmx')).Path
 $out=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
@@ -32,10 +32,12 @@ try {
  [IO.File]::WriteAllText((Join-Path $out 'owned-process.json'),(@{pid=$createdAccessPid;startTimeUtc=$ownedProcess.StartTime.ToUniversalTime().ToString('o');path=$ownedProcess.Path;sessionId=$ownedProcess.SessionId;existingPids=$existingAccess;temporaryDatabaseDirectory=$work}|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
  $app.NewCurrentDatabase($path)
  $db=$app.CurrentDb()
- $db.Execute('CREATE TABLE TbUnidade (CodUnidade LONG, NOME TEXT(255))')
+ $db.Execute('CREATE TABLE TbUnidade (CodUnidade LONG, [Nº UNIDADE] TEXT(50), NOME TEXT(255))')
  $db.Execute(@"
 CREATE TABLE CadResidencia (
   CodFam LONG,
+  CodResid LONG,
+  CRAS YESNO,
   [CRAS Origem] LONG,
   [Resid Propria] YESNO, [Resid Alugada] YESNO, [Resid Cedida] YESNO, [Resid Ocupada] YESNO,
   [Alvenaria/madeira aparelhada] YESNO, [Madeira aproveitada/taipa/outros] YESNO,
@@ -50,10 +52,10 @@ CREATE TABLE CadResidencia (
 )
 "@)
  $db.Execute('CREATE TABLE TbPessoa (CodPessoa LONG, CodFam LONG, NOME TEXT(255))')
- $db.Execute("INSERT INTO TbUnidade VALUES (1, 'UNIDADE SINTETICA')")
- $db.Execute("INSERT INTO CadResidencia VALUES (4242, 1, -1, 0, 0, 0, -1, 0, -1, 0, 0, 0, -1, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 5, 2, 2, 0, -1, 0, 0, 0, -1)")
+ $db.Execute("INSERT INTO TbUnidade VALUES (1, 'UNIDADE-01', 'UNIDADE SINTETICA')")
+ $db.Execute("INSERT INTO CadResidencia VALUES (4242, 4242, -1, 1, -1, 0, 0, 0, -1, 0, -1, 0, 0, 0, -1, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 5, 2, 2, 0, -1, 0, 0, 0, -1)")
  $db.Execute("INSERT INTO TbPessoa VALUES (10, 4242, 'FAMILIA SINTETICA - TESTE DE FIDELIDADE')")
- [void]$db.CreateQueryDef('CSPRONT1','SELECT CadResidencia.*, TbPessoa.NOME, TbUnidade.NOME FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam')
+ [void]$db.CreateQueryDef('CSPRONT1','SELECT CadResidencia.*, TbPessoa.NOME, TbUnidade.NOME, TbUnidade.[Nº UNIDADE] FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam')
  [void]$app.CurrentProject.AddSharedImage('logo-SUAS-ICON',$imagePath)
  $themeName=[IO.Path]::GetFileNameWithoutExtension($themePath)
  $themeRecords=$db.OpenRecordset(('SELECT * FROM MSysResources WHERE [Type]=''thmx'' AND [Name]='''+$themeName.Replace("'","''")+''''),2)
@@ -88,12 +90,18 @@ CREATE TABLE CadResidencia (
   $report=$app.Reports.Item($name)
   $controls=@()
   foreach($control in $report.Controls){
-   $controls += [pscustomobject]@{name=$control.Name;controlType=$control.ControlType;section=$control.Section;properties=(PropertyMap $control @('Name','ControlType','Section','Left','Top','Width','Height','Visible','Caption','ControlSource','FontName','FontSize','FontWeight','ForeColor','BackColor','BackStyle','BorderColor','BorderStyle','BorderWidth','TextAlign','Picture','PictureType','SizeMode'))}
+   $controls += [pscustomobject]@{name=$control.Name;controlType=$control.ControlType;section=$control.Section;properties=(PropertyMap $control @('Name','ControlType','Section','Left','Top','Width','Height','Visible','Caption','ControlSource','ColumnCount','BoundColumn','ColumnWidths','FontName','FontSize','FontWeight','ForeColor','BackColor','BackStyle','BorderColor','BorderStyle','BorderWidth','TextAlign','Picture','PictureType','SizeMode'))}
   }
   $reportEntries += [pscustomobject]@{reportName=$name;sourceSha256=(Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant();width=$report.Width;controls=$controls}
   $app.DoCmd.Close(3,$name,1);[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($report);$report=$null
   Write-Output ("ORACLE_REPORT=$name CONTROLS="+$controls.Count)
  }
+
+ $app.DoCmd.OpenReport('prontuario1',2)
+ $nativeTemp1=Join-Path $work 'report1.pdf'
+ $app.DoCmd.OutputTo(3,'prontuario1','PDF Format (*.pdf)',$nativeTemp1,$false,[Type]::Missing,[Type]::Missing,0)
+ Copy-Item -LiteralPath $nativeTemp1 -Destination (Join-Path $out 'report1.pdf') -Force
+ $app.DoCmd.Close(3,'prontuario1',2)
 
  $app.DoCmd.OpenReport('prontuario4-Condi-Habit',2)
  $nativeTemp=Join-Path $work 'report4.pdf'
@@ -101,7 +109,7 @@ CREATE TABLE CadResidencia (
  Copy-Item -LiteralPath $nativeTemp -Destination (Join-Path $out 'report4.pdf') -Force
  $app.DoCmd.Close(3,'prontuario4-Condi-Habit',2)
 
- $result=[pscustomobject]@{contract='cspront1-multi-native-presentation-v1';accessSessionId=$ownedProcess.SessionId;syntheticOnly=$true;originalDatabaseOpened=$false;reports=$reportEntries;report4PdfSha256=(Get-FileHash (Join-Path $out 'report4.pdf') -Algorithm SHA256).Hash.ToLowerInvariant()}
+ $result=[pscustomobject]@{contract='cspront1-multi-native-presentation-v1';accessSessionId=$ownedProcess.SessionId;syntheticOnly=$true;originalDatabaseOpened=$false;reports=$reportEntries;report1PdfSha256=(Get-FileHash (Join-Path $out 'report1.pdf') -Algorithm SHA256).Hash.ToLowerInvariant();report4PdfSha256=(Get-FileHash (Join-Path $out 'report4.pdf') -Algorithm SHA256).Hash.ToLowerInvariant()}
  [IO.File]::WriteAllText((Join-Path $out 'cspront1-multi-presentation.json'),($result|ConvertTo-Json -Depth 12),[Text.UTF8Encoding]::new($false))
  Write-Output 'MULTI_ORACLE_PDF_EXPORTED=True'
 }catch{Write-Output ('ORACLE_ERROR_HRESULT='+$_.Exception.HResult);throw}finally{

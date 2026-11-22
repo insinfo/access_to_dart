@@ -66,7 +66,8 @@ Map<String, dynamic> _buildCspront1Analysis({
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   final extraSelect = includeHabitColumns
       ? ', CadResidencia.[Nº Comodos], CadResidencia.[Nº Dormitorios], CadResidencia.[Nº pessoas/Dormitorio], '
-          '${_cspront1BoolColumns.map((c) => 'CadResidencia.[$c]').join(', ')}'
+          '${_cspront1BoolColumns.map((c) => 'CadResidencia.[$c]').join(', ')}, '
+          'CadResidencia.CRAS, TbUnidade.[Nº UNIDADE]'
       : '';
   final querySql =
       'SELECT CadResidencia.CodFam, TbPessoa.NOME, TbUnidade.NOME$extraSelect FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam WHERE (((CadResidencia.CodFam)=[Formulários]![FormProntuario]![CodFamTxt]) AND ((CadResidencia.DataDesligResid) Is Null) AND ((TbPessoa.DataDesligPes) Is Null) AND ((TbPessoa.Parentesco)="Pessoa de Referencia"))';
@@ -81,6 +82,7 @@ Map<String, dynamic> _buildCspront1Analysis({
       {'name': 'Nº pessoas/Dormitorio', 'typeCode': 4, 'typeName': 'Long'},
       for (final col in _cspront1BoolColumns)
         {'name': col, 'typeCode': 1, 'typeName': 'Boolean'},
+      {'name': 'CRAS', 'typeCode': 1, 'typeName': 'Boolean'},
     ],
   ];
 
@@ -106,6 +108,13 @@ Map<String, dynamic> _buildCspront1Analysis({
             'typeName': 'Text',
             'maxLength': 255
           },
+          if (includeHabitColumns)
+            {
+              'name': 'Nº UNIDADE',
+              'typeCode': 10,
+              'typeName': 'Text',
+              'maxLength': 50,
+            },
         ],
         'indexes': [
           {
@@ -189,6 +198,16 @@ Map<String, dynamic> _buildCspront1Analysis({
       {'ordinal': 5, 'name': 'Nº pessoas/Dormitorio', 'daoType': 4},
       for (var i = 0; i < _cspront1BoolColumns.length; i++)
         {'ordinal': 6 + i, 'name': _cspront1BoolColumns[i], 'daoType': 1},
+      {
+        'ordinal': 6 + _cspront1BoolColumns.length,
+        'name': 'CRAS',
+        'daoType': 1,
+      },
+      {
+        'ordinal': 7 + _cspront1BoolColumns.length,
+        'name': 'Nº UNIDADE',
+        'daoType': 10,
+      },
     ],
   ];
 
@@ -410,9 +429,11 @@ void main() {
   });
 
   test(
-      'all 14 eligible CSPRONT1 prontuario reports compile with 1806 controls while prontuario1 ComboBox is rejected',
+      'all 15 CSPRONT1 prontuario reports compile with 1965 controls while multi-column ComboBox is rejected',
       () async {
     const origin = 'fixtures/SIGAsul.accdb.src';
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     final temp = await Directory.systemTemp.createTemp('cspront1_all_reports_');
     addTearDown(() => temp.delete(recursive: true));
 
@@ -435,6 +456,47 @@ void main() {
       reports: [
         for (var i = 0; i < _cspront1ReportNames.length; i++)
           {'name': _cspront1ReportNames[i], 'id': i + 1},
+        {
+          'name': 'ReportComboMultiCol',
+          'recordSource': 'CSPRONT1',
+          'sourceSha256': sourceHash,
+          'properties': {'Width': '11022'},
+          'printSettings': {
+            'Items': {
+              'Margins': {
+                'LeftMargin': 0.3,
+                'RightMargin': 0.2,
+                'TopMargin': 0.2,
+                'BotMargin': 0.5,
+              },
+              'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+            },
+          },
+          'sections': [
+            {
+              'type': 'Section',
+              'name': 'Detalhe',
+              'height': 1000,
+              'controls': [
+                {
+                  'type': 'ComboBox',
+                  'name': 'ComboMultiCol',
+                  'controlSource': 'CodFam',
+                  'properties': {
+                    'Left': '100',
+                    'Top': '100',
+                    'Width': '1000',
+                    'Height': '300',
+                    'ControlSource': 'CodFam',
+                    'ColumnCount': '2',
+                    'BoundColumn': '1',
+                    'ColumnWidths': '0;1440',
+                  },
+                }
+              ],
+            }
+          ],
+        },
       ],
       includeHabitColumns: true,
     );
@@ -460,22 +522,35 @@ void main() {
       await File('${appDir.path}/access-reports.json').readAsString(),
     ) as Map<String, dynamic>;
     final compiled = (inventory['compiled_reports'] as List).cast<Map>();
-    expect(compiled, hasLength(14));
+    expect(compiled, hasLength(15));
     final totalControls = compiled.fold<int>(
       0,
       (sum, r) => sum + (r['controls'] as List).length,
     );
-    expect(totalControls, 1806);
+    expect(totalControls, 1965);
 
     final diagnostics = (inventory['report_diagnostics'] as List).cast<Map>();
     expect(
-      diagnostics.singleWhere((d) => d['report'] == 'prontuario1')['reason'],
-      'unsupported-control-type:ComboBox',
+      diagnostics
+          .singleWhere((d) => d['report'] == 'ReportComboMultiCol')['reason'],
+      'unsupported-combobox-lookup:ComboMultiCol',
     );
 
     final byKey = <String, Map>{
       for (final r in compiled) r['key'] as String: r,
     };
+    final r1 = byKey['prontuario_1']!;
+    final r1Controls = (r1['controls'] as List).cast<Map>();
+    expect(r1Controls, hasLength(159));
+    final codResid = r1Controls.singleWhere((c) => c['name'] == 'CodResid');
+    expect(codResid['type'], 'ComboBox');
+    expect(codResid['controlType'], 111);
+    expect(codResid['columnOrdinal'], 0);
+    expect(codResid['foreColor'], 9917743);
+    expect(
+      r1Controls.singleWhere((c) => c['name'] == 'Rótulo10')['foreColor'],
+      2316088,
+    );
     final r4 = byKey['prontuario_4_condi_habit']!;
     final r4Controls = (r4['controls'] as List).cast<Map>();
     expect(r4Controls, hasLength(169));
@@ -544,7 +619,9 @@ void main() {
             expect(c['borderColor'], oInt('BorderColor'),
                 reason: '$name:${c['name']}');
           }
-          if (c['type'] == 'Label' || c['type'] == 'TextBox') {
+          if (c['type'] == 'Label' ||
+              c['type'] == 'TextBox' ||
+              c['type'] == 'ComboBox') {
             expect(c['fontName'], oProps['FontName']!['value'],
                 reason: '$name:${c['name']}');
             expect(c['fontSize'], oInt('FontSize'),

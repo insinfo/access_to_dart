@@ -105,7 +105,27 @@ try {
     await sheet4.screenshot({ path: process.env.REPORT4_SCREENSHOT });
   }
 
-  assert.equal(reportApiCount >= 2, true);
+  // Navigate to prontuario1 and verify ComboBox, CheckBox, TextBox and Images
+  await page.evaluate(() => {
+    location.hash = '/access-report/prontuario_1';
+  });
+  await viewer.locator('[data-access-report-param="p0"]').fill('4242');
+  await viewer.getByRole('button', { name: 'Visualizar Relatório', exact: true }).click();
+  const sheet1 = viewer.locator('[data-access-report="prontuario_1"]');
+  await sheet1.waitFor();
+  const controlCount1 = await sheet1.locator('[data-access-control]').count();
+  assert.equal(controlCount1, 159, 'Expected all 159 controls in report1 DOM');
+  const codResid = sheet1.locator('[data-access-control="CodResid"]');
+  assert.equal(await codResid.getAttribute('data-access-control-type'), 'ComboBox');
+  assert.equal((await codResid.innerText()).trim(), '4242');
+  assert.equal(await sheet1.locator('[data-access-control="CRAS"] input[type="checkbox"]').isChecked(), true);
+  assert.equal((await sheet1.locator('[data-access-control="Nº UNIDADE"]').innerText()).trim(), 'UNIDADE-01');
+  assert.equal((await sheet1.locator('[data-access-control="Texto25"]').innerText()).trim(), 'FAMILIA SINTETICA - TESTE DE FIDELIDADE');
+  if (process.env.REPORT1_SCREENSHOT) {
+    await sheet1.screenshot({ path: process.env.REPORT1_SCREENSHOT });
+  }
+
+  assert.equal(reportApiCount >= 3, true);
   assert.equal(assetOk, true);
   assert.deepEqual(writes, []);
   assert.deepEqual(apiFailures, []);
@@ -113,6 +133,7 @@ try {
 
   result = {
     status: 'passed',
+    controlCount1,
     controlCount16,
     controlCount4,
     imgBox,
