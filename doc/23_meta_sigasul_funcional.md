@@ -24,9 +24,9 @@ fluxos e dados. Compilar, gerar CRUD ou preservar um inventário não encerra a 
 |---|---|---|
 | Dados | Todas as tabelas, anexos e relacionamentos migrados; contagens, valores e integridade comparados com Access/DAO; CRUD persistente validado | 54/54 contagens DAO conferidas: 123.922 registros lógicos. PostgreSQL: 887/887 colunas escalares, cinco anexos com 25 metadados e 55 valores multivalorados iguais ao DAO; um órfão físico preservado exatamente em arquivo separado. Escrita explícita de `MotivoNão` e CLI padrão com `sequence` para AutoNumber validados separadamente (docs 51/54). CRUD completo de todos os fluxos ainda pendente |
 | Consultas | Dependências e parâmetros resolvidos; resultados comparados com Access, incluindo filtros, JOIN, agregações e ações | CSPRONT1 executada pela API gerada: sete casos e 134 colunas iguais ao DAO, mediante contrato validado. Demais consultas, dependências e recursos fora do subconjunto ainda pendentes |
-| Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; contrato de capacidades por formulário exportado em `access-form-capabilities.json` (doc53). Não são 97 telas equivalentes |
+| Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; contrato de capacidades por formulário exportado em `access-form-capabilities.json` (doc53) e binding `[maxlength]` em `incluir_page.html.mustache` corrigido para `dart2js` (doc56). Não são 97 telas equivalentes |
 | Regras | Eventos, macros e VBA executados em Dart com efeitos comparados ao Access | Numeração familiar, atribuições de colunas do combo e navegação restrita têm provas específicas. Os demais eventos e a equivalência integral do lifecycle permanecem pendentes |
-| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário completo, apresentação de `prontuario16` (38 controles, layout, `printSettings`, imagem compartilhada) e oráculo PDF nativo em sessão interativa validados (doc52); renderer web compilado somente leitura validado para `prontuario16` com `CSPRONT1` em PostgreSQL + Chrome/Playwright (doc55). Demais 164 reports, agrupamentos, expressões e paginação seguem pendentes |
+| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Apresentação e oráculos nativos validados (docs 52/57); renderer web compilado somente leitura validado para **14 relatórios `CSPRONT1`** (`1.806` controles, `Label`/`TextBox`/`Rectangle`/`Image`/`CheckBox`) e confrontado com PostgreSQL + Chrome/Playwright em `prontuario16` e `prontuario4-Condi-Habit` (docs 55/57). Demais 151 reports, `ComboBox` em relatório, agrupamentos, expressões e paginação seguem pendentes |
 | Operação | Aplicação completa compilada e fluxos reais de cadastro, atendimento, benefícios, encaminhamento e relatórios testados com PostgreSQL | Snapshot 21c986c: backend AOT/release de 471 arquivos, GET de 7.040 pessoas, navegador com 2.869 residências/16 linhas relacionadas e datas nativas conferidas, sem writes. Cadastro completo, relatórios e demais regras VBA ainda não comprovados |
 
 Não há percentual global de conclusão calculado a partir de testes isolados.
@@ -148,6 +148,14 @@ validação integrada foram encerrados, com remoção do banco conferida.
   `CSPRONT1` (38 controles conferidos com o oráculo `presentation.json`, rota
   `/api/v1/access-reports`, asset `logo-SUAS-ICON.png` por SHA-256, build release
   NgDart sem `[style]` e verificação em navegador Chrome/Playwright).
+- Doc56: corrigido o binding `[maxlength]="<%maxLength%>"` em
+  `incluir_page.html.mustache` para atender `MaxLengthValidator` (`int`) do `ngforms`
+  e compilar via `dart2js` em tabelas com `maxLength` definido.
+- Doc57: renderer estendido para todos os 14 relatórios `CSPRONT1` elegíveis
+  (`1.806` controles, `CheckBox` booleano, `TextBox` sem vínculo, coordenadas
+  omitidas na origem zero / `LayoutCached*` e default opaco de `Rectangle`),
+  confrontado com oráculo nativo de 507 controles e validado em PostgreSQL +
+  Chrome/Playwright (`prontuario16` e `prontuario4-Condi-Habit`).
 
 Nenhuma dessas provas encerra a meta de reproduzir os 97 formulários, 165
 relatórios e todos os fluxos/regras do sistema.

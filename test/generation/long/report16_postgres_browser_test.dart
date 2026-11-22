@@ -14,12 +14,47 @@ import 'package:test/test.dart';
 
 import '../support/subform_postgres_harness.dart';
 
+const _habitBoolColumns = <String>[
+  'Resid Propria',
+  'Resid Alugada',
+  'Resid Cedida',
+  'Resid Ocupada',
+  'Alvenaria/madeira aparelhada',
+  'Madeira aproveitada/taipa/outros',
+  'Medidor proprio',
+  'Medidor compart',
+  'Sem Medidor',
+  'Sem energia eletrica',
+  'Agua canalizada',
+  'Abast Rede geral',
+  'Poço/Nascente',
+  'Cisterna/Captação',
+  'Carro pipa',
+  'Outra forma abast',
+  'Rede Coletora esgoto',
+  'Fossa septica',
+  'Fossa rudimentar',
+  'Vala Rio Lago',
+  'Sem banheiro',
+  'Coleta lixo direta',
+  'Coleta lixo indireta',
+  'Sem Coleta lixo',
+  'Domicilio tem acessib total',
+  'Domicilio tem acessib interno',
+  'Domicilio sem acessib',
+  'Area de risco',
+  'Area dif acesso geografico',
+  'Area violencia',
+];
+
 void main() {
   test(
-      'report16 backend HTTP, compiled NgDart release and asset parity work end-to-end with PostgreSQL',
+      'report16 and report4 backend HTTP, compiled NgDart release (with maxlength) and asset parity work end-to-end with PostgreSQL',
       () async {
-    const reportName = 'prontuario16-REGISTRO-SINTETICO-FR-VERSO';
-    const reportKey = 'prontuario_16_registro_sintetico_fr_verso';
+    const report16Name = 'prontuario16-REGISTRO-SINTETICO-FR-VERSO';
+    const report16Key = 'prontuario_16_registro_sintetico_fr_verso';
+    const report4Name = 'prontuario4-Condi-Habit';
+    const report4Key = 'prontuario_4_condi_habit';
     const origin = 'fixtures/SIGAsul.accdb.src';
 
     final harness = SubformPostgresHarness.fromEnvironment();
@@ -40,8 +75,10 @@ void main() {
     await Directory('${sourceDir.path}/reports').create(recursive: true);
     await Directory('${sourceDir.path}/images').create(recursive: true);
     for (final path in [
-      'reports/$reportName.bas',
-      'reports/$reportName.json',
+      'reports/$report16Name.bas',
+      'reports/$report16Name.json',
+      'reports/$report4Name.bas',
+      'reports/$report4Name.json',
       'images/logo-SUAS-ICON.json',
       'images/logo-SUAS-ICON.png',
     ]) {
@@ -49,8 +86,11 @@ void main() {
     }
 
     final source = await AccessSrcReader().readDirectory(sourceDir.path);
-    const querySql =
-        'SELECT CadResidencia.CodFam, TbPessoa.NOME, TbUnidade.NOME FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam WHERE (((CadResidencia.CodFam)=[Formulários]![FormProntuario]![CodFamTxt]) AND ((CadResidencia.DataDesligResid) Is Null) AND ((TbPessoa.DataDesligPes) Is Null) AND ((TbPessoa.Parentesco)="Pessoa de Referencia"))';
+    final extraSelect =
+        'CadResidencia.[Nº Comodos], CadResidencia.[Nº Dormitorios], CadResidencia.[Nº pessoas/Dormitorio], '
+        '${_habitBoolColumns.map((c) => 'CadResidencia.[$c]').join(', ')}';
+    final querySql =
+        'SELECT CadResidencia.CodFam, TbPessoa.NOME, TbUnidade.NOME, $extraSelect FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam WHERE (((CadResidencia.CodFam)=[Formulários]![FormProntuario]![CodFamTxt]) AND ((CadResidencia.DataDesligResid) Is Null) AND ((TbPessoa.DataDesligPes) Is Null) AND ((TbPessoa.Parentesco)="Pessoa de Referencia"))';
     const sourceHash =
         '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
@@ -74,6 +114,7 @@ void main() {
               'name': 'NOME',
               'typeCode': 10,
               'typeName': 'Text',
+              'maxLength': 255,
             },
           ],
           'indexes': [
@@ -99,6 +140,11 @@ void main() {
             },
             {'name': 'CRAS Origem', 'typeCode': 4, 'typeName': 'Long'},
             {'name': 'DataDesligResid', 'typeCode': 8, 'typeName': 'DateTime'},
+            {'name': 'Nº Comodos', 'typeCode': 4, 'typeName': 'Long'},
+            {'name': 'Nº Dormitorios', 'typeCode': 4, 'typeName': 'Long'},
+            {'name': 'Nº pessoas/Dormitorio', 'typeCode': 4, 'typeName': 'Long'},
+            for (final col in _habitBoolColumns)
+              {'name': col, 'typeCode': 1, 'typeName': 'Boolean'},
           ],
           'indexes': [
             {
@@ -126,11 +172,13 @@ void main() {
               'name': 'NOME',
               'typeCode': 10,
               'typeName': 'Text',
+              'maxLength': 255,
             },
             {
               'name': 'Parentesco',
               'typeCode': 10,
               'typeName': 'Text',
+              'maxLength': 100,
             },
             {'name': 'DataDesligPes', 'typeCode': 8, 'typeName': 'DateTime'},
           ],
@@ -153,7 +201,8 @@ void main() {
       ],
       'forms': <Object?>[],
       'reports': [
-        {'name': reportName, 'id': 16}
+        {'name': report4Name, 'id': 4},
+        {'name': report16Name, 'id': 16},
       ],
     };
 
@@ -174,6 +223,11 @@ void main() {
           {'ordinal': 0, 'name': 'CodFam', 'daoType': 4},
           {'ordinal': 1, 'name': 'TbPessoa.NOME', 'daoType': 10},
           {'ordinal': 2, 'name': 'TbUnidade.NOME', 'daoType': 10},
+          {'ordinal': 3, 'name': 'Nº Comodos', 'daoType': 4},
+          {'ordinal': 4, 'name': 'Nº Dormitorios', 'daoType': 4},
+          {'ordinal': 5, 'name': 'Nº pessoas/Dormitorio', 'daoType': 4},
+          for (var i = 0; i < _habitBoolColumns.length; i++)
+            {'ordinal': 6 + i, 'name': _habitBoolColumns[i], 'daoType': 1},
         ],
       },
       actualSourceHash: sourceHash,
@@ -199,11 +253,12 @@ void main() {
     );
 
     final project = AnalysisProject.fromJson(analysis);
+    const policy = MigrationIdentifierPolicy(
+      style: MigrationIdentifierStyle.snakeAscii,
+    );
     const ddlBuilder = MigrationStatementBuilder(
       notNullMode: MigrationNotNullMode.strict,
-      identifierPolicy: MigrationIdentifierPolicy(
-        style: MigrationIdentifierStyle.snakeAscii,
-      ),
+      identifierPolicy: policy,
     );
     final db = await harness.openDatabase(database);
     addTearDown(() => db.close());
@@ -212,9 +267,28 @@ void main() {
           .createCommand(ddlBuilder.buildCreateTableStatement(table))
           .executeNonQuery();
     }
+
+    final trueBoolSet = {
+      'Resid Propria',
+      'Alvenaria/madeira aparelhada',
+      'Medidor proprio',
+      'Agua canalizada',
+      'Abast Rede geral',
+      'Rede Coletora esgoto',
+      'Coleta lixo direta',
+      'Domicilio tem acessib interno',
+      'Area violencia',
+    };
+    final boolColSql = _habitBoolColumns.map((c) => policy.columnName(c)).join(', ');
+    final boolValsSql = _habitBoolColumns
+        .map((c) => trueBoolSet.contains(c) ? 'TRUE' : 'FALSE')
+        .join(', ');
+
     for (final sql in [
       "INSERT INTO tb_unidade(cod_unidade, nome) VALUES (1, 'UNIDADE SINTETICA')",
-      "INSERT INTO cad_residencia(cod_fam, cras_origem, data_deslig_resid) VALUES (4242, 1, NULL), (4243, 1, '2025-01-10T00:00:00')",
+      "INSERT INTO cad_residencia(cod_fam, cras_origem, data_deslig_resid, n_comodos, n_dormitorios, n_pessoas_dormitorio, $boolColSql) VALUES "
+          "(4242, 1, NULL, 5, 2, 2, $boolValsSql), "
+          "(4243, 1, '2025-01-10T00:00:00', 3, 1, 1, $boolValsSql)",
       "INSERT INTO tb_pessoa(cod_pessoa, cod_fam, nome, parentesco, data_deslig_pes) VALUES "
           "(10, 4242, 'Familia Sintetica - Teste de Fidelidade', 'Pessoa de Referencia', NULL), "
           "(11, 4242, 'Membro Secundario', 'Filho', NULL), "
@@ -242,7 +316,8 @@ void main() {
     await runDart(['analyze', 'lib'], backendDir);
     final serverExe =
         '${backendDir.path}/bin/report16_server${Platform.isWindows ? '.exe' : ''}';
-    await runDart(['compile', 'exe', 'bin/server.dart', '-o', serverExe], backendDir);
+    await runDart(
+        ['compile', 'exe', 'bin/server.dart', '-o', serverExe], backendDir);
 
     await runDart(['pub', 'get'], frontendDir);
     await runDart(['analyze', 'lib'], frontendDir);
@@ -321,32 +396,48 @@ void main() {
     final (listStatus, listBody, _, _) = await getRaw('/api/v1/access-reports');
     expect(listStatus, 200, reason: listBody);
     final listJson = jsonDecode(listBody) as Map<String, dynamic>;
-    expect((listJson['reports'] as List).single['key'], reportKey);
+    final reportKeys =
+        (listJson['reports'] as List).map((r) => r['key']).toList();
+    expect(reportKeys, containsAll([report4Key, report16Key]));
 
     final encodedParams = Uri.encodeQueryComponent(jsonEncode({'p0': '4242'}));
-    final (runStatus, runBody, _, _) =
-        await getRaw('/api/v1/access-reports/$reportKey?parameters=$encodedParams');
-    expect(runStatus, 200, reason: runBody);
-    final runJson = jsonDecode(runBody) as Map<String, dynamic>;
-    expect(runJson['rowCount'], 1);
-    expect(runJson['controls'], hasLength(38));
-    final pageValues =
-        ((runJson['pages'] as List).single as Map)['values'] as Map;
-    expect(pageValues['CadResidencia.CodFam'], '4242');
-    expect(pageValues['Nome'], 'FAMILIA SINTETICA - TESTE DE FIDELIDADE');
+    final (run16Status, run16Body, _, _) =
+        await getRaw('/api/v1/access-reports/$report16Key?parameters=$encodedParams');
+    expect(run16Status, 200, reason: run16Body);
+    final run16Json = jsonDecode(run16Body) as Map<String, dynamic>;
+    expect(run16Json['rowCount'], 1);
+    expect(run16Json['controls'], hasLength(38));
+    final page16Values =
+        ((run16Json['pages'] as List).single as Map)['values'] as Map;
+    expect(page16Values['CadResidencia.CodFam'], '4242');
+    expect(page16Values['Nome'], 'FAMILIA SINTETICA - TESTE DE FIDELIDADE');
+
+    final (run4Status, run4Body, _, _) =
+        await getRaw('/api/v1/access-reports/$report4Key?parameters=$encodedParams');
+    expect(run4Status, 200, reason: run4Body);
+    final run4Json = jsonDecode(run4Body) as Map<String, dynamic>;
+    expect(run4Json['rowCount'], 1);
+    expect(run4Json['controls'], hasLength(169));
+    final page4Values =
+        ((run4Json['pages'] as List).single as Map)['values'] as Map;
+    expect(page4Values['Seleção53'], 'true');
+    expect(page4Values['Resid Alugada'], 'false');
+    expect(page4Values['Nº Comodos'], '5');
+    expect(page4Values['Nº Dormitorios'], '2');
+    expect(page4Values['Nº pessoas/Dormitorio'], '2');
 
     final emptyParams = Uri.encodeQueryComponent(jsonEncode({'p0': '4243'}));
     final (emptyStatus, emptyBody, _, _) =
-        await getRaw('/api/v1/access-reports/$reportKey?parameters=$emptyParams');
+        await getRaw('/api/v1/access-reports/$report16Key?parameters=$emptyParams');
     expect(emptyStatus, 200);
     expect((jsonDecode(emptyBody) as Map)['rowCount'], 0);
 
     final (badStatus, _, _, _) =
-        await getRaw('/api/v1/access-reports/$reportKey?parameters=%7B%7D');
+        await getRaw('/api/v1/access-reports/$report16Key?parameters=%7B%7D');
     expect(badStatus, 400);
 
     final (assetStatus, _, assetBytes, assetMime) = await getRaw(
-        '/api/v1/access-reports/$reportKey/assets/logo-SUAS-ICON.png');
+        '/api/v1/access-reports/$report16Key/assets/logo-SUAS-ICON.png');
     expect(assetStatus, 200);
     expect(assetMime, 'image/png');
     final expectedLogoBytes =

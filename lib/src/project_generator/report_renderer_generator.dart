@@ -184,9 +184,11 @@ class CompiledReportSpec {
 
   List<Map<String, Object?>> get boundControls => [
         for (final control in controls)
-          if (control.type == 'TextBox' && control.columnOrdinal != null)
+          if ((control.type == 'TextBox' || control.type == 'CheckBox') &&
+              control.columnOrdinal != null)
             {
               'controlName': control.name,
+              'controlType': control.controlType,
               'controlSource': control.controlSource,
               'columnOrdinal': control.columnOrdinal,
               'daoType': control.daoType,
@@ -449,6 +451,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         'Label' => 100,
         'Rectangle' => 101,
         'Image' => 103,
+        'CheckBox' => 106,
         'TextBox' => 109,
         _ => null,
       };
@@ -458,16 +461,34 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
       final defProps =
           ((defaultsRaw[cType] as Map?) ?? const {}).cast<String, dynamic>();
-      final left = _parseReportInt(ctrl['left'] ?? cProps['Left']);
-      final top = _parseReportInt(ctrl['top'] ?? cProps['Top']);
-      final width =
+      var width =
           _parseReportInt(ctrl['width'] ?? cProps['Width'] ?? defProps['Width']);
-      final height = _parseReportInt(
+      var height = _parseReportInt(
           ctrl['height'] ?? cProps['Height'] ?? defProps['Height']);
+      final cachedLeft = _parseReportInt(cProps['LayoutCachedLeft']);
+      final cachedTop = _parseReportInt(cProps['LayoutCachedTop']);
+      final cachedRight = _parseReportInt(cProps['LayoutCachedWidth']);
+      final cachedBottom = _parseReportInt(cProps['LayoutCachedHeight']);
+      var left = _parseReportInt(ctrl['left'] ?? cProps['Left']) ?? cachedLeft;
+      if (left == null && width != null && cachedRight == width) {
+        left = 0;
+      }
+      var top = _parseReportInt(ctrl['top'] ?? cProps['Top']) ?? cachedTop;
+      if (top == null && height != null && cachedBottom == height) {
+        top = 0;
+      }
+      if (width == null && left != null && cachedRight != null && cachedRight > left) {
+        width = cachedRight - left;
+      }
+      if (height == null && top != null && cachedBottom != null && cachedBottom > top) {
+        height = cachedBottom - top;
+      }
       if (left == null ||
           top == null ||
           width == null ||
           height == null ||
+          left < 0 ||
+          top < 0 ||
           width <= 0 ||
           height <= 0) {
         return (spec: null, reason: 'invalid-control-geometry:$cName');
@@ -475,7 +496,9 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
       final backStyle = _parseReportInt(cProps['BackStyle'] ??
               defProps['BackStyle']) ??
-          (cType == 'TextBox' || cType == 'Image' ? 1 : 0);
+          (cType == 'TextBox' || cType == 'Image' || cType == 'Rectangle'
+              ? 1
+              : 0);
       final backColor =
           _parseReportInt(cProps['BackColor'] ?? defProps['BackColor']) ??
               16777215;
@@ -519,23 +542,40 @@ extension _CompiledReportRenderer on ProjectGenerator {
         } else {
           controlSource =
               (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
-          if (controlSource == null ||
-              controlSource.isEmpty ||
-              controlSource.startsWith('=')) {
-            return (spec: null, reason: 'unsupported-textbox-source:$cName');
+          if (controlSource != null && controlSource.isNotEmpty) {
+            if (controlSource.startsWith('=')) {
+              return (spec: null, reason: 'unsupported-textbox-source:$cName');
+            }
+            final colMatches =
+                columnsByLower[controlSource.toLowerCase()] ?? const [];
+            if (colMatches.length != 1) {
+              return (spec: null, reason: 'unresolved-textbox-column:$cName');
+            }
+            columnOrdinal = colMatches.single['ordinal'] as int;
+            daoType = colMatches.single['daoType'] as int;
+          } else {
+            controlSource = null;
           }
-          final colMatches =
-              columnsByLower[controlSource.toLowerCase()] ?? const [];
-          if (colMatches.length != 1) {
-            return (spec: null, reason: 'unresolved-textbox-column:$cName');
-          }
-          columnOrdinal = colMatches.single['ordinal'] as int;
-          daoType = colMatches.single['daoType'] as int;
           format = cProps['Format']?.toString();
           if (format != null && format.isNotEmpty && format != '>') {
             return (spec: null, reason: 'unsupported-textbox-format:$cName');
           }
         }
+      } else if (cType == 'CheckBox') {
+        controlSource =
+            (ctrl['controlSource'] ?? cProps['ControlSource'])?.toString().trim();
+        if (controlSource == null ||
+            controlSource.isEmpty ||
+            controlSource.startsWith('=')) {
+          return (spec: null, reason: 'unsupported-checkbox-source:$cName');
+        }
+        final colMatches =
+            columnsByLower[controlSource.toLowerCase()] ?? const [];
+        if (colMatches.length != 1 || colMatches.single['daoType'] != 1) {
+          return (spec: null, reason: 'unresolved-checkbox-column:$cName');
+        }
+        columnOrdinal = colMatches.single['ordinal'] as int;
+        daoType = 1;
       } else if (cType == 'Image') {
         picture = cProps['Picture']?.toString();
         pictureType =
@@ -878,6 +918,7 @@ class AccessReportController {
             raw,
             control['daoType'] as int,
             control['format'] as String?,
+            controlType: control['controlType'] as int?,
           );
         }
         pages.add({'pageNumber': i + 1, 'values': values});
@@ -926,7 +967,15 @@ class AccessReportController {
     );
   }
 
-  static String _formatCell(Object? value, int daoType, String? format) {
+  static String _formatCell(
+    Object? value,
+    int daoType,
+    String? format, {
+    int? controlType,
+  }) {
+    if (controlType == 106) {
+      return value == true ? 'true' : 'false';
+    }
     if (value == null) return '';
     String text;
     if (daoType == 1 && value is bool) {
@@ -1108,6 +1157,9 @@ class AccessReportViewer implements OnInit {
     }
     return '';
   }
+
+  bool pageChecked(Map<String, dynamic> page, String controlName) =>
+      pageValue(page, controlName) == 'true';
 }
 ''';
 
@@ -1176,6 +1228,11 @@ String _buildAccessReportViewerHtml(List<CompiledReportSpec> reports) {
           buffer.writeln(
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"></div>');
           break;
+        case 'CheckBox':
+          final nameArg = _ngDartSingleQuotedExpr(ctrl.name);
+          buffer.writeln(
+              '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr" [attr.data-access-checked]="pageValue(page, $nameArg)"><input type="checkbox" disabled [checked]="pageChecked(page, $nameArg)"></div>');
+          break;
         case 'Image':
           final src = _htmlTextLiteral(
               '/api/v1/access-reports/${report.key}/assets/${ctrl.assetName}');
@@ -1236,9 +1293,12 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
 }
 ''');
     for (final ctrl in report.controls) {
-      final bg = ctrl.backStyle == 1 ? ctrl.backColorHex : 'transparent';
-      final border =
-          ctrl.borderStyle == 1 ? '1px solid ${ctrl.borderColorHex}' : 'none';
+      final bg = ctrl.type == 'CheckBox'
+          ? 'transparent'
+          : (ctrl.backStyle == 1 ? ctrl.backColorHex : 'transparent');
+      final border = ctrl.type == 'CheckBox'
+          ? 'none'
+          : (ctrl.borderStyle == 1 ? '1px solid ${ctrl.borderColorHex}' : 'none');
       final cls = 'access-report-ctrl-${report.key}-${ctrl.index}';
       buffer.writeln('.$cls {');
       buffer.writeln('  position: absolute;');
@@ -1269,6 +1329,18 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
         buffer.writeln('  padding: 0;');
       }
       buffer.writeln('}');
+      if (ctrl.type == 'CheckBox') {
+        buffer.writeln('''
+.$cls input[type="checkbox"] {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 1px;
+  pointer-events: none;
+  accent-color: #1f1f1f;
+}
+''');
+      }
       if (ctrl.type == 'Image') {
         final fit = switch (ctrl.sizeMode) {
           1 => 'fill',

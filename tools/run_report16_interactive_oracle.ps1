@@ -1,4 +1,4 @@
-param([string]$InteractiveUser='isaque.santana',[string]$Repository='C:\MyDartProjects\access_to_dart',[string]$OutputDirectory='C:\MyDartProjects\access_to_dart\build\codex-report16-interactive')
+param([string]$InteractiveUser='isaque.santana',[string]$Repository='C:\MyDartProjects\access_to_dart',[string]$OutputDirectory='C:\MyDartProjects\access_to_dart\build\codex-report16-interactive',[string]$OracleScript='tools\audit_report16_native.ps1')
 $ErrorActionPreference='Stop'
 $token=[guid]::NewGuid().ToString('N')
 $task='CodexReport16Oracle_'+$token
@@ -9,7 +9,7 @@ $registered=$false
 try {
  & icacls $work /grant ($InteractiveUser+':(OI)(CI)M') /T /Q | Out-Null
  if($LASTEXITCODE -ne 0){throw 'Cannot grant access to the synthetic temporary folder'}
- $oracle=Join-Path $Repository 'tools\audit_report16_native.ps1'
+ $oracle=Join-Path $Repository $OracleScript
  $source=Join-Path $Repository 'fixtures\SIGAsul.accdb.src'
  $log=Join-Path $out 'oracle.log'
  $launcher=Join-Path $work 'invoke.ps1'

@@ -55,7 +55,7 @@ void main() {
     final incluirHtmlFile = File('$outputDir${Platform.pathSeparator}frontend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}modules${Platform.pathSeparator}contatos${Platform.pathSeparator}pages${Platform.pathSeparator}incluir_contatos${Platform.pathSeparator}incluir_contatos_page.html');
     final incluirHtmlContent = await incluirHtmlFile.readAsString();
     expect(incluirHtmlContent, contains('Endereço de Email:'));
-    expect(incluirHtmlContent, contains('maxlength="255"'));
+    expect(incluirHtmlContent, contains('[maxlength]="255"'));
     expect(incluirHtmlContent, contains('required'));
 
     final dataFile = File('$outputDir${Platform.pathSeparator}backend${Platform.pathSeparator}lib${Platform.pathSeparator}src${Platform.pathSeparator}generated_data.dart');
