@@ -102,9 +102,16 @@ extension _ProjectGeneratorShared on ProjectGenerator {
       }
     }
     buffer.writeln();
-    buffer.writeln(
-      '> Este artefato preserva o inventário e os metadados disponíveis; não gera um renderer de reports, layout paginado ou PDF. Campos ausentes não significam ausência de seções, controles ou agrupamentos.',
-    );
+    if (inventory['renderer_generated'] == true) {
+      final compiled = (inventory['compiled_reports'] as List?) ?? const [];
+      buffer.writeln(
+        '> Relatórios compilados somente leitura disponíveis: `${compiled.length}` em [access-reports.json](access-reports.json). Os demais relatórios permanecem apenas no inventário e sem paginação automática ou PDF.',
+      );
+    } else {
+      buffer.writeln(
+        '> Este artefato preserva o inventário e os metadados disponíveis; não gera um renderer de reports, layout paginado ou PDF. Campos ausentes não significam ausência de seções, controles ou agrupamentos.',
+      );
+    }
     buffer.writeln();
     buffer.writeln('## Findings');
     buffer.writeln();
@@ -150,13 +157,20 @@ extension _ProjectGeneratorShared on ProjectGenerator {
         'total': total,
       };
     }
+    final compiledReports = compileEligibleReports(project);
     final inventory = <String, Object?>{
       'schema_version': '1.0',
       'artifact': 'access_report_inventory',
       'analysis_schema_version': project.schemaVersion,
       'source': project.source,
-      'status': 'inventory_only',
-      'renderer_generated': false,
+      'status': compiledReports.reports.isEmpty
+          ? 'inventory_only'
+          : 'partial_compiled_renderer',
+      'renderer_generated': compiledReports.reports.isNotEmpty,
+      'compiled_reports': compiledReports.reports
+          .map((report) => report.toInventoryJson())
+          .toList(growable: false),
+      'report_diagnostics': compiledReports.diagnostics,
       'reports': reports,
       'source_overlay_reports': overlayReports,
       'canonical_reports': canonicalReports,

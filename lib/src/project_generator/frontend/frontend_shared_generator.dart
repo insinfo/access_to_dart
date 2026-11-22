@@ -17,6 +17,7 @@ extension _FrontendSharedGenerator on ProjectGenerator {
 export 'components/datatable.dart';
 export 'components/access_subform_panel.dart';
 export 'components/access_multivalue_panel.dart';
+export 'components/access_report_viewer.dart';
 export 'components/modal.dart';
 export 'services/api_http_service.dart';
 export 'services/rest_service.dart';
@@ -26,6 +27,14 @@ export 'utils/loading.dart';
 export 'utils/toast.dart';
 export 'utils/dialogs.dart';
 ''';
+
+    final compiledReports = compileEligibleReports(project).reports;
+    await File(p.join(sharedDir.path, 'components', 'access_report_viewer.dart'))
+        .writeAsString(_buildAccessReportViewerDartSource(compiledReports));
+    await File(p.join(sharedDir.path, 'components', 'access_report_viewer.html'))
+        .writeAsString(_buildAccessReportViewerHtml(compiledReports));
+    await File(p.join(sharedDir.path, 'components', 'access_report_viewer.scss'))
+        .writeAsString(_buildAccessReportViewerScss(compiledReports));
 
     await File(p.join(sharedDir.path, 'services', 'api_http_service.dart'))
         .writeAsString(_buildApiHttpServiceSource());

@@ -795,14 +795,25 @@ class {{namePascal}}PageComponent {}
 String _buildFrontendShellDartSource({
   required String initialModule,
   required Iterable<Map<String, Object?>> modules,
+  List<String> compiledReportKeys = const [],
 }) {
-  final importLines = modules
-      .map((module) =>
-          "import 'src/modules/${module['nameSnake']}/pages/${module['nameSnake']}_page_component.dart';")
-      .join('\n');
-  final directives = modules
-      .map((module) => '${module['namePascal']}PageComponent')
-      .join(', ');
+  final hasReports = compiledReportKeys.isNotEmpty;
+  final importLines = [
+    ...modules.map((module) =>
+        "import 'src/modules/${module['nameSnake']}/pages/${module['nameSnake']}_page_component.dart';"),
+    if (hasReports)
+      "import 'src/shared/components/access_report_viewer.dart';",
+  ].join('\n');
+  final directives = [
+    ...modules.map((module) => '${module['namePascal']}PageComponent'),
+    if (hasReports) 'AccessReportViewer',
+  ].join(', ');
+  final routeList = [
+    ...modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)),
+    if (hasReports) _dartStringLiteral('access-reports'),
+  ];
+  final reportRoutes =
+      compiledReportKeys.map(_dartStringLiteral).join(', ');
   return _renderTemplate(
     '''
 import 'dart:async';
@@ -820,7 +831,9 @@ import 'package:ngdart/angular.dart';
 class AppComponent implements OnInit, OnDestroy {
   StreamSubscription<html.Event>? _hashSubscription;
   String? accessNavigationNotice;
+  String? selectedReportKey;
   static const Set<String> _moduleRoutes = {{{moduleRoutes}}};
+  static const Set<String> _reportRoutes = {{{reportRoutes}}};
   String activeModule = '{{initialModule}}';
 
   @override
@@ -834,6 +847,16 @@ class AppComponent implements OnInit, OnDestroy {
 
   void _readHash() {
     final hash = html.window.location.hash;
+    if (hash.startsWith('#/access-report/')) {
+      String reportKey;
+      try { reportKey = Uri.decodeComponent(hash.substring('#/access-report/'.length)); }
+      on FormatException { return; }
+      if (!_reportRoutes.contains(reportKey)) return;
+      selectedReportKey = reportKey;
+      activeModule = 'access-reports';
+      accessNavigationNotice = null;
+      return;
+    }
     final partial = hash.startsWith('#/access-form/');
     final prefix = partial ? '#/access-form/' : '#/module/';
     if (!hash.startsWith(prefix)) return;
@@ -856,7 +879,8 @@ class AppComponent implements OnInit, OnDestroy {
 }
 ''',
     <String, Object?>{
-      'moduleRoutes': '<String>{${modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)).join(', ')}}',
+      'moduleRoutes': '<String>{${routeList.join(', ')}}',
+      'reportRoutes': '<String>{$reportRoutes}',
       'initialModule': initialModule.replaceAll("'", "\\'"),
       'importLines': importLines,
       'directives': directives,

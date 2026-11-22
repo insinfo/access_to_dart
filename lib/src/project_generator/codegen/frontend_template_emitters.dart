@@ -40,12 +40,14 @@ String _buildFrontendModulePageComponentHtml({
 String _buildFrontendShellHtml({
   required String projectName,
   required Iterable<Map<String, Object?>> modules,
+  bool hasReports = false,
 }) {
   return _renderTemplateAsset(
     'frontend/app_component.html.mustache',
     <String, Object?>{
       'projectName': projectName,
       'modules': modules.toList(growable: false),
+      'hasReports': hasReports,
     },
   );
 }

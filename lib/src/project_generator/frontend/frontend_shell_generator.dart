@@ -25,14 +25,18 @@ extension _FrontendShellGenerator on ProjectGenerator {
         )
         .toList(growable: false);
 
-    final initialModule = tables.isEmpty
-        ? ''
-      : tableRouteSegment(tables.first);
+    final compiledReports = compileEligibleReports(project).reports;
+    final compiledReportKeys =
+        compiledReports.map((report) => report.key).toList(growable: false);
+    final initialModule = tables.isNotEmpty
+        ? tableRouteSegment(tables.first)
+        : (compiledReportKeys.isNotEmpty ? 'access-reports' : '');
 
     await File(p.join(libDir.path, 'app_component.dart')).writeAsString(
       _buildFrontendShellDartSource(
         initialModule: initialModule,
         modules: modules,
+        compiledReportKeys: compiledReportKeys,
       ),
     );
 
@@ -40,6 +44,7 @@ extension _FrontendShellGenerator on ProjectGenerator {
       _buildFrontendShellHtml(
         projectName: project.projectName,
         modules: modules,
+        hasReports: compiledReportKeys.isNotEmpty,
       ),
     );
 

@@ -26,7 +26,7 @@ fluxos e dados. Compilar, gerar CRUD ou preservar um inventário não encerra a 
 | Consultas | Dependências e parâmetros resolvidos; resultados comparados com Access, incluindo filtros, JOIN, agregações e ações | CSPRONT1 executada pela API gerada: sete casos e 134 colunas iguais ao DAO, mediante contrato validado. Demais consultas, dependências e recursos fora do subconjunto ainda pendentes |
 | Formulários | Os 97 forms e seus subforms, seleção, filtros, ordenação e navegação exercitados | Apenas parte dos forms fornece metadados ao CRUD; contrato de capacidades por formulário exportado em `access-form-capabilities.json` (doc53). Não são 97 telas equivalentes |
 | Regras | Eventos, macros e VBA executados em Dart com efeitos comparados ao Access | Numeração familiar, atribuições de colunas do combo e navegação restrita têm provas específicas. Os demais eventos e a equivalência integral do lifecycle permanecem pendentes |
-| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário completo, apresentação de `prontuario16` (38 controles, layout, `printSettings`, imagem compartilhada) e oráculo PDF nativo em sessão interativa validados (doc52); renderer web ainda pendente |
+| Relatórios | Os 165 reports, agrupamentos, expressões, paginação e saídas comparados ao Access | Inventário completo, apresentação de `prontuario16` (38 controles, layout, `printSettings`, imagem compartilhada) e oráculo PDF nativo em sessão interativa validados (doc52); renderer web compilado somente leitura validado para `prontuario16` com `CSPRONT1` em PostgreSQL + Chrome/Playwright (doc55). Demais 164 reports, agrupamentos, expressões e paginação seguem pendentes |
 | Operação | Aplicação completa compilada e fluxos reais de cadastro, atendimento, benefícios, encaminhamento e relatórios testados com PostgreSQL | Snapshot 21c986c: backend AOT/release de 471 arquivos, GET de 7.040 pessoas, navegador com 2.869 residências/16 linhas relacionadas e datas nativas conferidas, sem writes. Cadastro completo, relatórios e demais regras VBA ainda não comprovados |
 
 Não há percentual global de conclusão calculado a partir de testes isolados.
@@ -143,6 +143,11 @@ validação integrada foram encerrados, com remoção do banco conferida.
   conferidas com oráculo COM sintético; não altera a política somente leitura dos painéis familiares.
 - Doc54: `migrate` passa a adotar `--auto-number-mode sequence` como padrão,
   validado em PostgreSQL + HTTP para inserts sem ID explícito.
+- Doc55: renderer web compilado somente leitura implementado para relatórios
+  elegíveis sem VBA/eventos/agrupamento e validado em `prontuario16` +
+  `CSPRONT1` (38 controles conferidos com o oráculo `presentation.json`, rota
+  `/api/v1/access-reports`, asset `logo-SUAS-ICON.png` por SHA-256, build release
+  NgDart sem `[style]` e verificação em navegador Chrome/Playwright).
 
 Nenhuma dessas provas encerra a meta de reproduzir os 97 formulários, 165
 relatórios e todos os fluxos/regras do sistema.

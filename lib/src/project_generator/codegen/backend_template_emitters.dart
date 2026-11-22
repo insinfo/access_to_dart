@@ -240,12 +240,16 @@ String _buildBackendApiRoutesSource(AnalysisProject project) {
     '''
 import 'package:shelf_router/shelf_router.dart';
 import '../shared/access_queries.dart';
+import '../shared/access_reports.dart';
 
 {{{imports}}}
 
 void setupApiRoutes(Router app) {
   final basePath = '/api/v1';
   app.get('/api/v1/access-queries/<key>', AccessQueryController.run);
+  app.get('/api/v1/access-reports', AccessReportController.list);
+  app.get('/api/v1/access-reports/<key>', AccessReportController.run);
+  app.get('/api/v1/access-reports/<key>/assets/<asset>', AccessReportController.asset);
 
 {{{setups}}}
 }
@@ -270,11 +274,15 @@ import 'package:shelf_router/shelf_router.dart';
 
 import '../controllers/public_api_controller.dart';
 import '../../../shared/access_queries.dart';
+import '../../../shared/access_reports.dart';
 {{{imports}}}
 
 void setupRoutes(Router app) {
   final basePath = '/api/v1';
   app.get('/api/v1/access-queries/<key>', AccessQueryController.run);
+  app.get('/api/v1/access-reports', AccessReportController.list);
+  app.get('/api/v1/access-reports/<key>', AccessReportController.run);
+  app.get('/api/v1/access-reports/<key>/assets/<asset>', AccessReportController.asset);
 
   app.get('/health', PublicApiController.health);
 {{{setups}}}

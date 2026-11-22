@@ -9,6 +9,9 @@ class AnalysisOverlayMerger {
     Map<String, dynamic> analysis,
     AccessSrcProject sourceProject,
   ) {
+    if (sourceProject.sourcePath.isNotEmpty) {
+      analysis['source_overlay_path'] ??= sourceProject.sourcePath;
+    }
     _mergeForms(analysis, sourceProject.forms);
     if (sourceProject.reports.isNotEmpty) {
       analysis['reports'] = _mergeReportRecords(

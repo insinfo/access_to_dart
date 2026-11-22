@@ -1,8 +1,12 @@
 part of 'project_generator.dart';
 
+typedef _QueryCompilationResult = ({
+  Map<String, Map<String, Object?>> specifications,
+  List<Map<String, Object?>> diagnostics,
+});
+
 extension _CompiledQueryBackend on ProjectGenerator {
-  Future<void> _generateQueryBackend(
-      AnalysisProject project, Directory backendDir) async {
+  _QueryCompilationResult _compileQuerySpecifications(AnalysisProject project) {
     final specifications = <String, Map<String, Object?>>{};
     final diagnostics = <Map<String, Object?>>[];
     final queries =
@@ -57,12 +61,20 @@ extension _CompiledQueryBackend on ProjectGenerator {
             {'query': name, 'status': 'rejected', 'reason': error.message});
       }
     }
+    return (specifications: specifications, diagnostics: diagnostics);
+  }
+
+  Future<void> _generateQueryBackend(
+      AnalysisProject project, Directory backendDir) async {
+    final compiled = _compileQuerySpecifications(project);
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.dart'))
         .writeAsString(_queryBackendSource.replaceFirst('/*SPECIFICATIONS*/',
-            _dartStringLiteral(jsonEncode(specifications))));
+            _dartStringLiteral(jsonEncode(compiled.specifications))));
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.json'))
-        .writeAsString(const JsonEncoder.withIndent('  ')
-            .convert({'queries': specifications, 'diagnostics': diagnostics}));
+        .writeAsString(const JsonEncoder.withIndent('  ').convert({
+      'queries': compiled.specifications,
+      'diagnostics': compiled.diagnostics,
+    }));
   }
 }
 
@@ -73,63 +85,68 @@ import 'package:shelf/shelf.dart';
 import 'extensions/request_extension.dart';
 import 'utils/api_utils.dart';
 
-class _QueryInputError implements Exception {
+class AccessQueryInputError implements Exception {
   final String message;
-  _QueryInputError(this.message);
+  AccessQueryInputError(this.message);
 }
 
 class AccessQueryController {
   static final Map<String,dynamic> specifications=(jsonDecode(/*SPECIFICATIONS*/) as Map).cast<String,dynamic>();
+
+  static Future<Map<String,dynamic>> executeDescriptor(Request request,Map descriptor) async {
+    final query=request.url.queryParametersAll;
+    if(query.keys.any((k)=>k!='parameters' && k!='limit') || query.values.any((v)=>v.length!=1)) {
+      throw AccessQueryInputError('Parametros HTTP desconhecidos ou repetidos.');
+    }
+    final raw=query['parameters']?.single;
+    if(raw==null || raw.length>4096) throw AccessQueryInputError('parameters deve conter um objeto JSON explicito.');
+    final input=_parseParameters(raw);
+    final limitText=query['limit']?.single ?? '100';
+    if(!RegExp(r'^[0-9]+$').hasMatch(limitText)) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
+    final limit=int.tryParse(limitText);
+    if(limit==null || limit<1 || limit>100) throw AccessQueryInputError('limit deve ser inteiro entre 1 e 100.');
+    final parameters=descriptor['parameters'] as List;
+    if(input.length!=parameters.length || parameters.any((p)=>!input.containsKey(p['key']))) {
+      throw AccessQueryInputError('Informe exatamente os parametros declarados p0, p1, ... .');
+    }
+    final bySource=<String,Object?>{};
+    for(final p in parameters) {
+      final value=input[p['key']];
+      if(value!=null && value is! String) throw AccessQueryInputError('Parametro DAO Text exige string ou null.');
+      bySource[p['sourceName'] as String]=value;
+    }
+    final bindings=<Object?>[];
+    for(final binding in descriptor['bindings'] as List) {
+      final value=binding['parameter']==null ? binding['literal'] : bySource[binding['parameter']];
+      if(value==null){bindings.add(null);continue;}
+      if(binding['typeCode']==4) {
+        if(value is! String || !RegExp(r'^[+-]?[0-9]+$').hasMatch(value)) throw AccessQueryInputError('Comparacao Long exige string inteira.');
+        final number=int.tryParse(value);
+        if(number==null || number < -2147483648 || number > 2147483647) throw AccessQueryInputError('Parametro fora da faixa Long.');
+        bindings.add(number);
+      } else {
+        if(value is! String || value.codeUnits.any((c)=>c>127)) throw AccessQueryInputError('Comparacao textual restrita a ASCII.');
+        bindings.add(value);
+      }
+    }
+    // SQL is a build-time compiler product; request data enters only bindings.
+    final rows=await request.make<Connection>().select('${descriptor['sql']} LIMIT 101',bindings);
+    final columns=descriptor['columns'] as List;
+    return {
+      'query':descriptor['name'],'columns':columns,'parameters':parameters,
+      'rows':[for(final row in rows.take(limit))
+        [for(final column in columns) _readValue(row,column)]],
+      'limit':limit,'truncated':rows.length>limit,'readOnly':true,
+      'ordering':'unspecified',
+    };
+  }
+
   static Future<Response> run(Request request,String key) async {
     final descriptor=specifications[key] as Map?;
     if(descriptor==null) return responseError('Consulta nao compilada.',statusCode:404);
     try {
-      final query=request.url.queryParametersAll;
-      if(query.keys.any((k)=>k!='parameters' && k!='limit') || query.values.any((v)=>v.length!=1)) {
-        throw _QueryInputError('Parametros HTTP desconhecidos ou repetidos.');
-      }
-      final raw=query['parameters']?.single;
-      if(raw==null || raw.length>4096) throw _QueryInputError('parameters deve conter um objeto JSON explicito.');
-      final input=_parseParameters(raw);
-      final limitText=query['limit']?.single ?? '100';
-      if(!RegExp(r'^[0-9]+$').hasMatch(limitText)) throw _QueryInputError('limit deve ser inteiro entre 1 e 100.');
-      final limit=int.tryParse(limitText);
-      if(limit==null || limit<1 || limit>100) throw _QueryInputError('limit deve ser inteiro entre 1 e 100.');
-      final parameters=descriptor['parameters'] as List;
-      if(input.length!=parameters.length || parameters.any((p)=>!input.containsKey(p['key']))) {
-        throw _QueryInputError('Informe exatamente os parametros declarados p0, p1, ... .');
-      }
-      final bySource=<String,Object?>{};
-      for(final p in parameters) {
-        final value=input[p['key']];
-        if(value!=null && value is! String) throw _QueryInputError('Parametro DAO Text exige string ou null.');
-        bySource[p['sourceName'] as String]=value;
-      }
-      final bindings=<Object?>[];
-      for(final binding in descriptor['bindings'] as List) {
-        final value=binding['parameter']==null ? binding['literal'] : bySource[binding['parameter']];
-        if(value==null){bindings.add(null);continue;}
-        if(binding['typeCode']==4) {
-          if(value is! String || !RegExp(r'^[+-]?[0-9]+$').hasMatch(value)) throw _QueryInputError('Comparacao Long exige string inteira.');
-          final number=int.tryParse(value);
-          if(number==null || number < -2147483648 || number > 2147483647) throw _QueryInputError('Parametro fora da faixa Long.');
-          bindings.add(number);
-        } else {
-          if(value is! String || value.codeUnits.any((c)=>c>127)) throw _QueryInputError('Comparacao textual restrita a ASCII.');
-          bindings.add(value);
-        }
-      }
-      // SQL is a build-time compiler product; request data enters only bindings.
-      final rows=await request.make<Connection>().select('${descriptor['sql']} LIMIT 101',bindings);
-      final columns=descriptor['columns'] as List;
-      return responseJson({
-        'query':descriptor['name'],'columns':columns,'parameters':parameters,
-        'rows':[for(final row in rows.take(limit))
-          [for(final column in columns) _readValue(row,column)]],
-        'limit':limit,'truncated':rows.length>limit,'readOnly':true,
-        'ordering':'unspecified',
-      });
-    } on _QueryInputError catch(error) {
+      return responseJson(await executeDescriptor(request,descriptor));
+    } on AccessQueryInputError catch(error) {
       return responseError(error.message,statusCode:400);
     } catch(_) {
       return responseError('Nao foi possivel executar a consulta compilada.',statusCode:500);
@@ -137,8 +154,8 @@ class AccessQueryController {
   }
   static Map _parseParameters(String raw) {
     final Object? parsed;
-    try {parsed=jsonDecode(raw);} on FormatException {throw _QueryInputError('parameters deve ser JSON valido.');}
-    if(parsed is! Map) throw _QueryInputError('parameters deve ser um objeto JSON.');
+    try {parsed=jsonDecode(raw);} on FormatException {throw AccessQueryInputError('parameters deve ser JSON valido.');}
+    if(parsed is! Map) throw AccessQueryInputError('parameters deve ser um objeto JSON.');
     return parsed;
   }
   static Object? _readValue(Map row,Map column) {
