@@ -304,6 +304,9 @@ class GeneratedBackendModule {
   final String primaryKeyParamType;
   final String primaryKeyRouteParseExpression;
   final bool primaryKeyIsAutoNumber;
+  final bool allowCreate;
+  final bool allowUpdate;
+  final bool allowDelete;
   final List<GeneratedLookupDescriptor> lookups;
   final List<GeneratedFieldDescriptor> fields;
   final List<GeneratedAttachmentSubresource> attachments;
@@ -311,6 +314,9 @@ class GeneratedBackendModule {
   const GeneratedBackendModule({
     this.complexPointerColumns = const [],
     this.beforeInsertAllocator,
+    this.allowCreate = true,
+    this.allowUpdate = true,
+    this.allowDelete = true,
     required this.packageName,
     required this.className,
     required this.normalizedName,
@@ -335,10 +341,18 @@ class GeneratedFrontendModule {
   final String formLogicClassName;
   final String primaryKeyField;
   final String primaryKeyParamType;
+  final bool allowCreate;
+  final bool allowUpdate;
+  final bool allowDelete;
+  final bool dataEntryOnly;
   final List<GeneratedFieldDescriptor> fields;
   final List<GeneratedAttachmentSubresource> attachments;
 
   const GeneratedFrontendModule({
+    this.allowCreate = true,
+    this.allowUpdate = true,
+    this.allowDelete = true,
+    this.dataEntryOnly = false,
     required this.packageName,
     required this.className,
     required this.nameSnake,
@@ -436,9 +450,25 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
           ),
         )
         .toList(growable: false);
+    final directForms = _resolveDirectBoundForms(project, table);
+    final formPermissions = directForms
+        .map((form) =>
+            (_describeFormCapabilitiesForRaw(project, form)['source_form_permissions']
+                as Map?) ??
+            const <Object?, Object?>{})
+        .toList(growable: false);
+    bool allowFormOp(String op) {
+      if (formPermissions.isEmpty) return true;
+      final values = formPermissions.map((perm) => perm[op] as bool?).toList();
+      return !(values.contains(false) && !values.any((v) => v != false));
+    }
+
     return GeneratedBackendModule(
       complexPointerColumns: table.columns.where((column) => column.typeCode == 18 || column.typeName.toLowerCase() == 'complextype' || column.allowMultipleValues == true).map(columnRuntimeName).toList(growable: false),
       beforeInsertAllocator: _resolveBeforeInsertAllocator(project, table),
+      allowCreate: allowFormOp('create'),
+      allowUpdate: allowFormOp('update'),
+      allowDelete: allowFormOp('delete'),
       packageName: project.dartPackageName,
       className: table.className,
       normalizedName: table.normalizedName,
@@ -464,11 +494,21 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
     AnalysisTable table,
   ) {
     final matchedForm = _resolveFrontendForm(project, table);
+    final matchedCapabilities = matchedForm == null
+        ? null
+        : _describeFormCapabilitiesForRaw(project, matchedForm);
+    final matchedPermissions =
+        (matchedCapabilities?['source_form_permissions'] as Map?) ??
+            const <Object?, Object?>{};
     final orderedColumns = _orderFrontendColumns(table, matchedForm);
     final primaryKeyColumn = _getPrimaryKey(table);
     final attachments = _resolveAttachmentSubresources(project, table);
 
     return GeneratedFrontendModule(
+      allowCreate: matchedPermissions['create'] != false,
+      allowUpdate: matchedPermissions['update'] != false,
+      allowDelete: matchedPermissions['delete'] != false,
+      dataEntryOnly: matchedCapabilities?['dataEntry'] == true,
       packageName: project.dartPackageName,
       className: table.className,
       nameSnake: table.normalizedName,
@@ -595,17 +635,59 @@ extension _ProjectGeneratorIrBuilder on ProjectGenerator {
         normalized == 'ole';
   }
 
-  AnalysisForm? _resolveFrontendForm(
+  List<AnalysisForm> _resolveDirectBoundForms(
     AnalysisProject project,
     AnalysisTable table,
   ) {
-    final candidates = project.forms.where((form) {
+    return project.forms.where((form) {
       final recordSource = form.recordSource;
       return recordSource != null &&
           (AnalysisProject.lookupKey(recordSource) ==
                   AnalysisProject.lookupKey(table.name) ||
               _isDirectTableProjection(recordSource, table));
     }).toList(growable: false);
+  }
+
+  Map<String, Object?> _describeFormCapabilitiesForRaw(
+    AnalysisProject project,
+    AnalysisForm form,
+  ) {
+    final lowerName = form.name.toLowerCase();
+    Map<String, dynamic>? rawForm;
+    for (final entry in ((project.raw['forms'] as List?) ?? const []).whereType<Map>()) {
+      if ((entry['name']?.toString().toLowerCase() ?? '') == lowerName) {
+        rawForm = entry.cast<String, dynamic>();
+        break;
+      }
+    }
+    Map<String, dynamic>? exportedForm;
+    for (final entry in (((project.raw['source_overlay'] as Map?)?['forms'] as List?) ?? const []).whereType<Map>()) {
+      if ((entry['name']?.toString().toLowerCase() ?? '') == lowerName) {
+        exportedForm = entry.cast<String, dynamic>();
+        break;
+      }
+    }
+    final baseForm = rawForm ??
+        <String, dynamic>{
+          'name': form.name,
+          'properties': const <String, dynamic>{},
+          'controls': const <Object?>[],
+        };
+    return describeAccessFormCapabilities(
+      <String, dynamic>{
+        ...baseForm,
+        if (exportedForm != null && exportedForm['properties'] is Map)
+          'properties': exportedForm['properties'],
+      },
+      hasSourceExport: exportedForm != null,
+    );
+  }
+
+  AnalysisForm? _resolveFrontendForm(
+    AnalysisProject project,
+    AnalysisTable table,
+  ) {
+    final candidates = _resolveDirectBoundForms(project, table);
 
     if (candidates.isEmpty) {
       return null;

@@ -10,6 +10,10 @@ void setup{{className}}Routes(Router app, String basePath) {
     ..get('/<id>', {{className}}Controller.show)
     ..get('/<id>/subforms/<key>', (request, id, key) =>
         AccessSubformController.list(request, '{{routeName}}', id, key))
+    ..post('/<id>/subforms/<key>', (request, id, key) =>
+        AccessSubformController.create(request, '{{routeName}}', id, key))
+    ..delete('/<id>/subforms/<key>/<childId>', (request, id, key, childId) =>
+        AccessSubformController.delete(request, '{{routeName}}', id, key, childId))
     ..get('/<id>/collections/<fieldKey>', (request, id, fieldKey) =>
         AccessMultivalueController.list(request, '{{routeName}}', id, fieldKey))
     ..put('/<id>/collections/<fieldKey>', (request, id, fieldKey) =>

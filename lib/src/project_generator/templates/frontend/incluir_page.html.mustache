@@ -31,6 +31,7 @@
   </div>
   <div class="card">
     <div class="card-body">
+      <div class="alert alert-secondary mb-3" *ngIf="!canSaveCurrentRecord">Modo somente leitura conforme permissoes do formulario Access.</div>
       <form (ngSubmit)="salvar()" #formEntity="ngForm" novalidate>
         <div class="row">
 <%#fields%>
@@ -244,7 +245,7 @@
 <%/fields%>
         </div>
         <div class="text-end mt-3">
-          <button class="btn btn-primary btn-labeled btn-labeled-start" type="submit">
+          <button class="btn btn-primary btn-labeled btn-labeled-start" type="submit" [disabled]="!canSaveCurrentRecord || navigationSaving">
             <span class="btn-labeled-icon bg-black bg-opacity-20"><i class="ph ph-floppy-disk"></i></span>
             Salvar
           </button>

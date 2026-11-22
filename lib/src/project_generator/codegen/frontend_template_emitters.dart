@@ -3,12 +3,16 @@ part of '../project_generator.dart';
 String _buildConsultarPageHtml({
   required String namePascal,
   required String moduleNameKebab,
+  bool allowCreate = true,
+  bool allowUpdate = true,
 }) {
   return _renderTemplateAsset(
     'frontend/consultar_page.html.mustache',
     <String, Object?>{
       'namePascal': namePascal,
       'moduleNameKebab': moduleNameKebab,
+      'allowCreate': allowCreate,
+      'allowUpdate': allowUpdate,
     },
   );
 }

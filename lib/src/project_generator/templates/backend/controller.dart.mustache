@@ -1,5 +1,7 @@
 import 'package:shelf/shelf.dart';
+{{#allowCreateOrUpdate}}
 import 'package:{{corePackageName}}_core/core.dart';
+{{/allowCreateOrUpdate}}
 
 import '../../../shared/extensions/request_extension.dart';
 import '../../../shared/utils/api_utils.dart';
@@ -93,6 +95,7 @@ class {{className}}Controller {
   }
 
   static Future<Response> create(Request req) async {
+{{#allowCreate}}
     try {
       final body = <String, dynamic>{
         ...{{className}}.defaultValues(),
@@ -122,9 +125,14 @@ class {{className}}Controller {
     } catch (e) {
       return responseError(e.toString());
     }
+{{/allowCreate}}
+{{^allowCreate}}
+    return responseError('Inclusao desabilitada pelas permissoes do formulario.', statusCode: 403);
+{{/allowCreate}}
   }
 
   static Future<Response> update(Request req, String idRaw) async {
+{{#allowUpdate}}
     try {
       final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final body = await req.bodyAsMap();
@@ -153,9 +161,14 @@ class {{className}}Controller {
     } catch (e) {
       return responseError(e.toString());
     }
+{{/allowUpdate}}
+{{^allowUpdate}}
+    return responseError('Alteracao desabilitada pelas permissoes do formulario.', statusCode: 403);
+{{/allowUpdate}}
   }
 
   static Future<Response> delete(Request req, String idRaw) async {
+{{#allowDelete}}
     try {
       final {{primaryKeyParamType}} id = {{{primaryKeyRouteParseExpression}}};
       final service = req.make<{{className}}Service>();
@@ -165,5 +178,9 @@ class {{className}}Controller {
     } catch (e) {
       return responseError(e.toString());
     }
+{{/allowDelete}}
+{{^allowDelete}}
+    return responseError('Exclusao desabilitada pelas permissoes do formulario.', statusCode: 403);
+{{/allowDelete}}
   }
 }

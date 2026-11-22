@@ -172,4 +172,179 @@ End
     expect(await File('${dir.path}/conversion-report.md').readAsString(),
         contains('access-form-capabilities.json'));
   });
+
+  test(
+      'generated backend controllers and frontend pages enforce form capabilities without overriding multi-form or binary-only tables',
+      () async {
+    Map<String, Object?> mkTable(String name) => {
+          'name': name,
+          'columns': [
+            {
+              'name': 'ID',
+              'typeName': 'Long',
+              'typeCode': 4,
+              'isAutoNumber': true,
+              'isRequired': true,
+            },
+            {
+              'name': 'Titulo',
+              'typeName': 'Text',
+              'typeCode': 10,
+              'maxLength': 80,
+              'isAutoNumber': false,
+              'isRequired': false,
+            },
+          ],
+          'sampleRows': [],
+          'indexes': [
+            {
+              'name': 'PrimaryKey',
+              'isPrimaryKey': true,
+              'columns': [
+                {'name': 'ID'}
+              ],
+            }
+          ],
+        };
+
+    final raw = <String, dynamic>{
+      'schema_version': '1.0',
+      'source': 'capabilities_enforce.accdb',
+      'format': 'VERSION_16',
+      'tables': [
+        mkTable('SomenteLeitura'),
+        mkTable('SnapshotTabela'),
+        mkTable('MultiForma'),
+        mkTable('SomenteBinario'),
+      ],
+      'forms': [
+        {
+          'name': 'FrmSomenteLeitura',
+          'recordSource': 'SomenteLeitura',
+          'properties': {
+            'AllowAdditions': 'NotDefault',
+            'AllowEdits': 'NotDefault',
+            'AllowDeletions': 'NotDefault',
+          },
+          'controls': [
+            {'type': 'TextBox', 'name': 'txtTitulo', 'controlSource': 'Titulo'}
+          ],
+        },
+        {
+          'name': 'FrmSnapshot',
+          'recordSource': 'SnapshotTabela',
+          'properties': {'RecordsetType': '2'},
+          'controls': [
+            {'type': 'TextBox', 'name': 'txtTitulo', 'controlSource': 'Titulo'}
+          ],
+        },
+        {
+          'name': 'FrmMultiLeitura',
+          'recordSource': 'MultiForma',
+          'properties': {
+            'AllowAdditions': 'NotDefault',
+            'AllowEdits': 'NotDefault',
+            'AllowDeletions': 'NotDefault',
+          },
+          'controls': [],
+        },
+        {
+          'name': 'FrmMultiEditavel',
+          'recordSource': 'MultiForma',
+          'properties': <String, dynamic>{},
+          'controls': [
+            {'type': 'TextBox', 'name': 'txtTitulo', 'controlSource': 'Titulo'}
+          ],
+        },
+        {
+          'name': 'FrmSomenteBinario',
+          'recordSource': 'SomenteBinario',
+          'properties': <String, dynamic>{},
+          'controls': [],
+        },
+      ],
+      'source_overlay': {
+        'forms': [
+          {
+            'name': 'FrmSomenteLeitura',
+            'properties': {
+              'AllowAdditions': 'NotDefault',
+              'AllowEdits': 'NotDefault',
+              'AllowDeletions': 'NotDefault',
+            },
+          },
+          {
+            'name': 'FrmSnapshot',
+            'properties': {'RecordsetType': '2'},
+          },
+          {
+            'name': 'FrmMultiLeitura',
+            'properties': {
+              'AllowAdditions': 'NotDefault',
+              'AllowEdits': 'NotDefault',
+              'AllowDeletions': 'NotDefault',
+            },
+          },
+          {
+            'name': 'FrmMultiEditavel',
+            'properties': <String, dynamic>{},
+          },
+        ],
+      },
+      'linkedTables': [],
+      'relationships': [],
+      'summary': {},
+    };
+
+    final dir = await Directory.systemTemp.createTemp('access_caps_enforce_');
+    addTearDown(() => dir.delete(recursive: true));
+    await ProjectGenerator().generate(
+      project: AnalysisProject.fromJson(raw),
+      outputDirectory: dir.path,
+    );
+
+    for (final roModule in ['somente_leitura', 'snapshot_tabela']) {
+      final ctrl = await File(
+        '${dir.path}/backend/lib/src/modules/$roModule/controllers/${roModule}_controller.dart',
+      ).readAsString();
+      expect(ctrl, contains('statusCode: 403'));
+      expect(ctrl, contains('Inclusao desabilitada'));
+      expect(ctrl, contains('Alteracao desabilitada'));
+      expect(ctrl, contains('Exclusao desabilitada'));
+      expect(ctrl, isNot(contains('_core/core.dart')));
+
+      final consultarHtml = await File(
+        '${dir.path}/frontend/lib/src/modules/$roModule/pages/consultar_$roModule/consultar_${roModule}_page.html',
+      ).readAsString();
+      expect(consultarHtml, isNot(contains('openCreateForm()')));
+      expect(consultarHtml, contains('>Visualizar</button>'));
+
+      final incluirDart = await File(
+        '${dir.path}/frontend/lib/src/modules/$roModule/pages/incluir_$roModule/incluir_${roModule}_page.dart',
+      ).readAsString();
+      expect(incluirDart, contains('static const bool allowCreate = false;'));
+      expect(incluirDart, contains('static const bool allowUpdate = false;'));
+      expect(incluirDart, contains('if (!canSaveCurrentRecord)'));
+
+      final incluirHtml = await File(
+        '${dir.path}/frontend/lib/src/modules/$roModule/pages/incluir_$roModule/incluir_${roModule}_page.html',
+      ).readAsString();
+      expect(incluirHtml, contains('Modo somente leitura conforme permissoes'));
+      expect(incluirHtml, contains('readonly'));
+    }
+
+    for (final rwModule in ['multi_forma', 'somente_binario']) {
+      final ctrl = await File(
+        '${dir.path}/backend/lib/src/modules/$rwModule/controllers/${rwModule}_controller.dart',
+      ).readAsString();
+      expect(ctrl, isNot(contains('statusCode: 403')));
+      expect(ctrl, contains('_core/core.dart'));
+
+      final consultarHtml = await File(
+        '${dir.path}/frontend/lib/src/modules/$rwModule/pages/consultar_$rwModule/consultar_${rwModule}_page.html',
+      ).readAsString();
+      expect(consultarHtml, contains('openCreateForm()'));
+      expect(consultarHtml, contains('>Editar</button>'));
+    }
+  });
 }

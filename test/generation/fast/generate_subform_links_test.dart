@@ -105,6 +105,9 @@ void main() {
       if (['composite', 'exact_form', 'exact_table'].contains(scenario)) {
         expect(specs.single['unsupportedReason'], isNull);
         expect(specs.single['childTable'], 'pessoa');
+        expect(specs.single['childPrimaryKey'], 'id');
+        expect(specs.single['canCreate'], isTrue);
+        expect(specs.single['canDelete'], isTrue);
         expect(specs.single['links'], [
           {'master': 'scope', 'child': 'family'},
           {'master': 'area', 'child': 'region'},
@@ -134,6 +137,59 @@ void main() {
           .readAsString();
       expect(backend, contains('if (value == null) return result'));
       expect(backend, contains('query.where'));
+      final routes = await File(
+              '${temp.path}/generated/backend/lib/src/modules/familia/routes/familia_routes.dart')
+          .readAsString();
+      expect(routes, contains("..post('/<id>/subforms/<key>'"));
+      expect(routes, contains("..delete('/<id>/subforms/<key>/<childId>'"));
     });
   }
+
+  test('subform write capabilities honor child form AllowAdditions/AllowDeletions and events',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('subform_caps_');
+    addTearDown(() => temp.delete(recursive: true));
+    final data =
+        jsonDecode(jsonEncode(subformFixture())) as Map<String, dynamic>;
+    final child = data['forms'][1] as Map<String, dynamic>;
+    child['properties'] = {
+      'AllowAdditions': 'NotDefault',
+      'AllowDeletions': 'True',
+    };
+    final file = await writeSubformFixture(temp, data);
+    final errors = StringBuffer();
+    expect(
+        await run([
+          'generate',
+          '--analysis',
+          file.path,
+          '--output',
+          '${temp.path}/out_no_create'
+        ], out: StringBuffer(), err: errors),
+        0,
+        reason: errors.toString());
+    var specs = jsonDecode(await File(
+            '${temp.path}/out_no_create/frontend/lib/src/modules/familia/access_subforms.json')
+        .readAsString()) as List;
+    expect(specs.single['canCreate'], isFalse);
+    expect(specs.single['canDelete'], isTrue);
+
+    child['properties'] = {'BeforeInsert': '[Event Procedure]'};
+    await writeSubformFixture(temp, data);
+    expect(
+        await run([
+          'generate',
+          '--analysis',
+          file.path,
+          '--output',
+          '${temp.path}/out_event'
+        ], out: StringBuffer(), err: errors),
+        0,
+        reason: errors.toString());
+    specs = jsonDecode(await File(
+            '${temp.path}/out_event/frontend/lib/src/modules/familia/access_subforms.json')
+        .readAsString()) as List;
+    expect(specs.single['canCreate'], isFalse);
+    expect(specs.single['canDelete'], isFalse);
+  });
 }

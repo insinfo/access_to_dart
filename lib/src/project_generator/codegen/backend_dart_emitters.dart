@@ -128,6 +128,10 @@ String _buildBackendControllerSource(GeneratedBackendModule module) {
     <String, Object?>{
       ..._beforeInsertTemplateContext(module),
       ..._complexPointerTemplateContext(module),
+      'allowCreate': module.allowCreate,
+      'allowUpdate': module.allowUpdate,
+      'allowDelete': module.allowDelete,
+      'allowCreateOrUpdate': module.allowCreate || module.allowUpdate,
       'corePackageName': module.packageName,
       'className': module.className,
       'normalizedName': module.normalizedName,

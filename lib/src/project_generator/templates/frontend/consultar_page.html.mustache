@@ -14,7 +14,9 @@
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <p class="mb-0">Itens carregados: {{ items.length }}</p>
+<%#allowCreate%>
         <button type="button" class="btn btn-primary" (click)="openCreateForm()">Novo</button>
+<%/allowCreate%>
       </div>
 
       <div *ngIf="loading">Carregando...</div>
@@ -33,7 +35,7 @@
             <td>{{ idx + 1 }}</td>
             <td>{{ recordSummary(item) }}</td>
             <td>
-              <button type="button" class="btn btn-sm btn-outline-primary" (click)="openEditForm(item)">Editar</button>
+              <button type="button" class="btn btn-sm btn-outline-primary" (click)="openEditForm(item)"><%#allowUpdate%>Editar<%/allowUpdate%><%^allowUpdate%>Visualizar<%/allowUpdate%></button>
             </td>
           </tr>
         </tbody>

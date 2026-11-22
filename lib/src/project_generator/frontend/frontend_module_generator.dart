@@ -247,6 +247,8 @@ class Consultar${namePascal}Page implements OnInit {
     final htmlContent = _buildConsultarPageHtml(
       namePascal: namePascal,
       moduleNameKebab: moduleNameKebab,
+      allowCreate: module.allowCreate,
+      allowUpdate: module.allowUpdate,
     );
 
     final pagesDir = Directory(p.join(moduleDir.path, 'pages', 'consultar_$nameSnake'));
@@ -290,7 +292,7 @@ class Consultar${namePascal}Page implements OnInit {
             'inputType': field.inputType,
             'inputMode': field.inputMode,
             'selectSize': field.selectSize,
-            'isReadOnly': field.isReadOnly || comboReadOnlyTargets.contains(field.runtimeName) || beforeInsertAllocator?.columnRuntimeName == field.runtimeName,
+            'isReadOnly': field.isReadOnly || (!module.allowCreate && !module.allowUpdate) || comboReadOnlyTargets.contains(field.runtimeName) || beforeInsertAllocator?.columnRuntimeName == field.runtimeName,
             'placeholder': beforeInsertAllocator?.columnRuntimeName == field.runtimeName ? 'Código definido ao salvar' : _htmlTextLiteral(field.label),
             'isRequired': field.isRequired,
             'maxLength': field.maxLength,
@@ -407,6 +409,12 @@ class Incluir${namePascal}Page implements OnInit {
 
   @Input('modoAlterar')
   bool modoAlterar = false;
+
+  static const bool allowCreate = ${module.allowCreate};
+  static const bool allowUpdate = ${module.allowUpdate};
+  static const bool allowDelete = ${module.allowDelete};
+
+  bool get canSaveCurrentRecord => modoAlterar ? allowUpdate : allowCreate;
 
   final Map<String, dynamic> _draft = <String, dynamic>{};
   final Map<String, String> validationErrors = <String, String>{};
@@ -1211,6 +1219,12 @@ $allocatorPendingRead
   }
 
   Future<void> salvar() async {
+    if (!canSaveCurrentRecord) {
+      SimpleDialogComponent.showAlert(
+        'Operacao de gravacao desabilitada pelas permissoes do formulario Access.',
+      );
+      return;
+    }
     if (navigationSaving) return;
     navigationSaving = true;
     final loading = SimpleLoading();
