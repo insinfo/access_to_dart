@@ -1244,7 +1244,7 @@ void main() {
     );
 
     final viewerHtml = await File(
-      '${appDir.path}/frontend/lib/src/shared/components/access_report_viewer/access_report_viewer.html',
+      '${appDir.path}/frontend/lib/src/shared/components/access_report_viewer.html',
     ).readAsString();
     expect(viewerHtml, contains('>1</div>'));
     expect(viewerHtml, contains('data-access-control-type'));
