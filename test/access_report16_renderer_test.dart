@@ -58,6 +58,13 @@ const _cspront1ReportNames = <String>[
   'prontuario16-REGISTRO-SINTETICO-FR-VERSO',
 ];
 
+const _unboundMultiSectionReportNames = <String>[
+  'PROSPECTO DE BUSCA ATIVA IMPRIMIR',
+  'PLANO SOCIO FAMILIAR',
+  'PLANO SOCIO FAMILIAR MEDIAÇÃO',
+  'PLANO SOCIO FAMILIAR-CONTINUAÇÃO',
+];
+
 Map<String, dynamic> _buildCspront1Analysis({
   required List<Map<String, dynamic>> reports,
   bool includeHabitColumns = false,
@@ -429,7 +436,7 @@ void main() {
   });
 
   test(
-      'all 15 CSPRONT1 prontuario reports compile with 1965 controls while multi-column ComboBox is rejected',
+      'all 15 CSPRONT1 and 4 unbound multi-section reports compile with 2255 controls matching 852-control COM oracle',
       () async {
     const origin = 'fixtures/SIGAsul.accdb.src';
     const sourceHash =
@@ -440,10 +447,19 @@ void main() {
     final sourceDir = Directory('${temp.path}/source');
     await Directory('${sourceDir.path}/reports').create(recursive: true);
     await Directory('${sourceDir.path}/images').create(recursive: true);
+    await Directory('${sourceDir.path}/themes').create(recursive: true);
     for (final path in [
+      'dbs-properties.json',
+      'themes/Tema do Office.thmx',
       'images/logo-SUAS-ICON.json',
       'images/logo-SUAS-ICON.png',
+      'images/suas-sistema-unico-de-saude-logo-1889E2CF64-seeklogo_com.json',
+      'images/suas-sistema-unico-de-saude-logo-1889E2CF64-seeklogo_com.png',
       for (final name in _cspront1ReportNames) ...[
+        'reports/$name.bas',
+        'reports/$name.json',
+      ],
+      for (final name in _unboundMultiSectionReportNames) ...[
         'reports/$name.bas',
         'reports/$name.json',
       ],
@@ -451,11 +467,15 @@ void main() {
       await File('$origin/$path').copy('${sourceDir.path}/$path');
     }
 
+    final allNames = [
+      ..._cspront1ReportNames,
+      ..._unboundMultiSectionReportNames,
+    ];
     final source = await AccessSrcReader().readDirectory(sourceDir.path);
     final analysis = _buildCspront1Analysis(
       reports: [
-        for (var i = 0; i < _cspront1ReportNames.length; i++)
-          {'name': _cspront1ReportNames[i], 'id': i + 1},
+        for (var i = 0; i < allNames.length; i++)
+          {'name': allNames[i], 'id': i + 1},
         {
           'name': 'ReportComboMultiCol',
           'recordSource': 'CSPRONT1',
@@ -497,6 +517,63 @@ void main() {
             }
           ],
         },
+        {
+          'name': 'ReportUnboundWithBoundField',
+          'sourceSha256': sourceHash,
+          'properties': {'Width': '11022'},
+          'printSettings': {
+            'Items': {
+              'Margins': {
+                'LeftMargin': 0.3,
+                'RightMargin': 0.2,
+                'TopMargin': 0.2,
+                'BotMargin': 0.5,
+              },
+              'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+            },
+          },
+          'sections': [
+            {
+              'type': 'Section',
+              'name': 'Detalhe',
+              'height': 1000,
+              'controls': [
+                {
+                  'type': 'TextBox',
+                  'name': 'CampoLigado',
+                  'controlSource': 'CodFam',
+                  'properties': {
+                    'Left': '100',
+                    'Top': '100',
+                    'Width': '1000',
+                    'Height': '300',
+                    'ControlSource': 'CodFam',
+                  },
+                }
+              ],
+            }
+          ],
+        },
+        {
+          'name': 'ReportMacroNaoCosmetica',
+          'sourceSha256': sourceHash,
+          'properties': {'Width': '11022'},
+          'macros': {
+            'OnOpenEmMacro': ['OpenForm'],
+          },
+          'macroDefinitions': {
+            'OnOpenEmMacro': [
+              {
+                'type': '_Anonymous',
+                'action': 'OpenForm',
+                'condition': null,
+                'arguments': ['OutraTela'],
+                'properties': <String, Object?>{},
+                'children': <Object?>[],
+              }
+            ],
+          },
+        },
       ],
       includeHabitColumns: true,
     );
@@ -522,18 +599,28 @@ void main() {
       await File('${appDir.path}/access-reports.json').readAsString(),
     ) as Map<String, dynamic>;
     final compiled = (inventory['compiled_reports'] as List).cast<Map>();
-    expect(compiled, hasLength(15));
+    expect(compiled, hasLength(19));
     final totalControls = compiled.fold<int>(
       0,
       (sum, r) => sum + (r['controls'] as List).length,
     );
-    expect(totalControls, 1965);
+    expect(totalControls, 2255);
 
     final diagnostics = (inventory['report_diagnostics'] as List).cast<Map>();
     expect(
       diagnostics
           .singleWhere((d) => d['report'] == 'ReportComboMultiCol')['reason'],
       'unsupported-combobox-lookup:ComboMultiCol',
+    );
+    expect(
+      diagnostics.singleWhere(
+          (d) => d['report'] == 'ReportUnboundWithBoundField')['reason'],
+      'missing-record-source',
+    );
+    expect(
+      diagnostics
+          .singleWhere((d) => d['report'] == 'ReportMacroNaoCosmetica')['reason'],
+      'has-vba-macros-or-events',
     );
 
     final byKey = <String, Map>{
@@ -550,6 +637,31 @@ void main() {
     expect(
       r1Controls.singleWhere((c) => c['name'] == 'Rótulo10')['foreColor'],
       2316088,
+    );
+
+    final prospecto = byKey['prospecto_de_busca_ativa_imprimir']!;
+    expect(prospecto['queryKey'], '');
+    expect(prospecto['parameters'], isEmpty);
+    expect(prospecto['pageSetup']['sheetHeightTwips'], 1695 + 7935 + 1045);
+    final prospectoControls = (prospecto['controls'] as List).cast<Map>();
+    expect(prospectoControls, hasLength(115));
+    final linha291 =
+        prospectoControls.singleWhere((c) => c['name'] == 'Linha291');
+    expect(linha291['type'], 'Line');
+    expect(linha291['controlType'], 102);
+    expect(linha291['section'], 0);
+    expect(linha291['top'], 1140);
+    expect(linha291['sheetTop'], 1695 + 1140);
+    expect(linha291['height'], 0);
+
+    final plano = byKey['plano_socio_familiar']!;
+    expect(plano['queryKey'], '');
+    expect(plano['pageSetup']['onOpenWindowAction'], 'Maximize');
+    final planoControls = (plano['controls'] as List).cast<Map>();
+    expect(planoControls, hasLength(71));
+    expect(
+      planoControls.singleWhere((c) => c['name'] == 'Rótulo68')['foreColor'],
+      6567968,
     );
     final r4 = byKey['prontuario_4_condi_habit']!;
     final r4Controls = (r4['controls'] as List).cast<Map>();
@@ -605,15 +717,19 @@ void main() {
           int oInt(String k) => (oProps[k]!['value'] as num).toInt();
           expect(c['controlType'], oInt('ControlType'),
               reason: '$name:${c['name']}');
+          expect(c['section'], oInt('Section'),
+              reason: '$name:${c['name']}');
           expect(c['left'], oInt('Left'), reason: '$name:${c['name']}');
           expect(c['top'], oInt('Top'), reason: '$name:${c['name']}');
           expect(c['width'], oInt('Width'), reason: '$name:${c['name']}');
           expect(c['height'], oInt('Height'), reason: '$name:${c['name']}');
-          if (c['type'] != 'CheckBox') {
+          if (c['type'] != 'CheckBox' && c['type'] != 'Line') {
             expect(c['backStyle'], oInt('BackStyle'),
                 reason: '$name:${c['name']}');
             expect(c['backColor'], oInt('BackColor'),
                 reason: '$name:${c['name']}');
+          }
+          if (c['type'] != 'CheckBox') {
             expect(c['borderStyle'], oInt('BorderStyle'),
                 reason: '$name:${c['name']}');
             expect(c['borderColor'], oInt('BorderColor'),
@@ -637,4 +753,178 @@ void main() {
       }
     }
   });
+
+  test('resolves theme colors dynamically from custom .thmx clrScheme XML',
+      () async {
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    final temp = await Directory.systemTemp.createTemp('custom_thmx_theme_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    final sourceDir = Directory('${temp.path}/source');
+    await Directory('${sourceDir.path}/themes').create(recursive: true);
+    await File('${sourceDir.path}/dbs-properties.json').writeAsString(jsonEncode({
+      'Items': {
+        'Theme Resource Name': {'Value': 'CustomRed', 'Type': 10},
+      },
+    }));
+
+    const themeXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="CustomRed">
+  <a:themeElements>
+    <a:clrScheme name="CustomRed">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="112233"/></a:dk2>
+      <a:lt2><a:srgbClr val="EEEEEE"/></a:lt2>
+      <a:accent1><a:srgbClr val="FF0000"/></a:accent1>
+      <a:accent2><a:srgbClr val="00FF00"/></a:accent2>
+      <a:accent3><a:srgbClr val="0000FF"/></a:accent3>
+      <a:accent4><a:srgbClr val="FFFF00"/></a:accent4>
+      <a:accent5><a:srgbClr val="00FFFF"/></a:accent5>
+      <a:accent6><a:srgbClr val="FF00FF"/></a:accent6>
+      <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
+      <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+    </a:clrScheme>
+  </a:themeElements>
+</a:theme>''';
+    await File('${sourceDir.path}/themes/CustomRed.thmx').writeAsBytes(
+      _buildStoredZip({'theme/theme/theme1.xml': utf8.encode(themeXml)}),
+    );
+
+    final analysis = _buildCspront1Analysis(reports: [
+      {
+        'name': 'CustomThemeReport',
+        'sourceSha256': sourceHash,
+        'properties': {'Width': '5000'},
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'sections': [
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 1000,
+            'controls': [
+              {
+                'type': 'Label',
+                'name': 'RedAccentShade',
+                'caption': 'Custom Theme',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '400',
+                  'Caption': 'Custom Theme',
+                  'ForeThemeColorIndex': '4',
+                  'ForeTint': '100.0',
+                  'ForeShade': '50.0',
+                },
+              }
+            ],
+          }
+        ],
+      }
+    ]);
+    analysis['source_overlay'] = {'sourcePath': sourceDir.path};
+    final analysisFile = File('${temp.path}/analysis.json');
+    await analysisFile.writeAsString(jsonEncode(analysis));
+
+    final appDir = Directory('${temp.path}/app');
+    final err = StringBuffer();
+    expect(
+      await run(
+        ['generate', '--analysis', analysisFile.path, '--output', appDir.path],
+        out: StringBuffer(),
+        err: err,
+      ),
+      0,
+      reason: '$err',
+    );
+    final inventory = jsonDecode(
+      await File('${appDir.path}/access-reports.json').readAsString(),
+    ) as Map<String, dynamic>;
+    final compiled = (inventory['compiled_reports'] as List).single as Map;
+    final label = (compiled['controls'] as List).single as Map;
+    // Pure red #FF0000 with 50% shade -> #800000 -> Access BGR int 128.
+    expect(label['foreColor'], 128);
+    expect(label['foreColorHex'], '#800000');
+
+    final rendererCode = await File(
+      'lib/src/project_generator/report_renderer_generator.dart',
+    ).readAsString();
+    expect(rendererCode, isNot(contains('9917743')));
+    expect(rendererCode, isNot(contains('2316088')));
+    expect(rendererCode, isNot(contains('8355711')));
+    expect(rendererCode, isNot(contains('10921638')));
+  });
+}
+
+List<int> _buildStoredZip(Map<String, List<int>> entries) {
+  final out = <int>[];
+  final central = <int>[];
+  void write16(List<int> buf, int v) => buf.addAll([v & 0xFF, (v >> 8) & 0xFF]);
+  void write32(List<int> buf, int v) => buf.addAll([
+        v & 0xFF,
+        (v >> 8) & 0xFF,
+        (v >> 16) & 0xFF,
+        (v >> 24) & 0xFF,
+      ]);
+
+  for (final e in entries.entries) {
+    final nameBytes = utf8.encode(e.key);
+    final data = e.value;
+    final offset = out.length;
+    write32(out, 0x04034b50);
+    write16(out, 20);
+    write16(out, 0);
+    write16(out, 0);
+    write16(out, 0);
+    write16(out, 0);
+    write32(out, 0);
+    write32(out, data.length);
+    write32(out, data.length);
+    write16(out, nameBytes.length);
+    write16(out, 0);
+    out.addAll(nameBytes);
+    out.addAll(data);
+
+    write32(central, 0x02014b50);
+    write16(central, 20);
+    write16(central, 20);
+    write16(central, 0);
+    write16(central, 0);
+    write16(central, 0);
+    write16(central, 0);
+    write32(central, 0);
+    write32(central, data.length);
+    write32(central, data.length);
+    write16(central, nameBytes.length);
+    write16(central, 0);
+    write16(central, 0);
+    write16(central, 0);
+    write16(central, 0);
+    write32(central, 0);
+    write32(central, offset);
+    central.addAll(nameBytes);
+  }
+  final cdOffset = out.length;
+  out.addAll(central);
+  write32(out, 0x06054b50);
+  write16(out, 0);
+  write16(out, 0);
+  write16(out, entries.length);
+  write16(out, entries.length);
+  write32(out, central.length);
+  write32(out, cdOffset);
+  write16(out, 0);
+  return out;
 }

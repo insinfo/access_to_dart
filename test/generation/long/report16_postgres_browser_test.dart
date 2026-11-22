@@ -49,7 +49,7 @@ const _habitBoolColumns = <String>[
 
 void main() {
   test(
-      'report1, report4 and report16 backend HTTP, compiled NgDart release (with maxlength) and asset parity work end-to-end with PostgreSQL',
+      'report1, report4, report16 and unbound multi-section prospecto backend HTTP, compiled NgDart release and asset parity work end-to-end with PostgreSQL',
       () async {
     const report1Name = 'prontuario1';
     const report1Key = 'prontuario_1';
@@ -57,6 +57,8 @@ void main() {
     const report16Key = 'prontuario_16_registro_sintetico_fr_verso';
     const report4Name = 'prontuario4-Condi-Habit';
     const report4Key = 'prontuario_4_condi_habit';
+    const prospectoName = 'PROSPECTO DE BUSCA ATIVA IMPRIMIR';
+    const prospectoKey = 'prospecto_de_busca_ativa_imprimir';
     const origin = 'fixtures/SIGAsul.accdb.src';
 
     final harness = SubformPostgresHarness.fromEnvironment();
@@ -76,13 +78,18 @@ void main() {
     final sourceDir = Directory('${root.path}/source');
     await Directory('${sourceDir.path}/reports').create(recursive: true);
     await Directory('${sourceDir.path}/images').create(recursive: true);
+    await Directory('${sourceDir.path}/themes').create(recursive: true);
     for (final path in [
+      'dbs-properties.json',
+      'themes/Tema do Office.thmx',
       'reports/$report1Name.bas',
       'reports/$report1Name.json',
       'reports/$report16Name.bas',
       'reports/$report16Name.json',
       'reports/$report4Name.bas',
       'reports/$report4Name.json',
+      'reports/$prospectoName.bas',
+      'reports/$prospectoName.json',
       'images/logo-SUAS-ICON.json',
       'images/logo-SUAS-ICON.png',
     ]) {
@@ -216,6 +223,7 @@ void main() {
         {'name': report1Name, 'id': 1},
         {'name': report4Name, 'id': 4},
         {'name': report16Name, 'id': 16},
+        {'name': prospectoName, 'id': 99},
       ],
     };
 
@@ -421,7 +429,17 @@ void main() {
     final listJson = jsonDecode(listBody) as Map<String, dynamic>;
     final reportKeys =
         (listJson['reports'] as List).map((r) => r['key']).toList();
-    expect(reportKeys, containsAll([report1Key, report4Key, report16Key]));
+    expect(
+      reportKeys,
+      containsAll([report1Key, report4Key, report16Key, prospectoKey]),
+    );
+
+    final (prospectoStatus, prospectoBody, _, _) =
+        await getRaw('/api/v1/access-reports/$prospectoKey?parameters=%7B%7D');
+    expect(prospectoStatus, 200, reason: prospectoBody);
+    final prospectoJson = jsonDecode(prospectoBody) as Map<String, dynamic>;
+    expect(prospectoJson['rowCount'], 1);
+    expect(prospectoJson['controls'], hasLength(115));
 
     final encodedParams = Uri.encodeQueryComponent(jsonEncode({'p0': '4242'}));
     final (run1Status, run1Body, _, _) =

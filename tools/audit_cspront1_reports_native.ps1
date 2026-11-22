@@ -1,7 +1,8 @@
 ﻿param([string]$SourceDirectory='fixtures/SIGAsul.accdb.src',[Parameter(Mandatory=$true)][string]$OutputDirectory)
 $ErrorActionPreference='Stop'
-$reportNames=@('prontuario1','prontuario4-Condi-Habit','prontuario6-Condi-SAUDE-TEXTO','prontuario11-violenc-violacoes-fr-verso','prontuario16-REGISTRO-SINTETICO-FR-VERSO')
+$reportNames=@('prontuario1','prontuario4-Condi-Habit','prontuario6-Condi-SAUDE-TEXTO','prontuario11-violenc-violacoes-fr-verso','prontuario16-REGISTRO-SINTETICO-FR-VERSO','PROSPECTO DE BUSCA ATIVA IMPRIMIR','PLANO SOCIO FAMILIAR')
 $imagePath=(Resolve-Path (Join-Path $SourceDirectory 'images/logo-SUAS-ICON.png')).Path
+$seekLogoPath=(Resolve-Path (Join-Path $SourceDirectory 'images/suas-sistema-unico-de-saude-logo-1889E2CF64-seeklogo_com.png')).Path
 $themePath=(Resolve-Path (Join-Path $SourceDirectory 'themes/Tema do Office.thmx')).Path
 $out=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 [IO.Directory]::CreateDirectory($out)|Out-Null
@@ -57,6 +58,7 @@ CREATE TABLE CadResidencia (
  $db.Execute("INSERT INTO TbPessoa VALUES (10, 4242, 'FAMILIA SINTETICA - TESTE DE FIDELIDADE')")
  [void]$db.CreateQueryDef('CSPRONT1','SELECT CadResidencia.*, TbPessoa.NOME, TbUnidade.NOME, TbUnidade.[Nº UNIDADE] FROM (TbUnidade INNER JOIN CadResidencia ON TbUnidade.CodUnidade = CadResidencia.[CRAS Origem]) INNER JOIN TbPessoa ON CadResidencia.CodFam = TbPessoa.CodFam')
  [void]$app.CurrentProject.AddSharedImage('logo-SUAS-ICON',$imagePath)
+ [void]$app.CurrentProject.AddSharedImage('suas-sistema-unico-de-saude-logo-1889E2CF64-seeklogo_com',$seekLogoPath)
  $themeName=[IO.Path]::GetFileNameWithoutExtension($themePath)
  $themeRecords=$db.OpenRecordset(('SELECT * FROM MSysResources WHERE [Type]=''thmx'' AND [Name]='''+$themeName.Replace("'","''")+''''),2)
  try {
@@ -82,7 +84,8 @@ CREATE TABLE CadResidencia (
  foreach($name in $reportNames){
   $source=(Resolve-Path (Join-Path $SourceDirectory ('reports/'+$name+'.bas'))).Path
   $text=Get-Content -LiteralPath $source -Raw -Encoding UTF8
-  if($text -match '(?im)^\s*(CodeBehindForm|On[A-Z]\w*\s*=|Begin BreakLevel)' -or $text -match '(?im)^\s*HasModule\s*=') {throw "Oracle accepts only event-free, group-free exported reports: $name"}
+  $stripped=[regex]::Replace($text,'(?ms)^    OnOpenEmMacro = Begin\r?\n(?:(?!^    End\r?\n).)*?\bAction ="Maximize"\r?\n(?:(?!\bAction =)(?!^    End\r?\n).)*?^    End\r?\n','')
+  if($stripped -match '(?im)^\s*(CodeBehindForm|On[A-Z]\w*\s*=|Begin BreakLevel)' -or $stripped -match '(?im)^\s*HasModule\s*=') {throw "Oracle accepts only event-free, group-free exported reports: $name"}
   $reportTextPath=Join-Path $work ($name+'.txt')
   [IO.File]::WriteAllText($reportTextPath,$text,[Text.Encoding]::Unicode)
   $app.LoadFromText(3,$name,$reportTextPath)
@@ -90,7 +93,7 @@ CREATE TABLE CadResidencia (
   $report=$app.Reports.Item($name)
   $controls=@()
   foreach($control in $report.Controls){
-   $controls += [pscustomobject]@{name=$control.Name;controlType=$control.ControlType;section=$control.Section;properties=(PropertyMap $control @('Name','ControlType','Section','Left','Top','Width','Height','Visible','Caption','ControlSource','ColumnCount','BoundColumn','ColumnWidths','FontName','FontSize','FontWeight','ForeColor','BackColor','BackStyle','BorderColor','BorderStyle','BorderWidth','TextAlign','Picture','PictureType','SizeMode'))}
+   $controls += [pscustomobject]@{name=$control.Name;controlType=$control.ControlType;section=$control.Section;properties=(PropertyMap $control @('Name','ControlType','Section','Left','Top','Width','Height','Visible','Caption','ControlSource','ColumnCount','BoundColumn','ColumnWidths','FontName','FontSize','FontWeight','ForeColor','BackColor','BackStyle','BorderColor','BorderStyle','BorderWidth','LineSlant','TextAlign','Picture','PictureType','SizeMode'))}
   }
   $reportEntries += [pscustomobject]@{reportName=$name;sourceSha256=(Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant();width=$report.Width;controls=$controls}
   $app.DoCmd.Close(3,$name,1);[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($report);$report=$null

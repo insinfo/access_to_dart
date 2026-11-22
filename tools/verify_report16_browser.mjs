@@ -125,7 +125,26 @@ try {
     await sheet1.screenshot({ path: process.env.REPORT1_SCREENSHOT });
   }
 
-  assert.equal(reportApiCount >= 3, true);
+  // Navigate to PROSPECTO DE BUSCA ATIVA IMPRIMIR (unbound, PageHeader/Detail/PageFooter, Line controls)
+  await page.evaluate(() => {
+    location.hash = '/access-report/prospecto_de_busca_ativa_imprimir';
+  });
+  await viewer.getByRole('button', { name: 'Visualizar Relatório', exact: true }).click();
+  const sheetProspecto = viewer.locator('[data-access-report="prospecto_de_busca_ativa_imprimir"]');
+  await sheetProspecto.waitFor();
+  const controlCountProspecto = await sheetProspecto.locator('[data-access-control]').count();
+  assert.equal(controlCountProspecto, 115, 'Expected all 115 controls in prospecto DOM');
+  const lineCountProspecto = await sheetProspecto.locator('[data-access-control-type="Line"]').count();
+  assert.equal(lineCountProspecto, 7, 'Expected 7 Line controls in prospecto DOM');
+  const line291Box = await sheetProspecto.locator('[data-access-control="Linha291"]').boundingBox();
+  assert.ok(line291Box && line291Box.width > 100 && line291Box.height >= 1, 'Expected Linha291 non-zero line box');
+  assert.equal((await sheetProspecto.locator('[data-access-control="Rótulo0"]').innerText()).trim(), 'PROSPECTO DE BUSCA ATIVA');
+  assert.ok((await sheetProspecto.locator('[data-access-control="Rótulo293"]').innerText()).includes('ASSINATURA E CARIMBO'));
+  if (process.env.PROSPECTO_SCREENSHOT) {
+    await sheetProspecto.screenshot({ path: process.env.PROSPECTO_SCREENSHOT });
+  }
+
+  assert.equal(reportApiCount >= 4, true);
   assert.equal(assetOk, true);
   assert.deepEqual(writes, []);
   assert.deepEqual(apiFailures, []);
@@ -136,6 +155,8 @@ try {
     controlCount1,
     controlCount16,
     controlCount4,
+    controlCountProspecto,
+    lineCountProspecto,
     imgBox,
     writes: writes.length,
     errors,

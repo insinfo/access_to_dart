@@ -1,6 +1,8 @@
 import '../access_query_contract.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:code_builder/code_builder.dart';
 import 'package:crypto/crypto.dart';
@@ -8,6 +10,7 @@ import 'package:dart_style/dart_style.dart';
 import 'package:mustache_template/mustache_template.dart';
 import 'package:path/path.dart' as p;
 import 'package:recase/recase.dart';
+import 'package:xml/xml.dart';
 
 import '../access_default_semantics.dart';
 import '../access_form_capabilities.dart';

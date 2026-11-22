@@ -38,6 +38,7 @@ class CompiledReportControl {
   final int section;
   final int left;
   final int top;
+  final int sheetTop;
   final int width;
   final int height;
   final int backStyle;
@@ -71,6 +72,7 @@ class CompiledReportControl {
     required this.section,
     required this.left,
     required this.top,
+    required this.sheetTop,
     required this.width,
     required this.height,
     required this.backStyle,
@@ -105,6 +107,7 @@ class CompiledReportControl {
         'section': section,
         'left': left,
         'top': top,
+        'sheetTop': sheetTop,
         'width': width,
         'height': height,
         'backStyle': backStyle,
@@ -227,6 +230,244 @@ class CompiledReportCompilationResult {
   });
 }
 
+class _OfficeThemePalette {
+  static const Map<int, List<int>> _defaultClrScheme = {
+    0: [0x00, 0x00, 0x00], // dk1
+    1: [0xFF, 0xFF, 0xFF], // lt1
+    2: [0x44, 0x54, 0x6A], // dk2
+    3: [0xE7, 0xE6, 0xE6], // lt2
+    4: [0x44, 0x72, 0xC4], // accent1
+    5: [0xED, 0x7D, 0x31], // accent2
+    6: [0xA5, 0xA5, 0xA5], // accent3
+    7: [0xFF, 0xC0, 0x00], // accent4
+    8: [0x5B, 0x9B, 0xD5], // accent5
+    9: [0x70, 0xAD, 0x47], // accent6
+    10: [0x05, 0x63, 0xC1], // hlink
+    11: [0x95, 0x4F, 0x72], // folHlink
+  };
+
+  static const Map<String, int> _slotByTag = {
+    'dk1': 0,
+    'lt1': 1,
+    'dk2': 2,
+    'lt2': 3,
+    'accent1': 4,
+    'accent2': 5,
+    'accent3': 6,
+    'accent4': 7,
+    'accent5': 8,
+    'accent6': 9,
+    'hlink': 10,
+    'folHlink': 11,
+  };
+
+  final Map<int, List<int>> _slots;
+
+  const _OfficeThemePalette._(this._slots);
+
+  factory _OfficeThemePalette.loadFromSource(String? sourceRoot) {
+    final slots = <int, List<int>>{
+      for (final entry in _defaultClrScheme.entries)
+        entry.key: List<int>.unmodifiable(entry.value),
+    };
+    if (sourceRoot == null || sourceRoot.isEmpty) {
+      return _OfficeThemePalette._(slots);
+    }
+    final thmxFile = _findActiveThmxFile(sourceRoot);
+    if (thmxFile == null || !thmxFile.existsSync()) {
+      return _OfficeThemePalette._(slots);
+    }
+    try {
+      final bytes = thmxFile.readAsBytesSync();
+      final themeXmlBytes = _extractZipEntry(
+        bytes,
+        (name) =>
+            name.toLowerCase() == 'theme/theme/theme1.xml' ||
+            name.toLowerCase().endsWith('/theme1.xml'),
+      );
+      if (themeXmlBytes == null) {
+        return _OfficeThemePalette._(slots);
+      }
+      final doc = XmlDocument.parse(utf8.decode(themeXmlBytes));
+      final schemes = doc.descendants
+          .whereType<XmlElement>()
+          .where((e) => e.localName == 'clrScheme');
+      if (schemes.isEmpty) {
+        return _OfficeThemePalette._(slots);
+      }
+      for (final child in schemes.first.childElements) {
+        final slotIdx = _slotByTag[child.localName];
+        if (slotIdx == null) continue;
+        final rgbHex = _readSchemeRgbHex(child);
+        if (rgbHex != null) {
+          slots[slotIdx] = rgbHex;
+        }
+      }
+    } catch (_) {
+      // Keep default Office palette if the .thmx archive cannot be decoded.
+    }
+    return _OfficeThemePalette._(slots);
+  }
+
+  static File? _findActiveThmxFile(String sourceRoot) {
+    final themesDir = Directory(p.join(sourceRoot, 'themes'));
+    if (!themesDir.existsSync()) return null;
+    final dbPropsFile = File(p.join(sourceRoot, 'dbs-properties.json'));
+    if (dbPropsFile.existsSync()) {
+      try {
+        final decoded = jsonDecode(dbPropsFile.readAsStringSync());
+        final items = (decoded as Map?)?['Items'] as Map?;
+        final themeProp = items?['Theme Resource Name'] as Map?;
+        final activeName = themeProp?['Value']?.toString().trim();
+        if (activeName != null && activeName.isNotEmpty) {
+          final exact = File(p.join(themesDir.path, '$activeName.thmx'));
+          if (exact.existsSync()) return exact;
+        }
+      } catch (_) {}
+    }
+    final candidates = themesDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.toLowerCase().endsWith('.thmx'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    return candidates.isEmpty ? null : candidates.first;
+  }
+
+  static List<int>? _readSchemeRgbHex(XmlElement slotElement) {
+    for (final child in slotElement.childElements) {
+      final hex = switch (child.localName) {
+        'srgbClr' => child.getAttribute('val'),
+        'sysClr' => child.getAttribute('lastClr'),
+        _ => null,
+      };
+      if (hex != null && RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
+        return List<int>.unmodifiable([
+          int.parse(hex.substring(0, 2), radix: 16),
+          int.parse(hex.substring(2, 4), radix: 16),
+          int.parse(hex.substring(4, 6), radix: 16),
+        ]);
+      }
+    }
+    return null;
+  }
+
+  static List<int>? _extractZipEntry(
+    Uint8List bytes,
+    bool Function(String entryName) matches,
+  ) {
+    if (bytes.length < 22) return null;
+    final view = ByteData.sublistView(bytes);
+    var eocdOffset = -1;
+    final minOffset = math.max(0, bytes.length - 65557);
+    for (var offset = bytes.length - 22; offset >= minOffset; offset--) {
+      if (view.getUint32(offset, Endian.little) == 0x06054b50) {
+        eocdOffset = offset;
+        break;
+      }
+    }
+    if (eocdOffset < 0) return null;
+    final totalEntries = view.getUint16(eocdOffset + 10, Endian.little);
+    final centralDirSize = view.getUint32(eocdOffset + 12, Endian.little);
+    final centralDirOffset = view.getUint32(eocdOffset + 16, Endian.little);
+    if (centralDirOffset + centralDirSize > bytes.length) return null;
+
+    var cursor = centralDirOffset;
+    for (var i = 0; i < totalEntries && cursor + 46 <= bytes.length; i++) {
+      if (view.getUint32(cursor, Endian.little) != 0x02014b50) break;
+      final method = view.getUint16(cursor + 10, Endian.little);
+      final compressedSize = view.getUint32(cursor + 20, Endian.little);
+      final nameLen = view.getUint16(cursor + 28, Endian.little);
+      final extraLen = view.getUint16(cursor + 30, Endian.little);
+      final commentLen = view.getUint16(cursor + 32, Endian.little);
+      final localHeaderOffset = view.getUint32(cursor + 42, Endian.little);
+      final nameStart = cursor + 46;
+      if (nameStart + nameLen > bytes.length) break;
+      final entryName =
+          utf8.decode(bytes.sublist(nameStart, nameStart + nameLen), allowMalformed: true);
+      cursor = nameStart + nameLen + extraLen + commentLen;
+      if (!matches(entryName)) continue;
+
+      if (localHeaderOffset + 30 > bytes.length ||
+          view.getUint32(localHeaderOffset, Endian.little) != 0x04034b50) {
+        return null;
+      }
+      final lfhNameLen = view.getUint16(localHeaderOffset + 26, Endian.little);
+      final lfhExtraLen = view.getUint16(localHeaderOffset + 28, Endian.little);
+      final dataStart = localHeaderOffset + 30 + lfhNameLen + lfhExtraLen;
+      final dataEnd = dataStart + compressedSize;
+      if (dataEnd > bytes.length) return null;
+      final payload = bytes.sublist(dataStart, dataEnd);
+      if (method == 0) return payload;
+      if (method == 8) return ZLibCodec(raw: true).decode(payload);
+      return null;
+    }
+    return null;
+  }
+
+  int? resolveColor({
+    required int themeIndex,
+    double? tint,
+    double? shade,
+  }) {
+    final rgb = _slots[themeIndex];
+    if (rgb == null) return null;
+    final r0 = rgb[0] / 255.0;
+    final g0 = rgb[1] / 255.0;
+    final b0 = rgb[2] / 255.0;
+    final maxC = math.max(r0, math.max(g0, b0));
+    final minC = math.min(r0, math.min(g0, b0));
+    var l = (maxC + minC) / 2.0;
+    var s = 0.0;
+    var h = 0.0;
+    if (maxC != minC) {
+      final d = maxC - minC;
+      s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
+      if (maxC == r0) {
+        h = (g0 - b0) / d + (g0 < b0 ? 6.0 : 0.0);
+      } else if (maxC == g0) {
+        h = (b0 - r0) / d + 2.0;
+      } else {
+        h = (r0 - g0) / d + 4.0;
+      }
+      h /= 6.0;
+    }
+
+    if (shade != null && shade < 100.0) {
+      l = (l * (shade / 100.0)).clamp(0.0, 1.0);
+    } else if (tint != null && tint < 100.0) {
+      l = (l + (1.0 - l) * (1.0 - tint / 100.0)).clamp(0.0, 1.0);
+    }
+
+    int channelToByte(double v) => v.round().clamp(0, 255);
+
+    if (s == 0.0) {
+      // Office/GDI truncates exact half-lum gray on dark theme tinting (e.g. dk1 50% -> 127).
+      final v = (tint != null && tint < 100.0 && (l - 0.5).abs() < 1e-9)
+          ? (l * 255.0).floor()
+          : channelToByte(l * 255.0);
+      return v | (v << 8) | (v << 16);
+    }
+
+    final q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+    final pVal = 2.0 * l - q;
+    double hueToRgb(double t) {
+      var u = t;
+      if (u < 0.0) u += 1.0;
+      if (u > 1.0) u -= 1.0;
+      if (u < 1.0 / 6.0) return pVal + (q - pVal) * 6.0 * u;
+      if (u < 1.0 / 2.0) return q;
+      if (u < 2.0 / 3.0) return pVal + (q - pVal) * (2.0 / 3.0 - u) * 6.0;
+      return pVal;
+    }
+
+    final r = channelToByte(hueToRgb(h + 1.0 / 3.0) * 255.0);
+    final g = channelToByte(hueToRgb(h) * 255.0);
+    final b = channelToByte(hueToRgb(h - 1.0 / 3.0) * 255.0);
+    return r | (g << 8) | (b << 16);
+  }
+}
+
 extension _CompiledReportRenderer on ProjectGenerator {
   CompiledReportCompilationResult compileEligibleReports(
       AnalysisProject project) {
@@ -236,6 +477,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         (entry.value['name'] as String).toLowerCase(): entry,
     };
     final sourceRoot = _resolveReportSourceRoot(project);
+    final themePalette = _OfficeThemePalette.loadFromSource(sourceRoot);
     final reports = <CompiledReportSpec>[];
     final diagnostics = <Map<String, Object?>>[];
     final usedKeys = <String>{};
@@ -266,6 +508,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         key: key,
         queryByLowerName: queryByLowerName,
         sourceRoot: sourceRoot,
+        themePalette: themePalette,
       );
       if (compiled.spec != null) {
         usedKeys.add(key);
@@ -321,6 +564,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
     required Map<String, MapEntry<String, Map<String, Object?>>>
         queryByLowerName,
     required String? sourceRoot,
+    required _OfficeThemePalette themePalette,
   }) {
     final sourceSha256 = report['sourceSha256']?.toString();
     if (sourceSha256 == null ||
@@ -333,6 +577,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
     if (_reportHasBehaviorOrModule(report, props)) {
       return (spec: null, reason: 'has-vba-macros-or-events');
     }
+    final onOpenWindowAction = _cosmeticOpenWindowAction(report);
 
     final groupLevels = (report['groupLevels'] as List?) ?? const [];
     if (groupLevels.isNotEmpty) {
@@ -341,11 +586,10 @@ extension _CompiledReportRenderer on ProjectGenerator {
 
     final recordSource =
         (report['recordSource'] ?? props['RecordSource'])?.toString().trim();
-    if (recordSource == null || recordSource.isEmpty) {
-      return (spec: null, reason: 'missing-record-source');
-    }
-    final queryEntry = queryByLowerName[recordSource.toLowerCase()];
-    if (queryEntry == null) {
+    final isBound = recordSource != null && recordSource.isNotEmpty;
+    final queryEntry =
+        isBound ? queryByLowerName[recordSource.toLowerCase()] : null;
+    if (isBound && queryEntry == null) {
       return (spec: null, reason: 'record-source-not-compiled-query');
     }
 
@@ -367,9 +611,33 @@ extension _CompiledReportRenderer on ProjectGenerator {
       return (spec: null, reason: 'missing-sections');
     }
 
-    final compiledSections = <CompiledReportSection>[];
-    final sectionControls = <Map<String, dynamic>>[];
-    var detailHeight = 0;
+    int sectionBucket(String type) => switch (type) {
+          'FormHeader' || 'ReportHeader' => 0,
+          'PageHeader' => 1,
+          'Section' => 2,
+          'FormFooter' || 'ReportFooter' => 3,
+          'PageFooter' => 4,
+          _ => -1,
+        };
+    int accessSectionCode(String type) => switch (type) {
+          'Section' => 0,
+          'FormHeader' || 'ReportHeader' => 1,
+          'FormFooter' || 'ReportFooter' => 2,
+          'PageHeader' => 3,
+          'PageFooter' => 4,
+          _ => 0,
+        };
+
+    final validatedSections = <({
+      Map<String, dynamic> raw,
+      String type,
+      String name,
+      int height,
+      int bucket,
+      int code,
+      bool keepTogether,
+      List<Map<String, dynamic>> controls,
+    })>[];
     for (final item in rawSections) {
       if (item is! Map) {
         return (spec: null, reason: 'invalid-section-entry');
@@ -381,46 +649,87 @@ extension _CompiledReportRenderer on ProjectGenerator {
       if (_mapHasBehaviorOrEvents(section, sProps)) {
         return (spec: null, reason: 'section-has-events-or-macros');
       }
-      if (sType != 'PageHeader' && sType != 'Section' && sType != 'PageFooter') {
+      final bucket = sectionBucket(sType);
+      if (bucket < 0) {
         return (spec: null, reason: 'unsupported-section-type:$sType');
       }
       final sHeight = _parseReportInt(section['height'] ?? sProps['Height']);
       if (sHeight == null || sHeight < 0) {
         return (spec: null, reason: 'invalid-section-height:$sType');
       }
+      if (sType == 'Section' && sHeight <= 0) {
+        return (spec: null, reason: 'empty-detail-section');
+      }
       final controls = (section['controls'] as List?) ?? const [];
-      if ((sType == 'PageHeader' || sType == 'PageFooter') &&
-          (sHeight > 0 || controls.isNotEmpty)) {
-        return (spec: null, reason: 'non-empty-page-header-or-footer');
-      }
-      if (sType == 'Section') {
-        if (sHeight <= 0) {
-          return (spec: null, reason: 'empty-detail-section');
+      final typedControls = <Map<String, dynamic>>[];
+      for (final ctrl in controls) {
+        if (ctrl is! Map) {
+          return (spec: null, reason: 'invalid-control-entry');
         }
-        detailHeight = sHeight;
-        for (final ctrl in controls) {
-          if (ctrl is! Map) {
-            return (spec: null, reason: 'invalid-control-entry');
+        final ctrlMap = ctrl.cast<String, dynamic>();
+        if (!isBound) {
+          final cProps = ((ctrlMap['properties'] as Map?) ?? const {});
+          final cs = (ctrlMap['controlSource'] ?? cProps['ControlSource'])
+              ?.toString()
+              .trim();
+          if (cs != null && cs.isNotEmpty) {
+            return (spec: null, reason: 'missing-record-source');
           }
-          sectionControls.add(ctrl.cast<String, dynamic>());
         }
+        typedControls.add(ctrlMap);
       }
-      compiledSections.add(CompiledReportSection(
+      validatedSections.add((
+        raw: section,
         type: sType,
         name: section['name']?.toString() ?? sType,
         height: sHeight,
+        bucket: bucket,
+        code: accessSectionCode(sType),
         keepTogether: sProps['KeepTogether']?.toString() == 'NotDefault',
+        controls: typedControls,
       ));
+    }
+
+    validatedSections.sort((a, b) => a.bucket.compareTo(b.bucket));
+    final compiledSections = <CompiledReportSection>[];
+    final sectionControls =
+        <({Map<String, dynamic> control, int sectionCode, int offsetTwips})>[];
+    var detailHeight = 0;
+    var sheetOffsetTwips = 0;
+    for (final s in validatedSections) {
+      if (s.type == 'Section') {
+        detailHeight = s.height;
+      }
+      for (final ctrl in s.controls) {
+        sectionControls.add((
+          control: ctrl,
+          sectionCode: s.code,
+          offsetTwips: sheetOffsetTwips,
+        ));
+      }
+      compiledSections.add(CompiledReportSection(
+        type: s.type,
+        name: s.name,
+        height: s.height,
+        keepTogether: s.keepTogether,
+      ));
+      sheetOffsetTwips += s.height;
     }
 
     if (detailHeight <= 0 || sectionControls.isEmpty) {
       return (spec: null, reason: 'missing-detail-controls');
     }
     pageSetup['detailHeightTwips'] = detailHeight;
+    pageSetup['sheetHeightTwips'] = sheetOffsetTwips;
+    if (onOpenWindowAction != null) {
+      pageSetup['onOpenWindowAction'] = onOpenWindowAction;
+    }
 
     final defaultsRaw =
         ((report['controlDefaults'] as Map?) ?? const {}).cast<String, dynamic>();
-    final queryColumns = (queryEntry.value['columns'] as List).cast<Map>();
+    final queryColumns = queryEntry == null
+        ? const <Map>[]
+        : (queryEntry.value['columns'] as List).cast<Map>();
     final columnsByLower = <String, List<Map>>{};
     for (final col in queryColumns) {
       final colName = (col['name'] as String).toLowerCase();
@@ -441,7 +750,10 @@ extension _CompiledReportRenderer on ProjectGenerator {
     final assetHashByName = <String, String>{};
 
     for (var i = 0; i < sectionControls.length; i++) {
-      final ctrl = sectionControls[i];
+      final entry = sectionControls[i];
+      final ctrl = entry.control;
+      final sectionCode = entry.sectionCode;
+      final sectionOffsetTwips = entry.offsetTwips;
       final cName = ctrl['name']?.toString() ?? '';
       final cType = ctrl['type']?.toString() ?? '';
       final cProps = ((ctrl['properties'] as Map?) ?? const {})
@@ -452,6 +764,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
       final controlTypeCode = switch (cType) {
         'Label' => 100,
         'Rectangle' => 101,
+        'Line' => 102,
         'Image' => 103,
         'CheckBox' => 106,
         'TextBox' => 109,
@@ -480,13 +793,31 @@ extension _CompiledReportRenderer on ProjectGenerator {
       if (top == null && height != null && cachedBottom == height) {
         top = 0;
       }
-      if (width == null && left != null && cachedRight != null && cachedRight > left) {
+      if (width == null &&
+          left != null &&
+          cachedRight != null &&
+          cachedRight >= left) {
         width = cachedRight - left;
       }
-      if (height == null && top != null && cachedBottom != null && cachedBottom > top) {
+      if (height == null &&
+          top != null &&
+          cachedBottom != null &&
+          cachedBottom >= top) {
         height = cachedBottom - top;
       }
-      if (left == null ||
+      if (cType == 'Line') {
+        width ??= 0;
+        height ??= 0;
+        if (left == null ||
+            top == null ||
+            left < 0 ||
+            top < 0 ||
+            width < 0 ||
+            height < 0 ||
+            (width == 0 && height == 0)) {
+          return (spec: null, reason: 'invalid-control-geometry:$cName');
+        }
+      } else if (left == null ||
           top == null ||
           width == null ||
           height == null ||
@@ -497,24 +828,41 @@ extension _CompiledReportRenderer on ProjectGenerator {
         return (spec: null, reason: 'invalid-control-geometry:$cName');
       }
 
-      final backStyle = _parseReportInt(cProps['BackStyle'] ??
-              defProps['BackStyle']) ??
-          (cType == 'TextBox' ||
-                  cType == 'ComboBox' ||
-                  cType == 'Image' ||
-                  cType == 'Rectangle'
-              ? 1
-              : 0);
-      final backColor =
-          _parseReportInt(cProps['BackColor'] ?? defProps['BackColor']) ??
-              16777215;
+      final backStyle = cType == 'Line' || cType == 'CheckBox'
+          ? 0
+          : (_parseReportInt(cProps['BackStyle'] ?? defProps['BackStyle']) ??
+              (cType == 'TextBox' ||
+                      cType == 'ComboBox' ||
+                      cType == 'Image' ||
+                      cType == 'Rectangle'
+                  ? 1
+                  : 0));
+      final backColor = _resolveControlThemeColor(
+        'Back',
+        cProps,
+        defProps,
+        themePalette,
+        fallback: 16777215,
+      );
       final borderStyle = _parseReportInt(cProps['BorderStyle'] ??
               cProps['OldBorderStyle'] ??
               defProps['BorderStyle'] ??
               defProps['OldBorderStyle']) ??
           (cType == 'Label' || cType == 'Image' ? 0 : 1);
-      final borderColor = _resolveReportBorderColor(cType, cProps, defProps);
-      final foreColor = _resolveReportForeColor(cProps, defProps);
+      final borderColor = _resolveControlThemeColor(
+        'Border',
+        cProps,
+        defProps,
+        themePalette,
+        fallback: 0,
+      );
+      final foreColor = _resolveControlThemeColor(
+        'Fore',
+        cProps,
+        defProps,
+        themePalette,
+        fallback: 0,
+      );
 
       String? fontName;
       int? fontSize;
@@ -633,9 +981,10 @@ extension _CompiledReportRenderer on ProjectGenerator {
         name: cName,
         type: cType,
         controlType: controlTypeCode,
-        section: 0,
+        section: sectionCode,
         left: left,
         top: top,
+        sheetTop: sectionOffsetTwips + top,
         width: width,
         height: height,
         backStyle: backStyle,
@@ -668,13 +1017,14 @@ extension _CompiledReportRenderer on ProjectGenerator {
         key: key,
         name: report['name'] as String,
         caption: (report['caption'] ?? props['Caption'])?.toString(),
-        recordSource: recordSource,
-        queryKey: queryEntry.key,
+        recordSource: recordSource ?? '',
+        queryKey: queryEntry?.key ?? '',
         sourceSha256: sourceSha256,
         printSettingsSha256: report['printSettingsSha256']?.toString(),
         pageSetup: pageSetup,
-        parameters:
-            ((queryEntry.value['parameters'] as List?) ?? const [])
+        parameters: queryEntry == null
+            ? const <Map<String, Object?>>[]
+            : ((queryEntry.value['parameters'] as List?) ?? const [])
                 .cast<Map<String, Object?>>(),
         sections: compiledSections,
         controls: compiledControls,
@@ -753,16 +1103,72 @@ extension _CompiledReportRenderer on ProjectGenerator {
         hasModuleProp != 'Default') {
       return true;
     }
-    return _mapHasBehaviorOrEvents(report, props);
+    return _mapHasBehaviorOrEvents(report, props, allowCosmeticOpenMacro: true);
+  }
+
+  String? _cosmeticOpenWindowAction(Map<String, dynamic> report) {
+    final macros = report['macros'];
+    final macroDefs = report['macroDefinitions'];
+    if (macros is Map && macros.isNotEmpty) {
+      if (macros.length != 1 || !macros.containsKey('OnOpenEmMacro')) {
+        return null;
+      }
+      final actions = macros['OnOpenEmMacro'];
+      if (actions is! List ||
+          actions.length != 1 ||
+          actions.single?.toString().trim() != 'Maximize') {
+        return null;
+      }
+    } else if (macroDefs is! Map || !macroDefs.containsKey('OnOpenEmMacro')) {
+      return null;
+    }
+
+    if (macroDefs is Map && macroDefs.isNotEmpty) {
+      if (macroDefs.length != 1 || !macroDefs.containsKey('OnOpenEmMacro')) {
+        return null;
+      }
+      final steps = macroDefs['OnOpenEmMacro'];
+      if (steps is! List || steps.isEmpty) return null;
+      var foundMaximize = false;
+      for (final rawStep in steps) {
+        if (rawStep is! Map) return null;
+        final action = rawStep['action']?.toString().trim();
+        final condition = rawStep['condition']?.toString().trim();
+        final arguments = (rawStep['arguments'] as List?) ?? const [];
+        final children = (rawStep['children'] as List?) ?? const [];
+        if ((condition != null && condition.isNotEmpty) ||
+            arguments.isNotEmpty ||
+            children.isNotEmpty) {
+          return null;
+        }
+        if (action == null || action.isEmpty) {
+          continue;
+        }
+        if (action == 'Maximize') {
+          foundMaximize = true;
+          continue;
+        }
+        return null;
+      }
+      if (!foundMaximize) return null;
+    }
+    return 'Maximize';
   }
 
   bool _mapHasBehaviorOrEvents(
     Map<String, dynamic> node,
-    Map<String, dynamic> props,
-  ) {
-    for (final key in const ['events', 'macros', 'macroDefinitions']) {
+    Map<String, dynamic> props, {
+    bool allowCosmeticOpenMacro = false,
+  }) {
+    final events = node['events'];
+    if (events is Map && events.isNotEmpty) return true;
+    final hasCosmeticOpen =
+        allowCosmeticOpenMacro && _cosmeticOpenWindowAction(node) != null;
+    for (final key in const ['macros', 'macroDefinitions']) {
       final entry = node[key];
-      if (entry is Map && entry.isNotEmpty) return true;
+      if (entry is Map && entry.isNotEmpty && !hasCosmeticOpen) {
+        return true;
+      }
     }
     for (final entry in props.entries) {
       if (RegExp(r'^On[A-Z]').hasMatch(entry.key) &&
@@ -806,6 +1212,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
     return <String, Object?>{
       'widthTwips': widthTwips,
       'detailHeightTwips': 0,
+      'sheetHeightTwips': 0,
       'orientation': orientation,
       'orientationName': orientationName,
       'paperSize': paperSize,
@@ -830,38 +1237,43 @@ extension _CompiledReportRenderer on ProjectGenerator {
     return null;
   }
 
-  int _resolveReportBorderColor(
-    String type,
+  int _resolveControlThemeColor(
+    String prefix,
     Map<String, dynamic> ctrlProp,
     Map<String, dynamic> defProp,
-  ) {
-    final explicit = _parseReportInt(ctrlProp['BorderColor']);
-    if (explicit != null) return explicit;
-    if (ctrlProp['BorderThemeColorIndex']?.toString() == '0' ||
-        (ctrlProp['BorderTint']?.toString() == '100.0' &&
-            defProp['BorderThemeColorIndex']?.toString() == '0')) {
-      return 0;
-    }
-    if (type == 'Label') return 8355711;
-    return 10921638;
-  }
+    _OfficeThemePalette palette, {
+    required int fallback,
+  }) {
+    final explicitCtrl = _parseReportInt(ctrlProp['${prefix}Color']);
+    if (explicitCtrl != null) return explicitCtrl;
 
-  int _resolveReportForeColor(
-    Map<String, dynamic> ctrlProp,
-    Map<String, dynamic> defProp,
-  ) {
-    final explicit =
-        _parseReportInt(ctrlProp['ForeColor'] ?? defProp['ForeColor']);
-    if (explicit != null) return explicit;
-    final themeIndex = (ctrlProp['ForeThemeColorIndex'] ??
-            defProp['ForeThemeColorIndex'])
-        ?.toString()
-        .trim();
-    final shade =
-        (ctrlProp['ForeShade'] ?? defProp['ForeShade'])?.toString().trim();
-    if (themeIndex == '4' && shade == '75.0') return 9917743;
-    if (themeIndex == '9' && shade == '50.0') return 2316088;
-    return 0;
+    final ctrlThemeRaw = ctrlProp['${prefix}ThemeColorIndex'];
+    final defThemeRaw = defProp['${prefix}ThemeColorIndex'];
+    final themeIndex = _parseReportInt(ctrlThemeRaw ?? defThemeRaw);
+    if (themeIndex != null && themeIndex >= 0) {
+      final ctrlChangedTheme = ctrlThemeRaw != null &&
+          ctrlThemeRaw.toString() != defThemeRaw?.toString();
+      final rawCtrlTint = ctrlProp['${prefix}Tint'];
+      final rawCtrlShade = ctrlProp['${prefix}Shade'];
+      final effectiveTint = rawCtrlTint ??
+          (ctrlChangedTheme || rawCtrlShade != null
+              ? null
+              : defProp['${prefix}Tint']);
+      final effectiveShade = rawCtrlShade ??
+          (ctrlChangedTheme || rawCtrlTint != null
+              ? null
+              : defProp['${prefix}Shade']);
+      final resolved = palette.resolveColor(
+        themeIndex: themeIndex,
+        tint: _parseReportDouble(effectiveTint),
+        shade: _parseReportDouble(effectiveShade),
+      );
+      if (resolved != null) return resolved;
+    }
+
+    final explicitDef = _parseReportInt(defProp['${prefix}Color']);
+    if (explicitDef != null) return explicitDef;
+    return fallback;
   }
 
   bool _isIdentityDisplayComboBox(
@@ -952,8 +1364,27 @@ class AccessReportController {
       return responseError('Relatorio nao compilado.', statusCode: 404);
     }
     final queryKey = descriptor['queryKey'] as String?;
+    if (queryKey == null || queryKey.isEmpty) {
+      return responseJson({
+        'report': descriptor['name'],
+        'key': key,
+        'caption': descriptor['caption'],
+        'recordSource': descriptor['recordSource'],
+        'queryKey': '',
+        'parameters': const <Object?>[],
+        'pageSetup': descriptor['pageSetup'],
+        'sections': descriptor['sections'],
+        'controls': descriptor['controls'],
+        'pages': const [
+          {'pageNumber': 1, 'values': <String, String>{}},
+        ],
+        'rowCount': 1,
+        'truncated': false,
+        'readOnly': true,
+      });
+    }
     final queryDescriptor =
-        queryKey == null ? null : AccessQueryController.specifications[queryKey] as Map?;
+        AccessQueryController.specifications[queryKey] as Map?;
     if (queryDescriptor == null) {
       return responseError('Consulta do relatorio indisponivel.', statusCode: 500);
     }
@@ -1281,6 +1712,7 @@ String _buildAccessReportViewerHtml(List<CompiledReportSpec> reports) {
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr">{{ pageValue(page, $nameArg) }}</div>');
           break;
         case 'Rectangle':
+        case 'Line':
           buffer.writeln(
               '        <div class="$cssClass" [attr.data-access-control]="$ctrlNameExpr" [attr.data-access-control-type]="$ctrlTypeExpr"></div>');
           break;
@@ -1322,7 +1754,8 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
   for (final report in reports) {
     final setup = report.pageSetup;
     final widthTwips = setup['widthTwips'] as int;
-    final heightTwips = setup['detailHeightTwips'] as int;
+    final heightTwips =
+        (setup['sheetHeightTwips'] as int?) ?? (setup['detailHeightTwips'] as int);
     final leftTwips = setup['leftMarginTwips'] as int;
     final rightTwips = setup['rightMarginTwips'] as int;
     final topTwips = setup['topMarginTwips'] as int;
@@ -1349,21 +1782,36 @@ String _buildAccessReportViewerScss(List<CompiledReportSpec> reports) {
 }
 ''');
     for (final ctrl in report.controls) {
-      final bg = ctrl.type == 'CheckBox'
+      final isLine = ctrl.type == 'Line';
+      final isCheck = ctrl.type == 'CheckBox';
+      final bg = isLine || isCheck
           ? 'transparent'
           : (ctrl.backStyle == 1 ? ctrl.backColorHex : 'transparent');
-      final border = ctrl.type == 'CheckBox'
+      final border = isLine || isCheck
           ? 'none'
           : (ctrl.borderStyle == 1 ? '1px solid ${ctrl.borderColorHex}' : 'none');
+      final cssWidth = _twipsToPx(isLine && ctrl.width == 0 ? 15 : ctrl.width);
+      final cssHeight =
+          _twipsToPx(isLine && ctrl.height == 0 ? 15 : ctrl.height);
       final cls = 'access-report-ctrl-${report.key}-${ctrl.index}';
       buffer.writeln('.$cls {');
       buffer.writeln('  position: absolute;');
       buffer.writeln('  left: ${_twipsToPx(ctrl.left)}px;');
-      buffer.writeln('  top: ${_twipsToPx(ctrl.top)}px;');
-      buffer.writeln('  width: ${_twipsToPx(ctrl.width)}px;');
-      buffer.writeln('  height: ${_twipsToPx(ctrl.height)}px;');
+      buffer.writeln('  top: ${_twipsToPx(ctrl.sheetTop)}px;');
+      buffer.writeln('  width: ${cssWidth}px;');
+      buffer.writeln('  height: ${cssHeight}px;');
       buffer.writeln('  background-color: $bg;');
       buffer.writeln('  border: $border;');
+      if (isLine) {
+        if (ctrl.width > 0 && ctrl.height == 0) {
+          buffer.writeln('  border-top: 1px solid ${ctrl.borderColorHex};');
+        } else if (ctrl.height > 0 && ctrl.width == 0) {
+          buffer.writeln('  border-left: 1px solid ${ctrl.borderColorHex};');
+        } else {
+          buffer.writeln('  border-top: 1px solid ${ctrl.borderColorHex};');
+          buffer.writeln('  border-left: 1px solid ${ctrl.borderColorHex};');
+        }
+      }
       buffer.writeln('  box-sizing: border-box;');
       buffer.writeln('  overflow: hidden;');
       if (ctrl.type == 'Label' ||

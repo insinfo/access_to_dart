@@ -151,15 +151,15 @@ validação integrada foram encerrados, com remoção do banco conferida.
 - Doc56: corrigido o binding `[maxlength]="<%maxLength%>"` em
   `incluir_page.html.mustache` para atender `MaxLengthValidator` (`int`) do `ngforms`
   e compilar via `dart2js` em tabelas com `maxLength` definido.
-- Doc57: renderer estendido para todos os **15/15** relatórios `CSPRONT1`
-  (`1.965` controles: `CheckBox` booleano, `ComboBox` de 1 coluna com exibição
-  direta `ControlType=111`, `TextBox` sem vínculo, coordenadas omitidas na
-  origem zero / `LayoutCached*`, default opaco de `Rectangle`/`ComboBox` e
-  cores de tema `ForeThemeColorIndex`/`ForeShade`), confrontado com oráculo
-  nativo de **666 controles** em 5 relatórios (`prontuario1`, `4`, `6`, `11`,
-  `16`), `--dao-query-shape` em `access_to_dart analyze`, validado em
-  PostgreSQL + Chrome/Playwright e na compilação integral do `SIGAsul`
-  (`45` tabelas, `core`/`backend`/`frontend` + `server.exe` + `build_release.dart`).
+- Doc57: renderer genérico ampliado para resolvedor `.thmx` (`<a:clrScheme>` +
+  HLS `Tint`/`Shade` sem constantes mágicas), múltiplas seções
+  (`FormHeader`/`PageHeader`/`Detalhe`/`PageFooter`/`FormFooter`), controle `Line`
+  (`ControlType=102`), macro cosmética `OnOpenEmMacro: Maximize`, relatórios sem
+  `RecordSource`, `ComboBox` de 1 coluna (`111`), `CheckBox` booleano (`106`)
+  e `--dao-query-shape` em `analyze` — **19** relatórios compilados (**2.255**
+  controles, `852/852` conferidos contra oráculo COM em 7 relatórios), validados
+  em PostgreSQL + Chrome/Playwright e na geração integral de 45 tabelas
+  (`server.exe` + `build_release.dart`).
 
 Nenhuma dessas provas encerra a meta de reproduzir os 97 formulários, 165
 relatórios e todos os fluxos/regras do sistema.
