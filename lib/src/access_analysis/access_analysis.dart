@@ -16,11 +16,20 @@ class AccessAnalysis {
   final List<CanonicalReport> reports = [];
   final List<CanonicalModule> modules = [];
 
-  Future<void> extractFromDatabase(AccessDatabase db) async {
-    final catalog =
-        AccessCatalog(format: db.format, pageChannel: db.pageChannel);
-    final model = await catalog.read(db.info.path);
+  Future<void> extractFromDatabase(
+    AccessDatabase db, {
+    AccessDatabaseModel? model,
+  }) async {
+    final activeModel = model ??
+        await AccessCatalog(format: db.format, pageChannel: db.pageChannel)
+            .read(db.info.path);
+    return _extractWithModel(db, activeModel);
+  }
 
+  Future<void> _extractWithModel(
+    AccessDatabase db,
+    AccessDatabaseModel model,
+  ) async {
     for (var rawTable in model.tables) {
       final canonicalColumns = rawTable.columns
           .map(
@@ -42,6 +51,10 @@ class AccessAnalysis {
         continue;
       }
       queries.add(CanonicalQuery(q.name, q.sqlText ?? ''));
+    }
+
+    if (model.forms.isEmpty && model.reports.isEmpty && model.modules.isEmpty) {
+      return;
     }
 
     final vbaTableReader = TableReader(

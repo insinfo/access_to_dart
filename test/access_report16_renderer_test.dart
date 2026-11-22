@@ -866,6 +866,152 @@ void main() {
     expect(rendererCode, isNot(contains('8355711')));
     expect(rendererCode, isNot(contains('10921638')));
   });
+
+  test(
+      'resolves theme colors and shared gallery images from binary resources when source_overlay is absent',
+      () async {
+    const sourceHash =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    final temp =
+        await Directory.systemTemp.createTemp('binary_resource_theme_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    const themeXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="CustomRed">
+  <a:themeElements>
+    <a:clrScheme name="CustomRed">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1>
+      <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="112233"/></a:dk2>
+      <a:lt2><a:srgbClr val="EEEEEE"/></a:lt2>
+      <a:accent1><a:srgbClr val="FF0000"/></a:accent1>
+      <a:accent2><a:srgbClr val="00FF00"/></a:accent2>
+      <a:accent3><a:srgbClr val="0000FF"/></a:accent3>
+      <a:accent4><a:srgbClr val="FFFF00"/></a:accent4>
+      <a:accent5><a:srgbClr val="00FFFF"/></a:accent5>
+      <a:accent6><a:srgbClr val="FF00FF"/></a:accent6>
+      <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
+      <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+    </a:clrScheme>
+  </a:themeElements>
+</a:theme>''';
+    final thmxBytes =
+        _buildStoredZip({'theme/theme/theme1.xml': utf8.encode(themeXml)});
+    final pngBytes = await File(
+      'fixtures/SIGAsul.accdb.src/images/logo-SUAS-ICON.png',
+    ).readAsBytes();
+    final pngSha = sha256.convert(pngBytes).toString();
+
+    final analysis = _buildCspront1Analysis(reports: [
+      {
+        'name': 'BinaryResourceReport',
+        'sourceSha256': sourceHash,
+        'properties': {'Width': '5000'},
+        'printSettings': {
+          'Items': {
+            'Margins': {
+              'LeftMargin': 0.25,
+              'RightMargin': 0.25,
+              'TopMargin': 0.25,
+              'BotMargin': 0.25,
+            },
+            'Printer': {'Orientation': 'Portrait', 'PaperSize': 'A4'},
+          },
+        },
+        'sections': [
+          {
+            'type': 'Section',
+            'name': 'Detalhe',
+            'height': 1000,
+            'controls': [
+              {
+                'type': 'Label',
+                'name': 'RedAccentShade',
+                'caption': 'Binary Theme',
+                'properties': {
+                  'Left': '0',
+                  'Top': '0',
+                  'Width': '2000',
+                  'Height': '400',
+                  'Caption': 'Binary Theme',
+                  'ForeThemeColorIndex': '4',
+                  'ForeTint': '100.0',
+                  'ForeShade': '50.0',
+                },
+              },
+              {
+                'type': 'Image',
+                'name': 'SharedLogo',
+                'properties': {
+                  'Left': '2200',
+                  'Top': '0',
+                  'Width': '600',
+                  'Height': '400',
+                  'Picture': 'logo-SUAS-ICON',
+                  'PictureType': '2',
+                },
+              },
+            ],
+          }
+        ],
+      }
+    ]);
+    analysis['database_properties'] = {'Theme Resource Name': 'CustomRed'};
+    analysis['resources'] = [
+      {
+        'id': 1,
+        'name': 'CustomRed',
+        'type': 'thmx',
+        'extension': 'thmx',
+        'fileName': 'CustomRed.thmx',
+        'fileType': 'thmx',
+        'byteLength': thmxBytes.length,
+        'dataBase64': base64Encode(thmxBytes),
+      },
+      {
+        'id': 2,
+        'name': 'logo-SUAS-ICON',
+        'type': 'img',
+        'extension': 'png',
+        'fileName': 'logo-SUAS-ICON.png',
+        'fileType': 'png',
+        'byteLength': pngBytes.length,
+        'dataBase64': base64Encode(pngBytes),
+      },
+    ];
+    final analysisFile = File('${temp.path}/analysis.json');
+    await analysisFile.writeAsString(jsonEncode(analysis));
+
+    final appDir = Directory('${temp.path}/app');
+    final err = StringBuffer();
+    expect(
+      await run(
+        ['generate', '--analysis', analysisFile.path, '--output', appDir.path],
+        out: StringBuffer(),
+        err: err,
+      ),
+      0,
+      reason: '$err',
+    );
+    final inventory = jsonDecode(
+      await File('${appDir.path}/access-reports.json').readAsString(),
+    ) as Map<String, dynamic>;
+    final compiled = (inventory['compiled_reports'] as List).single as Map;
+    final controls = (compiled['controls'] as List).cast<Map>();
+    final label = controls.singleWhere((c) => c['name'] == 'RedAccentShade');
+    expect(label['foreColor'], 128);
+    expect(label['foreColorHex'], '#800000');
+
+    final image = controls.singleWhere((c) => c['name'] == 'SharedLogo');
+    expect(image['assetName'], 'logo-SUAS-ICON.png');
+    final assets = (compiled['assets'] as List).cast<Map>();
+    expect(assets.single['sha256'], pngSha);
+
+    final reportsDart = await File(
+      '${appDir.path}/backend/lib/src/shared/access_reports.dart',
+    ).readAsString();
+    expect(reportsDart, contains('binary_resource_report/logo-SUAS-ICON.png'));
+  });
 }
 
 List<int> _buildStoredZip(Map<String, List<int>> entries) {

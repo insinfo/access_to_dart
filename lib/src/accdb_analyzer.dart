@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:jackcess_dart/jackcess_dart.dart';
@@ -28,12 +29,24 @@ class AccdbAnalyzer {
   Future<Map<String, dynamic>> analyze() async {
     final canonicalAnalysis = AccessAnalysis();
     if (db != null) {
-      await canonicalAnalysis.extractFromDatabase(db!);
+      await canonicalAnalysis.extractFromDatabase(db!, model: model);
     }
 
+    final catalogEntries = db == null
+        ? const <AccessCatalogEntry>[]
+        : await AccessCatalog(
+            format: db!.format,
+            pageChannel: db!.pageChannel,
+          ).debugGetAllEntries();
     final syntheticTables = db == null
         ? const <Map<String, dynamic>>[]
-        : await _buildSyntheticComplexTables();
+        : await _buildSyntheticComplexTables(catalogEntries);
+    final databaseProperties = db == null
+        ? const <String, dynamic>{}
+        : _buildDatabaseProperties(catalogEntries);
+    final resources = db == null
+        ? const <Map<String, dynamic>>[]
+        : await _buildResources(catalogEntries);
 
     final stableQueries = model.queries
         .where((query) => !_isTemporaryAccessObjectName(query.name))
@@ -64,6 +77,9 @@ class AccdbAnalyzer {
       'reports': model.reports.map((r) => r.toJson()).toList(),
       'macros': model.macros.map((m) => m.toJson()).toList(),
       'modules': model.modules.map((m) => m.toJson()).toList(),
+      if (databaseProperties.isNotEmpty)
+        'database_properties': databaseProperties,
+      if (resources.isNotEmpty) 'resources': resources,
       'canonical_analysis': canonicalAnalysis.toJson(),
     };
   }
@@ -76,17 +92,13 @@ class AccdbAnalyzer {
     };
   }
 
-  Future<List<Map<String, dynamic>>> _buildSyntheticComplexTables() async {
+  Future<List<Map<String, dynamic>>> _buildSyntheticComplexTables(
+    List<AccessCatalogEntry> entries,
+  ) async {
     final database = db;
     if (database == null) {
       return const <Map<String, dynamic>>[];
     }
-
-    final catalog = AccessCatalog(
-      format: database.format,
-      pageChannel: database.pageChannel,
-    );
-    final entries = await catalog.debugGetAllEntries();
     final entryById = <int, AccessCatalogEntry>{
       for (final entry in entries) entry.id: entry,
     };
@@ -230,6 +242,152 @@ class AccdbAnalyzer {
     }
 
     return syntheticTables;
+  }
+
+  Map<String, dynamic> _buildDatabaseProperties(
+    List<AccessCatalogEntry> entries,
+  ) {
+    final propertyReader = PropertyMapReader();
+    final merged = <String, dynamic>{};
+    for (final entryName in const ['SummaryInfo', 'UserDefined', 'MSysDb']) {
+      for (final entry in entries) {
+        if (entry.name != entryName) continue;
+        final bytes = entry.propertyBytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        final group = propertyReader.read(bytes);
+        for (final prop in group.defaultProperties.entries) {
+          final safeValue = _jsonSafePropertyValue(prop.value);
+          if (safeValue != null) {
+            merged[prop.key] = safeValue;
+          }
+        }
+      }
+    }
+    return merged;
+  }
+
+  Object? _jsonSafePropertyValue(Object? value) {
+    if (value == null || value is bool || value is int || value is String) {
+      return value;
+    }
+    if (value is double) {
+      return (value.isNaN || value.isInfinite) ? null : value;
+    }
+    if (value is DateTime) {
+      return value.toUtc().toIso8601String();
+    }
+    if (value is List<int>) {
+      return base64Encode(value);
+    }
+    return value.toString();
+  }
+
+  Future<List<Map<String, dynamic>>> _buildResources(
+    List<AccessCatalogEntry> entries,
+  ) async {
+    final database = db;
+    if (database == null) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    final entryById = <int, AccessCatalogEntry>{
+      for (final entry in entries) entry.id: entry,
+    };
+    final resEntry =
+        entries.where((entry) => entry.name == 'MSysResources').firstOrNull;
+    if (resEntry == null) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    final resRows = await _readRowsByPage(database, resEntry.id);
+    if (resRows.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    final attachmentsByKey = <int, Map<String, dynamic>>{};
+    final complexEntry =
+        entries.where((entry) => entry.name == 'MSysComplexColumns').firstOrNull;
+    if (complexEntry != null) {
+      final complexRows = await _readRowsByPage(database, complexEntry.id);
+      final dataCandidates = complexRows
+          .where((candidate) => _rowInt(candidate, 'ConceptualTableID') == resEntry.id)
+          .toList(growable: false);
+      final dataComplexRow = dataCandidates
+              .where((candidate) =>
+                  _normalizedName(candidate['ColumnName']?.toString() ?? '') ==
+                  'data')
+              .firstOrNull ??
+          dataCandidates.firstOrNull;
+      if (dataComplexRow != null) {
+        final flatTablePage = _rowInt(dataComplexRow, 'FlatTableID');
+        final typeObjectPage = _rowInt(dataComplexRow, 'ComplexTypeObjectID');
+        if (flatTablePage != null && typeObjectPage != null) {
+          final shapeCache = <int, _AttachmentTableShape>{};
+          final flatShape = await _readTableShapeCached(
+            database,
+            flatTablePage,
+            entryById[flatTablePage]?.name ?? 'flat#$flatTablePage',
+            shapeCache,
+          );
+          final typeShape = await _readTableShapeCached(
+            database,
+            typeObjectPage,
+            entryById[typeObjectPage]?.name ?? 'typeObj#$typeObjectPage',
+            shapeCache,
+          );
+          final linkColumnName = _inferAttachmentLinkColumnName(
+            flatShape,
+            typeShape,
+          );
+          if (linkColumnName != null) {
+            final flatRows = await _readRowsByPage(database, flatTablePage);
+            for (final flatRow in flatRows) {
+              final decoded = decodeAttachmentRow(flatRow);
+              final key = _rowInt(decoded, linkColumnName);
+              if (key != null && !attachmentsByKey.containsKey(key)) {
+                attachmentsByKey[key] = decoded;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    final sortedRows = List<Map<String, dynamic>>.from(resRows)
+      ..sort((a, b) {
+        final idCmp = (_rowInt(a, 'Id') ?? 0).compareTo(_rowInt(b, 'Id') ?? 0);
+        if (idCmp != 0) return idCmp;
+        return (a['Name']?.toString() ?? '').compareTo(b['Name']?.toString() ?? '');
+      });
+
+    final resources = <Map<String, dynamic>>[];
+    for (final row in sortedRows) {
+      final id = _rowInt(row, 'Id');
+      final name = (row['Name']?.toString() ?? '').trim();
+      final type = (row['Type']?.toString() ?? '').trim();
+      final extension = (row['Extension']?.toString() ?? '').trim();
+      final dataKey = _rowInt(row, 'Data');
+      final decoded = dataKey == null ? null : attachmentsByKey[dataKey];
+      final rawFileData = decoded?['FileData'];
+      final fileBytes = rawFileData is Uint8List
+          ? rawFileData
+          : (rawFileData is List<int> ? Uint8List.fromList(rawFileData) : null);
+
+      resources.add({
+        if (id != null) 'id': id,
+        'name': name,
+        'type': type,
+        'extension': extension,
+        if (decoded?['FileName'] case final String fileName)
+          'fileName': fileName,
+        if (decoded?['FileType'] case final String fileType)
+          'fileType': fileType,
+        if (fileBytes != null) 'byteLength': fileBytes.length,
+        if (fileBytes != null) 'dataBase64': base64Encode(fileBytes),
+      });
+    }
+
+    return resources;
   }
 
   String _buildPostgresDdl(AccessTableSchema t) {

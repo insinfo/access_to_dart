@@ -265,20 +265,26 @@ class _OfficeThemePalette {
 
   const _OfficeThemePalette._(this._slots);
 
-  factory _OfficeThemePalette.loadFromSource(String? sourceRoot) {
+  factory _OfficeThemePalette.loadFromSource(
+    String? sourceRoot, {
+    Map<String, dynamic>? analysisRaw,
+  }) {
     final slots = <int, List<int>>{
       for (final entry in _defaultClrScheme.entries)
         entry.key: List<int>.unmodifiable(entry.value),
     };
-    if (sourceRoot == null || sourceRoot.isEmpty) {
-      return _OfficeThemePalette._(slots);
+    Uint8List? bytes;
+    if (sourceRoot != null && sourceRoot.isNotEmpty) {
+      final thmxFile = _findActiveThmxFile(sourceRoot);
+      if (thmxFile != null && thmxFile.existsSync()) {
+        bytes = thmxFile.readAsBytesSync();
+      }
     }
-    final thmxFile = _findActiveThmxFile(sourceRoot);
-    if (thmxFile == null || !thmxFile.existsSync()) {
+    bytes ??= _findActiveThmxBytesFromAnalysis(analysisRaw);
+    if (bytes == null) {
       return _OfficeThemePalette._(slots);
     }
     try {
-      final bytes = thmxFile.readAsBytesSync();
       final themeXmlBytes = _extractZipEntry(
         bytes,
         (name) =>
@@ -332,6 +338,50 @@ class _OfficeThemePalette {
         .toList()
       ..sort((a, b) => a.path.compareTo(b.path));
     return candidates.isEmpty ? null : candidates.first;
+  }
+
+  static Uint8List? _findActiveThmxBytesFromAnalysis(
+    Map<String, dynamic>? analysisRaw,
+  ) {
+    if (analysisRaw == null) return null;
+    final dbProps = (analysisRaw['database_properties'] as Map?) ??
+        ((analysisRaw['source_overlay'] as Map?)?['databaseProperties']
+            as Map?);
+    final activeName =
+        dbProps?['Theme Resource Name']?.toString().trim().toLowerCase();
+    final resources = ((analysisRaw['resources'] as List?) ?? const [])
+        .whereType<Map>()
+        .where((r) {
+          final type = (r['type']?.toString() ?? '').trim().toLowerCase();
+          final ext = (r['extension']?.toString() ?? '').trim().toLowerCase();
+          final fileType =
+              (r['fileType']?.toString() ?? '').trim().toLowerCase();
+          return (type == 'thmx' || ext == 'thmx' || fileType == 'thmx') &&
+              r['dataBase64'] is String;
+        })
+        .toList(growable: false);
+    if (resources.isEmpty) return null;
+
+    Map? selected;
+    if (activeName != null && activeName.isNotEmpty) {
+      for (final resource in resources) {
+        final name = (resource['name']?.toString() ?? '').trim().toLowerCase();
+        final fileName =
+            (resource['fileName']?.toString() ?? '').trim().toLowerCase();
+        if (name == activeName ||
+            fileName == '$activeName.thmx' ||
+            p.basenameWithoutExtension(fileName) == activeName) {
+          selected = resource;
+          break;
+        }
+      }
+    }
+    selected ??= resources.first;
+    try {
+      return base64Decode(selected['dataBase64'] as String);
+    } catch (_) {
+      return null;
+    }
   }
 
   static List<int>? _readSchemeRgbHex(XmlElement slotElement) {
@@ -477,7 +527,14 @@ extension _CompiledReportRenderer on ProjectGenerator {
         (entry.value['name'] as String).toLowerCase(): entry,
     };
     final sourceRoot = _resolveReportSourceRoot(project);
-    final themePalette = _OfficeThemePalette.loadFromSource(sourceRoot);
+    final themePalette = _OfficeThemePalette.loadFromSource(
+      sourceRoot,
+      analysisRaw: project.raw,
+    );
+    final binaryResources = ((project.raw['resources'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((resource) => resource.cast<String, dynamic>())
+        .toList(growable: false);
     final reports = <CompiledReportSpec>[];
     final diagnostics = <Map<String, Object?>>[];
     final usedKeys = <String>{};
@@ -509,6 +566,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         queryByLowerName: queryByLowerName,
         sourceRoot: sourceRoot,
         themePalette: themePalette,
+        binaryResources: binaryResources,
       );
       if (compiled.spec != null) {
         usedKeys.add(key);
@@ -565,6 +623,7 @@ extension _CompiledReportRenderer on ProjectGenerator {
         queryByLowerName,
     required String? sourceRoot,
     required _OfficeThemePalette themePalette,
+    required List<Map<String, dynamic>> binaryResources,
   }) {
     final sourceSha256 = report['sourceSha256']?.toString();
     if (sourceSha256 == null ||
@@ -949,21 +1008,42 @@ extension _CompiledReportRenderer on ProjectGenerator {
           return (spec: null, reason: 'unsupported-image-storage:$cName');
         }
         final imageEntry = imageByControl[cName.toLowerCase()];
-        if (imageEntry == null ||
-            imageEntry['status'] != 'resolved' ||
-            imageEntry['sourcePath'] is! String ||
-            imageEntry['sha256'] is! String) {
-          return (spec: null, reason: 'unresolved-shared-image:$cName');
-        }
-        final loadedAsset = _loadVerifiedReportAsset(
-          controlName: cName,
-          picture: picture,
-          relativeSourcePath: imageEntry['sourcePath'] as String,
-          expectedSha256: imageEntry['sha256'] as String,
-          sourceRoot: sourceRoot,
-        );
-        if (loadedAsset == null) {
-          return (spec: null, reason: 'missing-or-corrupt-image-file:$cName');
+        CompiledReportAsset? loadedAsset;
+        if (sourceRoot != null && sourceRoot.isNotEmpty) {
+          if (imageEntry == null ||
+              imageEntry['status'] != 'resolved' ||
+              imageEntry['sourcePath'] is! String ||
+              imageEntry['sha256'] is! String) {
+            return (spec: null, reason: 'unresolved-shared-image:$cName');
+          }
+          loadedAsset = _loadVerifiedReportAsset(
+            controlName: cName,
+            picture: picture,
+            relativeSourcePath: imageEntry['sourcePath'] as String,
+            expectedSha256: imageEntry['sha256'] as String,
+            sourceRoot: sourceRoot,
+          );
+          if (loadedAsset == null) {
+            return (spec: null, reason: 'missing-or-corrupt-image-file:$cName');
+          }
+        } else {
+          if (imageEntry != null && imageEntry['status'] != 'resolved') {
+            return (spec: null, reason: 'unresolved-shared-image:$cName');
+          }
+          loadedAsset = _loadBinaryResourceReportAsset(
+            controlName: cName,
+            picture: picture,
+            expectedSha256: imageEntry?['sha256'] as String?,
+            resources: binaryResources,
+          );
+          if (loadedAsset == null) {
+            return (
+              spec: null,
+              reason: imageEntry == null
+                  ? 'unresolved-shared-image:$cName'
+                  : 'missing-or-corrupt-image-file:$cName',
+            );
+          }
         }
         final existingHash = assetHashByName[loadedAsset.assetName];
         if (existingHash != null && existingHash != loadedAsset.sha256) {
@@ -1083,6 +1163,89 @@ extension _CompiledReportRenderer on ProjectGenerator {
       picture: picture,
       assetName: p.basename(assetFile.path),
       sourcePath: normalizedRel,
+      sha256: actualSha,
+      contentType: contentType,
+      base64Data: base64Encode(bytes),
+    );
+  }
+
+  CompiledReportAsset? _loadBinaryResourceReportAsset({
+    required String controlName,
+    required String picture,
+    required String? expectedSha256,
+    required List<Map<String, dynamic>> resources,
+  }) {
+    if (resources.isEmpty) return null;
+    final pictureLower = picture.trim().toLowerCase();
+    Map<String, dynamic>? matched;
+    for (final resource in resources) {
+      if (resource['dataBase64'] is! String) continue;
+      final rType = (resource['type']?.toString() ?? '').trim().toLowerCase();
+      final rExt =
+          (resource['extension']?.toString() ?? '').trim().toLowerCase();
+      final isImage = rType == 'img' ||
+          rExt == 'png' ||
+          rExt == 'jpg' ||
+          rExt == 'jpeg' ||
+          rExt == 'gif';
+      if (!isImage) continue;
+      final rName = (resource['name']?.toString() ?? '').trim().toLowerCase();
+      final rFile =
+          (resource['fileName']?.toString() ?? '').trim().toLowerCase();
+      if (rName == pictureLower ||
+          rFile == pictureLower ||
+          (rFile.isNotEmpty &&
+              p.basenameWithoutExtension(rFile) == pictureLower)) {
+        matched = resource;
+        break;
+      }
+    }
+    if (matched == null) return null;
+
+    final List<int> bytes;
+    try {
+      bytes = base64Decode(matched['dataBase64'] as String);
+    } catch (_) {
+      return null;
+    }
+    final actualSha = sha256.convert(bytes).toString();
+    if (expectedSha256 != null &&
+        expectedSha256.isNotEmpty &&
+        actualSha != expectedSha256) {
+      return null;
+    }
+
+    var rawExt = (matched['extension']?.toString() ?? '').trim().toLowerCase();
+    if (rawExt.isEmpty && matched['fileType'] is String) {
+      rawExt = (matched['fileType'] as String).trim().toLowerCase();
+    }
+    final fileNameCandidate = (matched['fileName']?.toString() ?? '').trim();
+    if (rawExt.isEmpty && fileNameCandidate.isNotEmpty) {
+      rawExt = p.extension(fileNameCandidate).replaceFirst('.', '').toLowerCase();
+    }
+    final contentType = switch (rawExt) {
+      'png' => 'image/png',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'gif' => 'image/gif',
+      _ => null,
+    };
+    if (contentType == null) return null;
+
+    final fallbackBase = (matched['name']?.toString() ?? '').trim().isNotEmpty
+        ? (matched['name'] as String).trim()
+        : picture.trim();
+    final safeBase = fileNameCandidate.isNotEmpty
+        ? p.basename(fileNameCandidate)
+        : p.basename('$fallbackBase.$rawExt');
+    if (safeBase.isEmpty || safeBase == '.' || safeBase == '..') {
+      return null;
+    }
+
+    return CompiledReportAsset(
+      controlName: controlName,
+      picture: picture,
+      assetName: safeBase,
+      sourcePath: 'MSysResources/$safeBase',
       sha256: actualSha,
       contentType: contentType,
       base64Data: base64Encode(bytes),

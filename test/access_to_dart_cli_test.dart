@@ -441,4 +441,112 @@ void main() {
       expect(contractErr.toString(), contains('Expected exactly one named query'));
     },
   );
+
+  test(
+    'analyze extracts binary database_properties and MSysResources without --src on teste1',
+    () async {
+      final fixture = File.fromUri(
+        Directory.current.uri.resolve('fixtures/teste1/teste1.accdb'),
+      );
+      expect(await fixture.exists(), isTrue);
+      final tempDir =
+          await Directory.systemTemp.createTemp('cli_binary_res_teste1_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final err = StringBuffer();
+      final exitCode = await run(
+        <String>[
+          'analyze',
+          '--accdb',
+          fixture.path,
+          '--output',
+          tempDir.path,
+        ],
+        out: StringBuffer(),
+        err: err,
+      );
+      expect(exitCode, 0, reason: '$err');
+
+      final analysis = jsonDecode(
+        await File('${tempDir.path}/analysis.json').readAsString(),
+      ) as Map<String, dynamic>;
+      final dbProps = analysis['database_properties'] as Map<String, dynamic>;
+      expect(dbProps['Theme Resource Name'], 'Tema do Office');
+
+      final resources = (analysis['resources'] as List).cast<Map>();
+      final thmx = resources.firstWhere((r) => r['type'] == 'thmx');
+      expect(thmx['name'], 'Tema do Office');
+      expect(base64Decode(thmx['dataBase64'] as String), isNotEmpty);
+
+      final img = resources.firstWhere(
+        (r) =>
+            r['type'] == 'img' &&
+            r['name'] == 'OutlookSearchMagnifyingGlassHS',
+      );
+      expect(base64Decode(img['dataBase64'] as String), isNotEmpty);
+    },
+  );
+
+  test(
+    'analyze links SIGAsul binary-only frontend and backend without --src',
+    () async {
+      final frontend = File.fromUri(
+        Directory.current.uri.resolve('fixtures/SIGAsul.accdb'),
+      );
+      final backend = File.fromUri(
+        Directory.current.uri
+            .resolve('fixtures/SIGA2021-SUL_be_senha_4462.accdb'),
+      );
+      expect(await frontend.exists(), isTrue);
+      expect(await backend.exists(), isTrue);
+      final tempDir =
+          await Directory.systemTemp.createTemp('cli_binary_sigasul_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final err = StringBuffer();
+      final exitCode = await run(
+        <String>[
+          'analyze',
+          '--accdb',
+          frontend.path,
+          '--backend-accdb',
+          backend.path,
+          '--backend-password',
+          '4462',
+          '--output',
+          tempDir.path,
+        ],
+        out: StringBuffer(),
+        err: err,
+      );
+      expect(exitCode, 0, reason: '$err');
+
+      final analysis = jsonDecode(
+        await File('${tempDir.path}/analysis.json').readAsString(),
+      ) as Map<String, dynamic>;
+      final linkedTables = (analysis['linkedTables'] as List).cast<Map>();
+      expect(linkedTables, hasLength(45));
+      expect(linkedTables.first['foreignName'], isA<String>());
+      expect(linkedTables.first['sourceTableName'], isA<String>());
+      expect(
+        linkedTables.first['database']?.toString(),
+        contains('SIGA2021-SUL_be_senha_4462.accdb'),
+      );
+      expect(linkedTables.first['connect'], 'MS Access;PWD=4462;');
+
+      expect((analysis['tables'] as List), hasLength(54));
+      final dbProps = analysis['database_properties'] as Map<String, dynamic>;
+      expect(dbProps['Theme Resource Name'], 'Tema do Office');
+
+      final resources = (analysis['resources'] as List).cast<Map>();
+      expect(resources, hasLength(194));
+      expect(
+        resources.any(
+            (r) => r['type'] == 'thmx' && r['name'] == 'Tema do Office'),
+        isTrue,
+      );
+      expect(resources.any((r) => r['type'] == 'img'), isTrue);
+    },
+    timeout: const Timeout(Duration(minutes: 4)),
+  );
 }

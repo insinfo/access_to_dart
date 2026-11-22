@@ -139,4 +139,82 @@ void main() {
     expect((merged['summary'] as Map<String, dynamic>)['tables'], 1);
     expect((merged['backend_analysis'] as Map<String, dynamic>)['source'], contains('SIGA2021-SUL_be_senha_4462.accdb'));
   });
+
+  test(
+      'mergeLinkedBackendAnalysis resolves aliased binary linkedTables without source_overlay',
+      () {
+    final frontend = <String, dynamic>{
+      'schema_version': '1.0',
+      'source': 'synthetic_frontend.accdb',
+      'format': 'VERSION_14',
+      'summary': {
+        'tables': 0,
+        'linkedTables': 1,
+        'relationships': 0,
+        'queries': 0,
+        'forms': 0,
+        'reports': 0,
+        'macros': 0,
+        'modules': 0,
+      },
+      'tables': const [],
+      'linkedTables': [
+        {
+          'name': 'AliasTabela',
+          'database': r'C:\db\backend.accdb',
+          'connect': 'MS Access;',
+          'foreignName': 'TbPessoa',
+          'sourceTableName': 'TbPessoa',
+        },
+      ],
+      'relationships': const [],
+      'queries': const [],
+      'forms': const [],
+    };
+    final backend = <String, dynamic>{
+      'schema_version': '1.0',
+      'source': 'backend.accdb',
+      'format': 'VERSION_14',
+      'tables': [
+        {
+          'name': 'TbPessoa',
+          'rowCount': 0,
+          'columns': [
+            {
+              'name': 'CodPessoa',
+              'typeName': 'Long',
+              'typeCode': 4,
+              'isAutoNumber': true,
+              'isCalculated': false,
+              'isRequired': true,
+            },
+          ],
+          'indexes': [
+            {
+              'name': 'PrimaryKey',
+              'isPrimaryKey': true,
+              'columns': [
+                {'name': 'CodPessoa'},
+              ],
+            },
+          ],
+          'sampleRows': const [],
+          'postgres_ddl': 'CREATE TABLE "tb_pessoa" ();',
+          'dart_class_name': 'TbPessoa',
+        },
+      ],
+      'linkedTables': const [],
+      'relationships': const [],
+      'queries': const [],
+      'forms': const [],
+    };
+
+    final merged =
+        AnalysisBackendLinker().mergeLinkedBackendAnalysis(frontend, backend);
+
+    expect((merged['tables'] as List<dynamic>), hasLength(1));
+    expect(((merged['tables'] as List<dynamic>).single as Map)['name'],
+        'TbPessoa');
+    expect((merged['summary'] as Map<String, dynamic>)['tables'], 1);
+  });
 }

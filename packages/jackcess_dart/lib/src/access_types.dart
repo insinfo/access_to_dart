@@ -108,6 +108,9 @@ class AccessCatalogEntry {
   final int flags;
   final int rawType;
   final Uint8List? propertyBytes;
+  final String? database;
+  final String? connect;
+  final String? foreignName;
 
   const AccessCatalogEntry({
     required this.id,
@@ -117,6 +120,9 @@ class AccessCatalogEntry {
     required this.flags,
     required this.rawType,
     this.propertyBytes,
+    this.database,
+    this.connect,
+    this.foreignName,
   });
 
   /// Returns true if this is a system/internal object.
@@ -142,6 +148,10 @@ class AccessCatalogEntry {
         'flags': flags,
         'isSystem': isSystem,
         'isHidden': isHidden,
+        if (database != null) 'database': database,
+        if (connect != null) 'connect': connect,
+        if (foreignName != null) 'foreignName': foreignName,
+        if (foreignName != null) 'sourceTableName': foreignName,
       };
 
   @override

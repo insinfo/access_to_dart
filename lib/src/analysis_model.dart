@@ -661,11 +661,26 @@ class AnalysisRelationship {
 
 class AnalysisLinkedTable {
   final String name;
+  final String? database;
+  final String? connect;
+  final String? foreignName;
 
-  AnalysisLinkedTable({required this.name});
+  AnalysisLinkedTable({
+    required this.name,
+    this.database,
+    this.connect,
+    this.foreignName,
+  });
+
+  String? get sourceTableName => foreignName;
 
   factory AnalysisLinkedTable.fromJson(Map<String, dynamic> json) {
-    return AnalysisLinkedTable(name: json['name'] as String? ?? 'linked_table');
+    return AnalysisLinkedTable(
+      name: json['name'] as String? ?? 'linked_table',
+      database: json['database'] as String?,
+      connect: json['connect'] as String?,
+      foreignName: (json['foreignName'] ?? json['sourceTableName']) as String?,
+    );
   }
 }
 

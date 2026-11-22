@@ -33,6 +33,13 @@ class AnalysisBackendLinker {
     };
 
     final linkedSourceByAlias = <String, String>{};
+    for (final linked in frontendProject.linkedTables) {
+      final sourceName = linked.sourceTableName ?? linked.name;
+      linkedSourceByAlias[_lookupKey(linked.name)] = sourceName;
+      if (linked.sourceTableName case final sourceTableName?) {
+        linkedSourceByAlias[_lookupKey(sourceTableName)] = sourceTableName;
+      }
+    }
     for (final linked in frontendProject.sourceOverlayLinkedTables) {
       linkedSourceByAlias[_lookupKey(linked.name)] = linked.sourceTableName ?? linked.name;
       if (linked.sourceTableName case final sourceTableName?) {

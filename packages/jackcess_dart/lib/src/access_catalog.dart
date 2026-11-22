@@ -271,7 +271,15 @@ class AccessCatalog {
       flags: flags is int ? flags : (flags as num?)?.toInt() ?? 0,
       rawType: rawType,
       propertyBytes: row['LvProp'] as Uint8List?,
+      database: _optionalTrimmedString(row['Database']),
+      connect: _optionalTrimmedString(row['Connect']),
+      foreignName: _optionalTrimmedString(row['ForeignName']),
     );
+  }
+
+  static String? _optionalTrimmedString(Object? value) {
+    final text = value?.toString().trim();
+    return (text == null || text.isEmpty) ? null : text;
   }
 
   AccessTableSchema _applyPropertyMetadataToSchema(
