@@ -56,7 +56,9 @@ End
     expect(form['recordSource'], 'Contatos');
     expect(form['id'], isA<int>(),
         reason: 'Preserva identidade do catálogo binário.');
-    final control = (form['controls'] as List).single as Map;
+    final control = (form['controls'] as List)
+        .cast<Map>()
+        .singleWhere((c) => c['name'] == 'txtFirstName');
     expect(control['controlSource'], 'Nome');
     expect(control['caption'], 'Nome completo para correspondência');
 

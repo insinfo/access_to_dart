@@ -575,7 +575,7 @@ AccessDecodedUiBlob? parseAccessUiBlob(
     }
 
     final ctrlName = obj.str(220)?.trim() ?? '';
-    if (ctrlName.isEmpty) continue;
+    if (ctrlName.isEmpty || ctrlName.startsWith('zecEmptyCell')) continue;
 
     final ctrlMap = <String, dynamic>{
       'type': ctrlType,

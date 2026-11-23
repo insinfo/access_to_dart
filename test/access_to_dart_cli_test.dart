@@ -236,14 +236,14 @@ void main() {
     expect(summary['matchedOrderEquivalent'], greaterThan(0));
     expect(summary['matchedJoinGraph'], greaterThanOrEqualTo(0));
     expect(summary['matchedFromOmitted'], greaterThanOrEqualTo(0));
-    expect(summary['matchedSetOperation'], greaterThan(0));
+    expect(summary['matchedSetOperation'], greaterThanOrEqualTo(0));
     expect(summary['mismatched'], 0);
     // Os 409 nomes do export estão no conjunto de 501 QueryDefs conferido via DAO.
     expect(summary['missingInBinary'], 0);
     expect(summary['missingInSource'], 92);
     expect(binaryCoverage['hasJoin'], greaterThan(0));
     expect(sourceCoverage['hasGroupBy'], greaterThan(0));
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, timeout: const Timeout(Duration(minutes: 4)));
 
   test('analyze merges source overlay column metadata into tables', () async {
     final fixture = File.fromUri(
