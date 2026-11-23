@@ -19,6 +19,7 @@ export 'components/access_subform_panel.dart';
 export 'components/access_multivalue_panel.dart';
 export 'components/access_report_viewer.dart';
 export 'components/access_query_viewer.dart';
+export 'components/access_menu_panel.dart';
 export 'components/modal.dart';
 export 'services/api_http_service.dart';
 export 'services/rest_service.dart';
@@ -44,6 +45,14 @@ export 'utils/dialogs.dart';
         .writeAsString(_buildAccessQueryViewerHtml());
     await File(p.join(sharedDir.path, 'components', 'access_query_viewer.scss'))
         .writeAsString(_buildAccessQueryViewerScss());
+
+    final compiledMenus = _compileMenuForms(project);
+    await File(p.join(sharedDir.path, 'components', 'access_menu_panel.dart'))
+        .writeAsString(_buildAccessMenuPanelDartSource(compiledMenus));
+    await File(p.join(sharedDir.path, 'components', 'access_menu_panel.html'))
+        .writeAsString(_buildAccessMenuPanelHtml());
+    await File(p.join(sharedDir.path, 'components', 'access_menu_panel.scss'))
+        .writeAsString(_buildAccessMenuPanelScss());
 
     await File(p.join(sharedDir.path, 'services', 'api_http_service.dart'))
         .writeAsString(_buildApiHttpServiceSource());

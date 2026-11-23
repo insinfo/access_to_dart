@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:xml/xml.dart';
+
 class BlobFieldRecord {
   final int start;
   final int end;
@@ -577,6 +579,7 @@ AccessDecodedUiBlob? parseAccessUiBlob(
     final ctrlName = obj.str(220)?.trim() ?? '';
     if (ctrlName.isEmpty || ctrlName.startsWith('zecEmptyCell')) continue;
 
+    final emMacroSteps = _decodeControlEmbeddedMacro(obj);
     final ctrlMap = <String, dynamic>{
       'type': ctrlType,
       'name': ctrlName,
@@ -590,6 +593,8 @@ AccessDecodedUiBlob? parseAccessUiBlob(
       if (cProps['Width'] != null) 'width': int.tryParse(cProps['Width']!),
       if (cProps['Height'] != null) 'height': int.tryParse(cProps['Height']!),
       if (currentSection != null) 'section': currentSection['name'],
+      if (emMacroSteps != null && emMacroSteps.isNotEmpty)
+        'macroDefinitions': <String, dynamic>{'OnClickEmMacro': emMacroSteps},
       'properties': cProps,
     };
     allControls.add(ctrlMap);
@@ -793,4 +798,278 @@ String _decodeUtf16LeSlice(Uint8List bytes, int start, int length) {
     if (unit != 0) units.add(unit);
   }
   return String.fromCharCodes(units);
+}
+
+
+List<Map<String, dynamic>>? _decodeControlEmbeddedMacro(AccessBlobObject obj) {
+  for (final prop in obj.properties) {
+    if (prop.propertyId != 275 || prop.payload.length < 20) continue;
+    final xmlText = _extractAxlXmlFromPayload(prop.payload);
+    if (xmlText == null) continue;
+    try {
+      final doc = XmlDocument.parse(xmlText);
+      final root = doc.rootElement;
+      final statements = root.findElements('Statements').firstOrNull;
+      if (statements == null) return null;
+      final steps = <Map<String, dynamic>>[];
+      _collectAxlStatements(statements, steps);
+      return steps.isEmpty ? null : steps;
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
+
+String? _extractAxlXmlFromPayload(Uint8List payload) {
+  const marker = <int>[0x5F, 0x00, 0x41, 0x00, 0x58, 0x00, 0x4C, 0x00, 0x3A, 0x00];
+  final sb = StringBuffer();
+  var i = 0;
+  while (i + marker.length <= payload.length) {
+    var matched = true;
+    for (var j = 0; j < marker.length; j++) {
+      if (payload[i + j] != marker[j]) {
+        matched = false;
+        break;
+      }
+    }
+    if (!matched) {
+      i++;
+      continue;
+    }
+    i += marker.length;
+    while (i + 1 < payload.length) {
+      final cu = payload[i] | (payload[i + 1] << 8);
+      i += 2;
+      if (cu == 0) break;
+      sb.writeCharCode(cu);
+    }
+  }
+  final out = sb.toString().trim();
+  return out.isEmpty ? null : out;
+}
+
+void _collectAxlStatements(
+  XmlElement container,
+  List<Map<String, dynamic>> out, {
+  String? condition,
+}) {
+  for (final child in container.childElements) {
+    final tag = child.name.local;
+    if (tag == 'Action') {
+      out.add(_convertAxlAction(child, condition: condition));
+    } else if (tag == 'ConditionalBlock') {
+      final ifElems = child.findElements('If').toList();
+      final elseIfElems = child.findElements('ElseIf').toList();
+      final elseElems = child.findElements('Else').toList();
+      if (ifElems.length == 1 && elseIfElems.isEmpty && elseElems.isEmpty) {
+        final ifElem = ifElems.single;
+        final condText =
+            ifElem.findElements('Condition').firstOrNull?.innerText.trim() ?? '';
+        final stmts = ifElem.findElements('Statements').firstOrNull;
+        if (stmts != null) {
+          final inner = <Map<String, dynamic>>[];
+          _collectAxlStatements(
+            stmts,
+            inner,
+            condition: condText.isEmpty ? condition : condText,
+          );
+          if (inner.length == 1 && condition == null) {
+            out.add(inner.single);
+          } else if (inner.isNotEmpty) {
+            out.add(<String, dynamic>{
+              'condition': condText,
+              'children': inner,
+            });
+          }
+        }
+      } else {
+        out.add(<String, dynamic>{
+          'condition': 'ConditionalBlock',
+          'children': <Map<String, dynamic>>[
+            <String, dynamic>{'action': 'ConditionalBlock'},
+          ],
+        });
+      }
+    }
+  }
+}
+
+Map<String, dynamic> _convertAxlAction(
+  XmlElement elem, {
+  String? condition,
+}) {
+  final rawName = elem.getAttribute('Name') ?? '';
+  final argMap = <String, String>{};
+  final rawArgList = <String>[];
+  for (final arg in elem.findElements('Argument')) {
+    final k = arg.getAttribute('Name') ?? '';
+    final v = arg.innerText.trim();
+    if (k.isNotEmpty) argMap[k.toLowerCase()] = v;
+    rawArgList.add(v);
+  }
+  String arg(String key, [String fallback = '']) =>
+      argMap[key.toLowerCase()] ?? fallback;
+
+  String action = rawName;
+  List<String> arguments;
+  switch (rawName) {
+    case 'OnError':
+      final goto = arg('GoTo', 'Next').toLowerCase();
+      final code = switch (goto) {
+        'next' || '' => '0',
+        'macro name' => '1',
+        'fail' => '2',
+        _ => goto,
+      };
+      arguments = <String>[code];
+      break;
+    case 'MessageBox':
+      action = 'MsgBox';
+      final beep = arg('Beep', 'Yes').toLowerCase() == 'no' ? '0' : '-1';
+      final type = switch (arg('Type', 'None').toLowerCase()) {
+        'none' || '' => '0',
+        'critical' => '1',
+        'warning?' => '2',
+        'warning!' => '3',
+        'information' => '4',
+        _ => '0',
+      };
+      final title = arg('Title');
+      arguments = <String>[
+        arg('Message'),
+        beep,
+        type,
+        if (title.isNotEmpty) title,
+      ];
+      break;
+    case 'GoToRecord':
+      final objType = arg('ObjectType');
+      final objTypeCode = objType.isEmpty ? '-1' : objType;
+      final objName = arg('ObjectName');
+      final rec = switch (arg('Record', 'Next').toLowerCase()) {
+        'previous' => '0',
+        'next' || '' => '1',
+        'first' => '2',
+        'last' => '3',
+        'goto' => '4',
+        'new' => '5',
+        _ => arg('Record'),
+      };
+      arguments = <String>[objTypeCode, objName, rec];
+      break;
+    case 'OpenForm':
+      final view = switch (arg('View', 'Form').toLowerCase()) {
+        'form' || '' => '0',
+        'design' => '1',
+        'print preview' => '2',
+        'datasheet' => '3',
+        'pivottable' => '4',
+        'pivotchart' => '5',
+        'layout' => '6',
+        _ => '0',
+      };
+      final dataMode = switch (arg('DataMode').toLowerCase()) {
+        '' => '-1',
+        'add' => '0',
+        'edit' => '1',
+        'read only' => '2',
+        _ => arg('DataMode'),
+      };
+      final winMode = switch (arg('WindowMode', 'Normal').toLowerCase()) {
+        'normal' || '' => '0',
+        'hidden' => '1',
+        'icon' => '2',
+        'dialog' => '3',
+        _ => '0',
+      };
+      arguments = <String>[
+        arg('FormName'),
+        view,
+        arg('FilterName'),
+        arg('WhereCondition'),
+        dataMode,
+        winMode,
+      ];
+      break;
+    case 'OpenReport':
+      final view = switch (arg('View', 'Print').toLowerCase()) {
+        'print' || '' => '0',
+        'design' => '1',
+        'print preview' => '2',
+        'report' => '5',
+        'layout' => '6',
+        _ => '2',
+      };
+      final winMode = switch (arg('WindowMode', 'Normal').toLowerCase()) {
+        'normal' || '' => '0',
+        'hidden' => '1',
+        'icon' => '2',
+        'dialog' => '3',
+        _ => '0',
+      };
+      arguments = <String>[
+        arg('ReportName'),
+        view,
+        arg('FilterName'),
+        arg('WhereCondition'),
+        winMode,
+      ];
+      break;
+    case 'OpenQuery':
+      final view = switch (arg('View', 'Datasheet').toLowerCase()) {
+        'datasheet' || '' => '0',
+        'design' => '1',
+        'print preview' => '2',
+        _ => '0',
+      };
+      final dataMode = switch (arg('DataMode', 'Edit').toLowerCase()) {
+        'add' => '0',
+        'edit' || '' => '1',
+        'read only' => '2',
+        _ => '1',
+      };
+      arguments = <String>[arg('QueryName'), view, dataMode];
+      break;
+    case 'SaveRecord':
+      action = 'RunCommand';
+      arguments = <String>['97'];
+      break;
+    case 'DeleteRecord':
+      action = 'RunCommand';
+      arguments = <String>['223'];
+      break;
+    case 'UndoRecord':
+      action = 'RunCommand';
+      arguments = <String>['292'];
+      break;
+    case 'CloseWindow':
+      action = 'Close';
+      arguments = <String>[arg('ObjectType'), arg('ObjectName'), arg('Save')];
+      break;
+    case 'RunMenuCommand':
+      action = 'RunCommand';
+      final cmdName = arg('Command').toLowerCase();
+      final code = switch (cmdName) {
+        'saverecord' => '97',
+        'deleterecord' => '223',
+        'undo' => '292',
+        'refresh' => '18',
+        'refreshpage' => '37',
+        'print' => '340',
+        'closewindow' => '58',
+        _ => arg('Command'),
+      };
+      arguments = <String>[code];
+      break;
+    default:
+      arguments = rawArgList;
+      break;
+  }
+
+  return <String, dynamic>{
+    'action': action,
+    'arguments': arguments,
+    if (condition != null && condition.isNotEmpty) 'condition': condition,
+  };
 }

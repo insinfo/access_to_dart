@@ -797,9 +797,11 @@ String _buildFrontendShellDartSource({
   required Iterable<Map<String, Object?>> modules,
   List<String> compiledReportKeys = const [],
   List<String> compiledQueryKeys = const [],
+  List<String> compiledMenuKeys = const [],
 }) {
   final hasReports = compiledReportKeys.isNotEmpty;
   final hasQueries = compiledQueryKeys.isNotEmpty;
+  final hasMenus = compiledMenuKeys.isNotEmpty;
   final importLines = [
     ...modules.map((module) =>
         "import 'src/modules/${module['nameSnake']}/pages/${module['nameSnake']}_page_component.dart';"),
@@ -807,14 +809,18 @@ String _buildFrontendShellDartSource({
       "import 'src/shared/components/access_report_viewer.dart';",
     if (hasQueries)
       "import 'src/shared/components/access_query_viewer.dart';",
+    if (hasMenus)
+      "import 'src/shared/components/access_menu_panel.dart';",
   ].join('\n');
   final directives = [
     ...modules.map((module) => '${module['namePascal']}PageComponent'),
     if (hasReports) 'AccessReportViewer',
     if (hasQueries) 'AccessQueryViewer',
+    if (hasMenus) 'AccessMenuPanel',
   ].join(', ');
   final routeList = [
     ...modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)),
+    if (hasMenus) _dartStringLiteral('access-menus'),
     if (hasReports) _dartStringLiteral('access-reports'),
     if (hasQueries) _dartStringLiteral('access-queries'),
   ];
@@ -822,6 +828,8 @@ String _buildFrontendShellDartSource({
       compiledReportKeys.map(_dartStringLiteral).join(', ');
   final queryRoutes =
       compiledQueryKeys.map(_dartStringLiteral).join(', ');
+  final menuRoutes =
+      compiledMenuKeys.map(_dartStringLiteral).join(', ');
   return _renderTemplate(
     '''
 import 'dart:async';
@@ -841,9 +849,11 @@ class AppComponent implements OnInit, OnDestroy {
   String? accessNavigationNotice;
   String? selectedReportKey;
   String? selectedQueryKey;
+  String? selectedMenuKey;
   static const Set<String> _moduleRoutes = {{{moduleRoutes}}};
   static const Set<String> _reportRoutes = {{{reportRoutes}}};
   static const Set<String> _queryRoutes = {{{queryRoutes}}};
+  static const Set<String> _menuRoutes = {{{menuRoutes}}};
   String activeModule = '{{initialModule}}';
 
   @override
@@ -877,6 +887,16 @@ class AppComponent implements OnInit, OnDestroy {
       accessNavigationNotice = null;
       return;
     }
+    if (hash.startsWith('#/access-menu/')) {
+      String menuKey;
+      try { menuKey = Uri.decodeComponent(hash.substring('#/access-menu/'.length)); }
+      on FormatException { return; }
+      if (!_menuRoutes.contains(menuKey)) return;
+      selectedMenuKey = menuKey;
+      activeModule = 'access-menus';
+      accessNavigationNotice = null;
+      return;
+    }
     final partial = hash.startsWith('#/access-form/');
     final prefix = partial ? '#/access-form/' : '#/module/';
     if (!hash.startsWith(prefix)) return;
@@ -902,6 +922,7 @@ class AppComponent implements OnInit, OnDestroy {
       'moduleRoutes': '<String>{${routeList.join(', ')}}',
       'reportRoutes': '<String>{$reportRoutes}',
       'queryRoutes': '<String>{$queryRoutes}',
+      'menuRoutes': '<String>{$menuRoutes}',
       'initialModule': initialModule.replaceAll("'", "\\'"),
       'importLines': importLines,
       'directives': directives,

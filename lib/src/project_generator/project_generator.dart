@@ -33,6 +33,7 @@ part 'multivalue_generator.dart';
 part 'multivalue_frontend.dart';
 part 'query_backend_generator.dart';
 part 'query_viewer_generator.dart';
+part 'menu_panel_generator.dart';
 part 'report_renderer_generator.dart';
 part 'report_expression_compiler.dart';
 part 'before_insert_allocator.dart';
@@ -83,6 +84,8 @@ class ProjectGenerator {
         List<Map<String, Object?>> extendedDiagnostics,
         Map<String, String> catalogKeyByLowerName,
       })> _compiledQueriesCache = Expando();
+  final Expando<List<Map<String, Object?>>> _compiledMenuFormsCache =
+      Expando<List<Map<String, Object?>>>();
   static const AccessDefaultSemanticTranslator defaultSemanticTranslator =
       AccessDefaultSemanticTranslator();
 

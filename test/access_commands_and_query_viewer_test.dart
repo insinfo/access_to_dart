@@ -152,6 +152,54 @@ Map<String, dynamic> _commandsAndViewerFixture() {
               ],
             },
           },
+          {
+            'name': 'BtnOpenMenu',
+            'type': 'CommandButton',
+            'caption': 'Menu Relatorios',
+            'macroDefinitions': {
+              'OnClickEmMacro': [
+                {'action': 'OpenForm', 'arguments': ['FrmMenuRelatorios', '0', '', '', '-1', '0']},
+              ],
+            },
+          },
+        ],
+      },
+      {
+        'name': 'FrmMenuRelatorios',
+        'caption': 'Central de Relatorios',
+        'recordSource': '',
+        'properties': <String, Object?>{},
+        'controls': [
+          {
+            'name': 'BtnMenuRpt',
+            'type': 'CommandButton',
+            'caption': 'Relatorio Clientes',
+            'macroDefinitions': {
+              'OnClickEmMacro': [
+                {'action': 'OpenReport', 'arguments': ['RptClientes', '2', '', '', '0']},
+              ],
+            },
+          },
+          {
+            'name': 'BtnMenuQry',
+            'type': 'CommandButton',
+            'caption': 'Consulta Clientes',
+            'macroDefinitions': {
+              'OnClickEmMacro': [
+                {'action': 'OpenQuery', 'arguments': ['QryClientesAtivos', '0', '2']},
+              ],
+            },
+          },
+          {
+            'name': 'BtnMenuForm',
+            'type': 'CommandButton',
+            'caption': 'Cadastro Clientes',
+            'macroDefinitions': {
+              'OnClickEmMacro': [
+                {'action': 'OpenForm', 'arguments': ['FrmClientesMacro', '0', '', '', '-1', '0']},
+              ],
+            },
+          },
         ],
       },
       {
@@ -306,8 +354,26 @@ void main() {
     expect(appDart, contains('#/access-query/'));
     expect(appDart, contains('_queryRoutes'));
 
+    final openMenu = macroCmds.singleWhere((c) => c['control'] == 'BtnOpenMenu');
+    expect(openMenu['status'], 'partial_navigation');
+    expect(openMenu['href'], '#/access-menu/frm_menu_relatorios');
+
+    final menuPanelDart = await File(
+      '$outDir/frontend/lib/src/shared/components/access_menu_panel.dart',
+    ).readAsString();
+    expect(menuPanelDart, contains('Central de Relatorios'));
+    expect(menuPanelDart, contains('#/access-report/rpt_clientes'));
+    expect(menuPanelDart, contains('#/access-query/qry_clientes_ativos'));
+    expect(menuPanelDart, contains('#/access-form/clientes'));
+
+    expect(appDart, contains("import 'src/shared/components/access_menu_panel.dart';"));
+    expect(appDart, contains('#/access-menu/'));
+    expect(appDart, contains('_menuRoutes'));
+
     final appHtml = await File('$outDir/frontend/lib/app_component.html').readAsString();
     expect(appHtml, contains('access-query-viewer'));
     expect(appHtml, contains("'access-queries'"));
+    expect(appHtml, contains('access-menu-panel'));
+    expect(appHtml, contains("'access-menus'"));
   });
 }

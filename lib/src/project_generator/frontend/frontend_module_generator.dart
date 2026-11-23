@@ -6,8 +6,9 @@ extension _FrontendModuleGenerator on ProjectGenerator {
   ({String? href, String? reason}) _resolveCleanOpenFormDestination(
     AnalysisProject project,
     Map? Function(String name) rawFormLookup,
-    String destination,
-  ) {
+    String destination, {
+    bool includeMenuForms = true,
+  }) {
     final target = rawFormLookup(destination);
     final matchingTables = scaffoldTables(project)
         .where((candidate) =>
@@ -15,6 +16,18 @@ extension _FrontendModuleGenerator on ProjectGenerator {
             destination.toLowerCase())
         .toList();
     if (target == null || matchingTables.length != 1) {
+      if (includeMenuForms && target != null) {
+        final menus = _compileMenuForms(project);
+        for (final menu in menus) {
+          if ((menu['name'] as String).toLowerCase() ==
+              destination.toLowerCase()) {
+            return (
+              href: '#/access-menu/${Uri.encodeComponent(menu['key'] as String)}',
+              reason: null,
+            );
+          }
+        }
+      }
       return (
         href: null,
         reason: 'Formulário de destino ainda sem cadastro gerado correspondente.',
