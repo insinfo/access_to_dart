@@ -725,7 +725,7 @@ class _ExtParser {
     final first = identifier();
     if (at('!')) {
       final parts = <String>[first];
-      while (take('!')) {
+      while (take('!') || take('.')) {
         parts.add(identifier());
       }
       return _ExtExpr('param', value: parts.map((p) => '[$p]').join('!'));

@@ -83,7 +83,7 @@ extension _AccessSearchPanelGenerator on ProjectGenerator {
 
         // Parse simple PK equality WhereCondition: [PkField]=[Forms]![SrcForm]![ListBox]
         final whereMatch = RegExp(
-          r'^\[?([^\]]+?)\]?\s*=\s*(?:(?:\[?Forms\]?![^\s!]+!)?\[?([^\]]+?)\]?)$',
+          r'^\[?([^\]]+?)\]?\s*=\s*(?:(?:\[?(?:Forms|Formulários)\]?!\[?[^\]!]+?\]?[!.])?\[?([^\]]+?)\]?)$',
           caseSensitive: false,
         ).firstMatch(whereCond);
         if (whereMatch == null) continue;
