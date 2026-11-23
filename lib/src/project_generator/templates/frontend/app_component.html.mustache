@@ -12,6 +12,9 @@
 <%#hasMenus%>
       <button type="button" class="nav-link" [class.is-active]="activeModule == 'access-menus'" (click)="setActiveModule('access-menus')">Painéis</button>
 <%/hasMenus%>
+<%#hasSearches%>
+      <button type="button" class="nav-link" [class.is-active]="activeModule == 'access-searches'" (click)="setActiveModule('access-searches')">Pesquisas</button>
+<%/hasSearches%>
 <%#hasQueries%>
       <button type="button" class="nav-link" [class.is-active]="activeModule == 'access-queries'" (click)="setActiveModule('access-queries')">Consultas</button>
 <%/hasQueries%>
@@ -20,7 +23,7 @@
   <main class="content-area">
     <p class="alert alert-info" *ngIf="accessNavigationNotice != null">{{ accessNavigationNotice }}</p>
 <%#modules%>
-    <<%routeSegment%>-page *ngIf="activeModule == '<%routeSegment%>'"></<%routeSegment%>-page>
+    <<%routeSegment%>-page *ngIf="activeModule == '<%routeSegment%>'" [selectedRecordId]="selectedRecordId"></<%routeSegment%>-page>
 <%/modules%>
 <%#hasReports%>
     <access-report-viewer *ngIf="activeModule == 'access-reports'" [selectedKey]="selectedReportKey"></access-report-viewer>
@@ -28,6 +31,9 @@
 <%#hasMenus%>
     <access-menu-panel *ngIf="activeModule == 'access-menus'" [selectedKey]="selectedMenuKey"></access-menu-panel>
 <%/hasMenus%>
+<%#hasSearches%>
+    <access-search-panel *ngIf="activeModule == 'access-searches'" [selectedKey]="selectedSearchKey"></access-search-panel>
+<%/hasSearches%>
 <%#hasQueries%>
     <access-query-viewer *ngIf="activeModule == 'access-queries'" [selectedKey]="selectedQueryKey"></access-query-viewer>
 <%/hasQueries%>

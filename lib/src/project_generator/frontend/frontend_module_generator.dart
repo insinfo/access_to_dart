@@ -27,6 +27,16 @@ extension _FrontendModuleGenerator on ProjectGenerator {
             );
           }
         }
+        final searches = _compileSearchForms(project).panels;
+        for (final search in searches) {
+          if ((search['name'] as String).toLowerCase() ==
+              destination.toLowerCase()) {
+            return (
+              href: '#/access-search/${Uri.encodeComponent(search['key'] as String)}',
+              reason: null,
+            );
+          }
+        }
       }
       return (
         href: null,
@@ -387,6 +397,19 @@ class Consultar${namePascal}Page implements OnInit {
   bool showForm = false;
   $namePascal? selectedItem;
   String? errorMessage;
+  String? _selectedRecordId;
+
+  @Input()
+  set selectedRecordId(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      _selectedRecordId = null;
+      return;
+    }
+    if (_selectedRecordId == trimmed) return;
+    _selectedRecordId = trimmed;
+    _openSelectedRecordById(trimmed);
+  }
 
   @override
   void ngOnInit() {
@@ -399,10 +422,29 @@ class Consultar${namePascal}Page implements OnInit {
     try {
       final frame = await _service.all();
       items = frame.items;
+      if (_selectedRecordId != null) {
+        await _openSelectedRecordById(_selectedRecordId!);
+      }
     } catch (e, s) {
       errorMessage = '\$e\\n\$s';
     } finally {
       loading = false;
+    }
+  }
+
+  Future<void> _openSelectedRecordById(String rawId) async {
+    for (final row in items) {
+      if (row.${module.primaryKeyField}?.toString() == rawId) {
+        openEditForm(row);
+        return;
+      }
+    }
+    ${module.primaryKeyParamType == 'int' ? "final parsed = int.tryParse(rawId);\n    if (parsed == null) return;" : "final parsed = rawId;"}
+    try {
+      final row = await _service.getById(parsed);
+      openEditForm(row);
+    } catch (_) {
+      // Record not found or unreachable; keep list view open.
     }
   }
 

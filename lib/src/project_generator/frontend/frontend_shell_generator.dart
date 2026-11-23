@@ -34,13 +34,19 @@ extension _FrontendShellGenerator on ProjectGenerator {
     final compiledMenuKeys = _compileMenuForms(project)
         .map((m) => m['key'] as String)
         .toList(growable: false);
+    final compiledSearchKeys = _compileSearchForms(project)
+        .panels
+        .map((s) => s['key'] as String)
+        .toList(growable: false);
     final initialModule = tables.isNotEmpty
         ? tableRouteSegment(tables.first)
         : (compiledMenuKeys.isNotEmpty
             ? 'access-menus'
-            : (compiledReportKeys.isNotEmpty
-                ? 'access-reports'
-                : (compiledQueryKeys.isNotEmpty ? 'access-queries' : '')));
+            : (compiledSearchKeys.isNotEmpty
+                ? 'access-searches'
+                : (compiledReportKeys.isNotEmpty
+                    ? 'access-reports'
+                    : (compiledQueryKeys.isNotEmpty ? 'access-queries' : ''))));
 
     await File(p.join(libDir.path, 'app_component.dart')).writeAsString(
       _buildFrontendShellDartSource(
@@ -49,6 +55,7 @@ extension _FrontendShellGenerator on ProjectGenerator {
         compiledReportKeys: compiledReportKeys,
         compiledQueryKeys: compiledQueryKeys,
         compiledMenuKeys: compiledMenuKeys,
+        compiledSearchKeys: compiledSearchKeys,
       ),
     );
 
@@ -59,6 +66,7 @@ extension _FrontendShellGenerator on ProjectGenerator {
         hasReports: compiledReportKeys.isNotEmpty,
         hasQueries: compiledQueryKeys.isNotEmpty,
         hasMenus: compiledMenuKeys.isNotEmpty,
+        hasSearches: compiledSearchKeys.isNotEmpty,
       ),
     );
 

@@ -214,10 +214,15 @@ extension _CompiledQueryBackend on ProjectGenerator {
       AnalysisProject project, Directory backendDir) async {
     final catalog = _compileCatalogQueries(project);
     final reportsResult = compileEligibleReports(project);
+    final searchResult = _compileSearchForms(project);
     final mergedSpecifications = <String, Map<String, Object?>>{
       ...catalog.specifications,
       for (final entry in reportsResult.compiledReportQueries.entries)
         if (!catalog.specifications.containsKey(entry.key))
+          entry.key: entry.value,
+      for (final entry in searchResult.compiledSearchQueries.entries)
+        if (!catalog.specifications.containsKey(entry.key) &&
+            !reportsResult.compiledReportQueries.containsKey(entry.key))
           entry.key: entry.value,
     };
     await File(p.join(backendDir.path, 'lib/src/shared/access_queries.dart'))
@@ -405,7 +410,7 @@ class AccessQueryController {
   static Future<Response> list(Request request) async {
     final items = <Map<String, Object?>>[];
     for (final entry in specifications.entries) {
-      if (entry.key.startsWith('_rpt_')) continue;
+      if (entry.key.startsWith('_rpt_') || entry.key.startsWith('_srch_')) continue;
       final spec = entry.value as Map;
       final name = spec['name']?.toString() ?? entry.key;
       if (name.startsWith('~')) continue;

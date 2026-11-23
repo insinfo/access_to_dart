@@ -34,6 +34,7 @@ part 'multivalue_frontend.dart';
 part 'query_backend_generator.dart';
 part 'query_viewer_generator.dart';
 part 'menu_panel_generator.dart';
+part 'search_panel_generator.dart';
 part 'report_renderer_generator.dart';
 part 'report_expression_compiler.dart';
 part 'before_insert_allocator.dart';
@@ -86,6 +87,11 @@ class ProjectGenerator {
       })> _compiledQueriesCache = Expando();
   final Expando<List<Map<String, Object?>>> _compiledMenuFormsCache =
       Expando<List<Map<String, Object?>>>();
+  final Expando<
+      ({
+        List<Map<String, Object?>> panels,
+        Map<String, Map<String, Object?>> compiledSearchQueries,
+      })> _compiledSearchFormsCache = Expando();
   static const AccessDefaultSemanticTranslator defaultSemanticTranslator =
       AccessDefaultSemanticTranslator();
 

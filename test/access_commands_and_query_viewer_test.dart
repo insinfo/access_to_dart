@@ -162,6 +162,16 @@ Map<String, dynamic> _commandsAndViewerFixture() {
               ],
             },
           },
+          {
+            'name': 'BtnOpenSearch',
+            'type': 'CommandButton',
+            'caption': 'Pesquisar Clientes',
+            'macroDefinitions': {
+              'OnClickEmMacro': [
+                {'action': 'OpenForm', 'arguments': ['FrmPesquisarClientes', '0', '', '', '-1', '0']},
+              ],
+            },
+          },
         ],
       },
       {
@@ -198,6 +208,27 @@ Map<String, dynamic> _commandsAndViewerFixture() {
               'OnClickEmMacro': [
                 {'action': 'OpenForm', 'arguments': ['FrmClientesMacro', '0', '', '', '-1', '0']},
               ],
+            },
+          },
+        ],
+      },
+      {
+        'name': 'FrmPesquisarClientes',
+        'caption': 'Pesquisar Clientes',
+        'recordSource': '',
+        'properties': <String, Object?>{},
+        'rawVbaCode': r'''
+Private Sub lstClientes_Click()
+    DoCmd.OpenForm "FrmClientesMacro", acNormal, "", "[Id]=[Forms]![FrmPesquisarClientes]![lstClientes]", , acNormal
+End Sub
+''',
+        'controls': [
+          {
+            'name': 'lstClientes',
+            'type': 'ListBox',
+            'properties': {
+              'RowSource': 'SELECT Clientes.Id, Clientes.Nome FROM Clientes WHERE Clientes.Nome LIKE "*" & [Forms]![FrmPesquisarClientes]![txtFiltro] & "*" ORDER BY Clientes.Nome;',
+              'BoundColumn': '1',
             },
           },
         ],
@@ -375,5 +406,25 @@ void main() {
     expect(appHtml, contains("'access-queries'"));
     expect(appHtml, contains('access-menu-panel'));
     expect(appHtml, contains("'access-menus'"));
+
+    final openSearch = macroCmds.singleWhere((c) => c['control'] == 'BtnOpenSearch');
+    expect(openSearch['status'], 'partial_navigation');
+    expect(openSearch['href'], '#/access-search/frm_pesquisar_clientes');
+
+    final searchPanelDart = await File(
+      '$outDir/frontend/lib/src/shared/components/access_search_panel.dart',
+    ).readAsString();
+    expect(searchPanelDart, contains('Pesquisar Clientes'));
+    expect(searchPanelDart, contains('_srch_frm_pesquisar_clientes'));
+    expect(searchPanelDart, contains('txtFiltro'));
+
+    expect(appDart, contains("import 'src/shared/components/access_search_panel.dart';"));
+    expect(appDart, contains('#/access-search/'));
+    expect(appDart, contains('_searchRoutes'));
+    expect(appDart, contains('selectedRecordId'));
+    expect(appHtml, contains('access-search-panel'));
+    expect(appHtml, contains("'access-searches'"));
+    expect(consultarDart, contains('set selectedRecordId'));
+    expect(consultarDart, contains('_openSelectedRecordById'));
   });
 }

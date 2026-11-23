@@ -781,7 +781,10 @@ import 'consultar_{{nameSnake}}/consultar_{{nameSnake}}_page.dart';
   styleUrls: ['{{nameSnake}}_page_component.css'],
   directives: [coreDirectives, Consultar{{namePascal}}Page],
 )
-class {{namePascal}}PageComponent {}
+class {{namePascal}}PageComponent {
+  @Input()
+  String? selectedRecordId;
+}
 ''',
     <String, Object?>{
       'namePascal': namePascal,
@@ -798,10 +801,12 @@ String _buildFrontendShellDartSource({
   List<String> compiledReportKeys = const [],
   List<String> compiledQueryKeys = const [],
   List<String> compiledMenuKeys = const [],
+  List<String> compiledSearchKeys = const [],
 }) {
   final hasReports = compiledReportKeys.isNotEmpty;
   final hasQueries = compiledQueryKeys.isNotEmpty;
   final hasMenus = compiledMenuKeys.isNotEmpty;
+  final hasSearches = compiledSearchKeys.isNotEmpty;
   final importLines = [
     ...modules.map((module) =>
         "import 'src/modules/${module['nameSnake']}/pages/${module['nameSnake']}_page_component.dart';"),
@@ -811,16 +816,20 @@ String _buildFrontendShellDartSource({
       "import 'src/shared/components/access_query_viewer.dart';",
     if (hasMenus)
       "import 'src/shared/components/access_menu_panel.dart';",
+    if (hasSearches)
+      "import 'src/shared/components/access_search_panel.dart';",
   ].join('\n');
   final directives = [
     ...modules.map((module) => '${module['namePascal']}PageComponent'),
     if (hasReports) 'AccessReportViewer',
     if (hasQueries) 'AccessQueryViewer',
     if (hasMenus) 'AccessMenuPanel',
+    if (hasSearches) 'AccessSearchPanel',
   ].join(', ');
   final routeList = [
     ...modules.map((m) => _dartStringLiteral(m['routeSegment'] as String)),
     if (hasMenus) _dartStringLiteral('access-menus'),
+    if (hasSearches) _dartStringLiteral('access-searches'),
     if (hasReports) _dartStringLiteral('access-reports'),
     if (hasQueries) _dartStringLiteral('access-queries'),
   ];
@@ -830,6 +839,8 @@ String _buildFrontendShellDartSource({
       compiledQueryKeys.map(_dartStringLiteral).join(', ');
   final menuRoutes =
       compiledMenuKeys.map(_dartStringLiteral).join(', ');
+  final searchRoutes =
+      compiledSearchKeys.map(_dartStringLiteral).join(', ');
   return _renderTemplate(
     '''
 import 'dart:async';
@@ -850,10 +861,13 @@ class AppComponent implements OnInit, OnDestroy {
   String? selectedReportKey;
   String? selectedQueryKey;
   String? selectedMenuKey;
+  String? selectedSearchKey;
+  String? selectedRecordId;
   static const Set<String> _moduleRoutes = {{{moduleRoutes}}};
   static const Set<String> _reportRoutes = {{{reportRoutes}}};
   static const Set<String> _queryRoutes = {{{queryRoutes}}};
   static const Set<String> _menuRoutes = {{{menuRoutes}}};
+  static const Set<String> _searchRoutes = {{{searchRoutes}}};
   String activeModule = '{{initialModule}}';
 
   @override
@@ -893,17 +907,42 @@ class AppComponent implements OnInit, OnDestroy {
       on FormatException { return; }
       if (!_menuRoutes.contains(menuKey)) return;
       selectedMenuKey = menuKey;
+      selectedRecordId = null;
       activeModule = 'access-menus';
+      accessNavigationNotice = null;
+      return;
+    }
+    if (hash.startsWith('#/access-search/')) {
+      String searchKey;
+      try { searchKey = Uri.decodeComponent(hash.substring('#/access-search/'.length)); }
+      on FormatException { return; }
+      if (!_searchRoutes.contains(searchKey)) return;
+      selectedSearchKey = searchKey;
+      selectedRecordId = null;
+      activeModule = 'access-searches';
       accessNavigationNotice = null;
       return;
     }
     final partial = hash.startsWith('#/access-form/');
     final prefix = partial ? '#/access-form/' : '#/module/';
     if (!hash.startsWith(prefix)) return;
+    final tail = hash.substring(prefix.length);
+    final qIdx = tail.indexOf('?');
+    final rawRoute = qIdx >= 0 ? tail.substring(0, qIdx) : tail;
+    final rawQuery = qIdx >= 0 ? tail.substring(qIdx + 1) : '';
     String route;
-    try { route = Uri.decodeComponent(hash.substring(prefix.length)); }
+    try { route = Uri.decodeComponent(rawRoute); }
     on FormatException { return; }
     if (!_moduleRoutes.contains(route)) return;
+    String? recordId;
+    if (rawQuery.isNotEmpty) {
+      try {
+        recordId = Uri.splitQueryString(rawQuery)['id'];
+      } on FormatException {
+        recordId = null;
+      }
+    }
+    selectedRecordId = recordId;
     activeModule = route;
     accessNavigationNotice = partial
         ? 'Cadastro gerado: eventos de abertura e janela do formulário original ainda não reproduzidos.'
@@ -923,6 +962,7 @@ class AppComponent implements OnInit, OnDestroy {
       'reportRoutes': '<String>{$reportRoutes}',
       'queryRoutes': '<String>{$queryRoutes}',
       'menuRoutes': '<String>{$menuRoutes}',
+      'searchRoutes': '<String>{$searchRoutes}',
       'initialModule': initialModule.replaceAll("'", "\\'"),
       'importLines': importLines,
       'directives': directives,

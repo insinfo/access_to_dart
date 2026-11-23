@@ -47,6 +47,7 @@ String _buildFrontendShellHtml({
   bool hasReports = false,
   bool hasQueries = false,
   bool hasMenus = false,
+  bool hasSearches = false,
 }) {
   return _renderTemplateAsset(
     'frontend/app_component.html.mustache',
@@ -56,6 +57,7 @@ String _buildFrontendShellHtml({
       'hasReports': hasReports,
       'hasQueries': hasQueries,
       'hasMenus': hasMenus,
+      'hasSearches': hasSearches,
     },
   );
 }

@@ -20,6 +20,7 @@ export 'components/access_multivalue_panel.dart';
 export 'components/access_report_viewer.dart';
 export 'components/access_query_viewer.dart';
 export 'components/access_menu_panel.dart';
+export 'components/access_search_panel.dart';
 export 'components/modal.dart';
 export 'services/api_http_service.dart';
 export 'services/rest_service.dart';
@@ -53,6 +54,14 @@ export 'utils/dialogs.dart';
         .writeAsString(_buildAccessMenuPanelHtml());
     await File(p.join(sharedDir.path, 'components', 'access_menu_panel.scss'))
         .writeAsString(_buildAccessMenuPanelScss());
+
+    final compiledSearches = _compileSearchForms(project).panels;
+    await File(p.join(sharedDir.path, 'components', 'access_search_panel.dart'))
+        .writeAsString(_buildAccessSearchPanelDartSource(compiledSearches));
+    await File(p.join(sharedDir.path, 'components', 'access_search_panel.html'))
+        .writeAsString(_buildAccessSearchPanelHtml());
+    await File(p.join(sharedDir.path, 'components', 'access_search_panel.scss'))
+        .writeAsString(_buildAccessSearchPanelScss());
 
     await File(p.join(sharedDir.path, 'services', 'api_http_service.dart'))
         .writeAsString(_buildApiHttpServiceSource());
