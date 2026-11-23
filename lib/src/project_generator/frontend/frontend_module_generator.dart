@@ -375,6 +375,15 @@ extension _FrontendModuleGenerator on ProjectGenerator {
     final moduleNameKebab = module.moduleNameKebab;
 
     final collectionKeysLiteral = _multivalueFieldKeys(project, table).map(_dartStringLiteral).join(', ');
+    final pkParseExpr = switch (module.primaryKeyParamType) {
+      'int' => 'final parsed = int.tryParse(rawId);\n    if (parsed == null) return;',
+      'double' => 'final parsed = double.tryParse(rawId);\n    if (parsed == null) return;',
+      'num' => 'final parsed = num.tryParse(rawId);\n    if (parsed == null) return;',
+      'DateTime' => 'final parsed = DateTime.tryParse(rawId);\n    if (parsed == null) return;',
+      'bool' => "final parsed = rawId.toLowerCase() == 'true' ? true : (rawId.toLowerCase() == 'false' ? false : null);\n    if (parsed == null) return;",
+      'String' => 'final parsed = rawId;',
+      _ => 'return;',
+    };
     final dartContent = '''
 import 'package:ngdart/angular.dart';
 import 'package:${project.dartPackageName}_core/core.dart';
@@ -439,13 +448,13 @@ class Consultar${namePascal}Page implements OnInit {
         return;
       }
     }
-    ${module.primaryKeyParamType == 'int' ? "final parsed = int.tryParse(rawId);\n    if (parsed == null) return;" : "final parsed = rawId;"}
-    try {
+    $pkParseExpr
+    ${module.primaryKeyParamType == 'int' || module.primaryKeyParamType == 'double' || module.primaryKeyParamType == 'num' || module.primaryKeyParamType == 'DateTime' || module.primaryKeyParamType == 'bool' || module.primaryKeyParamType == 'String' ? '''try {
       final row = await _service.getById(parsed);
       openEditForm(row);
     } catch (_) {
       // Record not found or unreachable; keep list view open.
-    }
+    }''' : ''}
   }
 
   Map<String, dynamic> recordSummary($namePascal row) {
